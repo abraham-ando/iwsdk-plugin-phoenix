@@ -188,6 +188,30 @@ defmodule IwsdkPhoenix.RoomSupervisorTest do
       {:ok, bob} = Server.join(second, "bob")
       assert bob.network_id == alice.network_id
     end
+
+    test "never hands back a room that has already exited" do
+      # `Server.leave/2` replies before the room actually stops, and `Registry`
+      # unregisters a dead process asynchronously after that. So for a brief
+      # window the name still resolves — to a corpse. Returning it gives the
+      # caller a room whose every call exits, and reaping empty rooms guarantees
+      # this window is hit, because that is exactly when rooms get recreated.
+      #
+      # Looped: the race is a scheduler hop wide, and one attempt would pass by
+      # luck against the broken implementation.
+      for _ <- 1..40 do
+        {:ok, room} = RoomSupervisor.ensure_started("churn", stop_when_empty: true)
+        {:ok, _alice} = Server.join(room, "alice")
+        {:ok, _player} = Server.leave(room, "alice")
+
+        {:ok, next} = RoomSupervisor.ensure_started("churn", stop_when_empty: true)
+
+        assert Process.alive?(next)
+        # Alive is not enough: it has to answer.
+        assert State.player_count(Server.state(next)) == 0
+
+        RoomSupervisor.stop("churn")
+      end
+    end
   end
 
   describe "introspection" do

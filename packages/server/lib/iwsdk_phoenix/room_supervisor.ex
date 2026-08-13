@@ -119,11 +119,18 @@ defmodule IwsdkPhoenix.RoomSupervisor do
     end
   end
 
-  @doc "The room process for `room_id`, or `nil`."
+  @doc """
+  The room process for `room_id`, or `nil`.
+
+  Filters out a pid that has already exited. A room stops itself when its last
+  peer leaves, and `Registry` unregisters it asynchronously afterwards, so for a
+  brief window a lookup returns a dead pid. Handing that back would give the
+  caller a room whose every `GenServer.call` exits.
+  """
   @spec whereis(String.t()) :: pid() | nil
   def whereis(room_id) do
     case Registry.lookup(@registry, room_id) do
-      [{pid, _value}] -> pid
+      [{pid, _value}] -> if Process.alive?(pid), do: pid, else: nil
       [] -> nil
     end
   end
@@ -150,13 +157,40 @@ defmodule IwsdkPhoenix.RoomSupervisor do
     :ok
   end
 
-  defp start_room(room_id, opts) do
+  # Bounded retry while the registry still holds a room that has already exited.
+  # 50 × 10ms; the window in practice is a scheduler hop.
+  @registry_settle_attempts 50
+  @registry_settle_ms 10
+
+  defp start_room(room_id, opts, attempts \\ @registry_settle_attempts) do
     child = {Server, Keyword.put(opts, :id, room_id)}
 
     case DynamicSupervisor.start_child(@rooms, child) do
-      {:ok, pid} -> {:ok, pid}
-      {:error, {:already_started, pid}} -> {:ok, pid}
-      {:error, reason} -> {:error, reason}
+      {:ok, pid} ->
+        {:ok, pid}
+
+      {:error, {:already_started, pid}} ->
+        cond do
+          # Two peers racing into an empty room. The loser uses the winner's.
+          Process.alive?(pid) ->
+            {:ok, pid}
+
+          # The previous room has exited but the registry has not yet processed
+          # its DOWN, so the name is still taken by a corpse. This is not
+          # hypothetical: a peer rejoining the instant the last one left hits it,
+          # and the whole point of reaping empty rooms is that rooms do get
+          # recreated right after they are destroyed. Waiting is the only
+          # option — the registry frees the name on its own.
+          attempts > 0 ->
+            Process.sleep(@registry_settle_ms)
+            start_room(room_id, opts, attempts - 1)
+
+          true ->
+            {:error, :room_name_never_released}
+        end
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 end
