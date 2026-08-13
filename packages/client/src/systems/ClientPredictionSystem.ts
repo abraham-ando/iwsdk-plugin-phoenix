@@ -22,6 +22,7 @@ import { Networked, NetworkInput } from '../components/index.js';
 import type { INetworkAdapter } from '../interfaces/INetworkAdapter.js';
 import { BinaryProtocol } from '../protocol/BinaryProtocol.js';
 import { OpCode } from '../protocol/opcodes.js';
+import { integrateMovement } from '../math/movement.js';
 
 /** One unacknowledged input, retained for replay. */
 interface PendingInput {
@@ -55,6 +56,15 @@ export class ClientPredictionSystem extends createSystem(
      * Prevents float noise from producing a visible snap every tick.
      */
     reconcileEpsilon: { type: Types.Float32, default: 0.001 },
+    /**
+     * Longest timestep a single input may integrate, in milliseconds.
+     *
+     * Must match `IwsdkPhoenix.Physics.Kinematic`'s `max_delta_ms`. The server
+     * clamps this to stop a client claiming one ten-second frame and crossing
+     * the map in a single packet; the client applies the same clamp so that a
+     * render hitch does not by itself cause a divergence and a visible snap.
+     */
+    maxDeltaMs: { type: Types.Float32, default: 100 },
   },
 ) {
   private pending: PendingInput[] = [];
@@ -141,8 +151,10 @@ export class ClientPredictionSystem extends createSystem(
    * Integrate one input step.
    *
    * Movement is applied in the entity's yaw frame so "forward" means forward
-   * relative to where the player is facing. This must stay bit-compatible with
-   * `IwsdkPhoenix.Physics.Kinematic.apply_input/3`.
+   * relative to where the player is facing. This must stay behaviourally
+   * identical to `IwsdkPhoenix.Physics.Kinematic.apply_input/3`, including the
+   * clamping below — the shared `test/fixtures/protocol_vectors.json` pins the
+   * equivalence so the two cannot drift apart unnoticed.
    */
   private applyInput(
     entity: Entity,
@@ -151,18 +163,21 @@ export class ClientPredictionSystem extends createSystem(
     yaw: number,
     deltaSeconds: number,
   ): void {
-    const speed = this.config.moveSpeed.value;
     const position = entity.getVectorView(Transform, 'position');
 
-    const sin = Math.sin(yaw);
-    const cos = Math.cos(yaw);
+    const next = integrateMovement(
+      position[0] as number,
+      position[2] as number,
+      movementX,
+      movementY,
+      yaw,
+      deltaSeconds,
+      this.config.moveSpeed.value,
+      this.config.maxDeltaMs.value,
+    );
 
-    // Right/forward basis from yaw; movementY drives -Z (forward in Three.js).
-    const worldX = movementX * cos + movementY * sin;
-    const worldZ = -movementX * sin + movementY * cos;
-
-    position[0] = (position[0] as number) + worldX * speed * deltaSeconds;
-    position[2] = (position[2] as number) - worldZ * speed * deltaSeconds;
+    position[0] = next.x;
+    position[2] = next.z;
   }
 
   /**

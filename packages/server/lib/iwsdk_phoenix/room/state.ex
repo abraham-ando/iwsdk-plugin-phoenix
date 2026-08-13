@@ -1,0 +1,223 @@
+defmodule IwsdkPhoenix.Room.State do
+  @moduledoc """
+  Pure room state: membership, network-id allocation and authoritative player
+  positions.
+
+  Deliberately free of any Phoenix or process concerns. Everything here is a
+  plain function over a struct, which means the interesting behaviour of a room
+  — id allocation, authority, area-of-interest filtering — is testable without
+  starting a socket, a channel or even a GenServer.
+
+  `IwsdkPhoenix.Room.Server` wraps this in a process; `IwsdkPhoenix.RoomChannel`
+  drives it from channel callbacks.
+  """
+
+  alias IwsdkPhoenix.Physics.Kinematic
+  alias IwsdkPhoenix.Protocol
+  alias IwsdkPhoenix.SpatialGrid
+
+  @max_network_id 2_147_483_647
+
+  defstruct id: nil,
+            mode: :host_relayed,
+            players: %{},
+            entities: %{},
+            next_network_id: 1,
+            tick: 0,
+            physics_module: Kinematic,
+            physics_state: nil,
+            interest_radius: 50.0,
+            cell_size: 50.0,
+            grid_mode: :full
+
+  @type mode :: :host_relayed | :server_authoritative
+
+  @type player :: %{
+          peer_id: String.t(),
+          network_id: pos_integer(),
+          position: Protocol.vec3(),
+          last_sequence: non_neg_integer()
+        }
+
+  @type t :: %__MODULE__{}
+
+  @doc """
+  Build a room.
+
+  ## Options
+
+    * `:mode` — `:host_relayed` (default) or `:server_authoritative`
+    * `:interest_radius` — metres; `nil` disables area-of-interest filtering
+    * `:cell_size` — spatial grid cell edge, metres
+    * `:physics_module` — a `IwsdkPhoenix.Physics` implementation
+    * `:physics_opts` — forwarded to the backend's `init/1`
+  """
+  @spec new(String.t(), keyword()) :: t()
+  def new(id, opts \\ []) do
+    physics_module = Keyword.get(opts, :physics_module, Kinematic)
+    {:ok, physics_state} = physics_module.init(Keyword.get(opts, :physics_opts, []))
+
+    %__MODULE__{
+      id: id,
+      mode: Keyword.get(opts, :mode, :host_relayed),
+      physics_module: physics_module,
+      physics_state: physics_state,
+      interest_radius: Keyword.get(opts, :interest_radius, 50.0),
+      cell_size: Keyword.get(opts, :cell_size, SpatialGrid.default_cell_size()),
+      grid_mode: Keyword.get(opts, :grid_mode, :full)
+    }
+  end
+
+  @doc """
+  Admit a peer, allocating it a network id.
+
+  Returns `{state, player}`. Re-joining with the same `peer_id` is idempotent
+  and keeps the existing id — a socket reconnect must not orphan the peer's
+  entity and hand it a new identity.
+  """
+  @spec join(t(), String.t(), Protocol.vec3()) :: {t(), player()}
+  def join(%__MODULE__{} = state, peer_id, position \\ %{x: 0.0, y: 0.0, z: 0.0}) do
+    case Map.fetch(state.players, peer_id) do
+      {:ok, existing} ->
+        {state, existing}
+
+      :error ->
+        {network_id, state} = allocate_network_id(state)
+
+        player = %{
+          peer_id: peer_id,
+          network_id: network_id,
+          position: position,
+          last_sequence: 0
+        }
+
+        {%{state | players: Map.put(state.players, peer_id, player)}, player}
+    end
+  end
+
+  @doc "Remove a peer and everything it owned."
+  @spec leave(t(), String.t()) :: {t(), player() | nil}
+  def leave(%__MODULE__{} = state, peer_id) do
+    case Map.pop(state.players, peer_id) do
+      {nil, _players} ->
+        {state, nil}
+
+      {player, players} ->
+        entities =
+          state.entities
+          |> Enum.reject(fn {_id, entity} -> entity.owner_id == player.network_id end)
+          |> Map.new()
+
+        {%{state | players: players, entities: entities}, player}
+    end
+  end
+
+  @doc "Look up a player by peer id."
+  @spec player(t(), String.t()) :: player() | nil
+  def player(%__MODULE__{} = state, peer_id), do: Map.get(state.players, peer_id)
+
+  @doc "Number of connected peers."
+  @spec player_count(t()) :: non_neg_integer()
+  def player_count(%__MODULE__{} = state), do: map_size(state.players)
+
+  @doc """
+  Apply one client input under server authority.
+
+  Returns `{state, reconcile_frame}` where the frame is the correction to send
+  back to that client. Returns `{state, nil}` for an unknown peer or when the
+  room is not server-authoritative.
+  """
+  @spec apply_input(t(), String.t(), map()) :: {t(), binary() | nil}
+  def apply_input(%__MODULE__{mode: :host_relayed} = state, _peer_id, _input), do: {state, nil}
+
+  def apply_input(%__MODULE__{} = state, peer_id, input) do
+    case Map.fetch(state.players, peer_id) do
+      :error ->
+        {state, nil}
+
+      {:ok, player} ->
+        {updated, physics_state} =
+          state.physics_module.apply_input(
+            %{position: player.position, last_sequence: player.last_sequence},
+            input,
+            state.physics_state
+          )
+
+        player = %{
+          player
+          | position: updated.position,
+            last_sequence: updated.last_sequence
+        }
+
+        state = %{
+          state
+          | players: Map.put(state.players, peer_id, player),
+            physics_state: physics_state
+        }
+
+        frame =
+          Protocol.encode_reconcile(player.network_id, player.last_sequence, player.position)
+
+        {state, frame}
+    end
+  end
+
+  @doc """
+  Record a transform reported by its owner.
+
+  Used in `:host_relayed` rooms so the server still knows where everyone is —
+  which is what makes area-of-interest filtering possible even when the server
+  is not simulating.
+  """
+  @spec track_transform(t(), String.t(), Protocol.vec3()) :: t()
+  def track_transform(%__MODULE__{} = state, peer_id, position) do
+    case Map.fetch(state.players, peer_id) do
+      :error -> state
+      {:ok, player} -> put_in(state.players[peer_id], %{player | position: position})
+    end
+  end
+
+  @doc """
+  Build the snapshot a given viewer should receive.
+
+  When `interest_radius` is set, only players inside the viewer's bubble are
+  included — and the viewer itself is always excluded, since its own position is
+  predicted locally and echoing it back would fight prediction.
+  """
+  @spec snapshot_for(t(), String.t()) :: [Protocol.transform()]
+  def snapshot_for(%__MODULE__{} = state, viewer_peer_id) do
+    viewer = Map.get(state.players, viewer_peer_id)
+
+    state.players
+    |> Enum.reject(fn {peer_id, _player} -> peer_id == viewer_peer_id end)
+    |> Enum.filter(fn {_peer_id, player} -> visible?(state, viewer, player) end)
+    |> Enum.map(fn {_peer_id, player} ->
+      %{
+        network_id: player.network_id,
+        position: player.position,
+        rotation: %{x: 0.0, y: 0.0, z: 0.0, w: 1.0}
+      }
+    end)
+    |> Enum.sort_by(& &1.network_id)
+  end
+
+  defp visible?(_state, nil, _player), do: true
+  defp visible?(%__MODULE__{interest_radius: nil}, _viewer, _player), do: true
+
+  defp visible?(%__MODULE__{interest_radius: radius}, viewer, player) do
+    SpatialGrid.within?(viewer.position, player.position, radius)
+  end
+
+  @doc "Advance the tick counter."
+  @spec tick(t()) :: t()
+  def tick(%__MODULE__{} = state), do: %{state | tick: state.tick + 1}
+
+  # Network ids are consumed by the client as Int32 (elics has no unsigned
+  # 32-bit storage), so allocation stays inside the positive Int32 range and
+  # wraps rather than overflowing into negative territory.
+  defp allocate_network_id(%__MODULE__{next_network_id: next} = state) do
+    id = next
+    following = if next >= @max_network_id, do: 1, else: next + 1
+    {id, %{state | next_network_id: following}}
+  end
+end

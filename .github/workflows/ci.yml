@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  client:
+    name: Client (TypeScript)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Typecheck against the real @iwsdk/core
+        run: pnpm typecheck
+
+      - run: pnpm test
+
+      - run: pnpm build
+
+      - name: Verify the golden vectors are current
+        # Regenerating must be a no-op. A diff here means the wire format
+        # changed without the fixture being updated, which would let the two
+        # implementations drift apart silently.
+        run: |
+          node scripts/generate-fixtures.mjs
+          git diff --exit-code fixtures/protocol_vectors.tsv
+
+  server:
+    name: Server (Elixir)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - elixir: '1.15'
+            otp: '25'
+          - elixir: '1.17'
+            otp: '27'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: ${{ matrix.elixir }}
+          otp-version: ${{ matrix.otp }}
+
+      - name: Cache deps and build
+        uses: actions/cache@v4
+        with:
+          path: |
+            packages/server/deps
+            packages/server/_build
+          key: ${{ runner.os }}-mix-${{ matrix.elixir }}-${{ matrix.otp }}-${{ hashFiles('packages/server/mix.exs') }}
+          restore-keys: ${{ runner.os }}-mix-${{ matrix.elixir }}-${{ matrix.otp }}-
+
+      - name: Core suite, with no dependencies at all
+        # Proves the protocol, spatial-grid, physics and room layers stay
+        # dependency-free. If this breaks, something leaked a dependency into
+        # the core.
+        working-directory: packages/server
+        run: IWSDK_CORE_ONLY=1 mix test
+        env:
+          MIX_ENV: test
+
+      - run: mix deps.get
+        working-directory: packages/server
+
+      - name: Check formatting
+        working-directory: packages/server
+        run: mix format --check-formatted
+
+      - name: Compile with warnings as errors
+        working-directory: packages/server
+        run: mix compile --warnings-as-errors
+
+      - name: Full suite, including RoomChannel against a real Phoenix
+        working-directory: packages/server
+        run: mix test

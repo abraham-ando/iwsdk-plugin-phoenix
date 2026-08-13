@@ -86,6 +86,9 @@ export type { SpawnRequest } from './systems/PhoenixNetworkSystem.js';
 
 // Math helpers
 export { clamp, distanceSquared, lerpVec3, slerpQuat } from './math/interpolation.js';
+export type { MutableVector } from './math/interpolation.js';
+export { clampToUnitDisc, integrateMovement } from './math/movement.js';
+export type { MovementStep } from './math/movement.js';
 
 // Plugin entrypoint
 export { SystemPriority, installPhoenixNetworking } from './plugin.js';
