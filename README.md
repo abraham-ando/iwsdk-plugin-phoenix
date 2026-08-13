@@ -174,9 +174,16 @@ Regenerate after any protocol change, and treat the diff as the change record:
 pnpm build && node scripts/generate-fixtures.mjs
 ```
 
+Golden vectors prove the two sides *encode* identically. They cannot prove the
+two actually interoperate, so `packages/client/test/interop.test.ts` spawns the
+real Elixir server and drives a full session through it — input simulation,
+reconciliation, snapshots, ownership arbitration and signalling — using the
+genuine client codec, with nothing stubbed on either side. It skips itself when
+Elixir is unavailable.
+
 ## Status
 
-Verified: 86 client tests, 161 server tests, cross-language parity, clean
+Verified: 95 client tests (incl. 9 live interop), 161 server tests, cross-language parity, clean
 typecheck against `@iwsdk/core@0.5.3`, successful build.
 
 Not yet verified in a browser: the Web Worker path (its `RingBuffer` is tested

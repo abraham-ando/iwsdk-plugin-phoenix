@@ -31,6 +31,20 @@ jobs:
 
       - run: pnpm test
 
+      - name: Fail if the interop test silently skipped
+        # The interop suite skips itself when Elixir is missing, so a green run
+        # would otherwise hide the loss of all cross-runtime coverage. Assert
+        # the tests actually executed rather than merely that the file was seen
+        # — a skipped suite still prints its own name.
+        working-directory: packages/client
+        run: |
+          npx vitest run test/interop.test.ts 2>&1 | tee /tmp/interop.log
+          if grep -qi "skipped" /tmp/interop.log; then
+            echo "::error::interop suite skipped — Elixir unavailable, cross-runtime coverage lost"
+            exit 1
+          fi
+          grep -qE "Tests +[0-9]+ passed" /tmp/interop.log
+
       - run: pnpm build
 
       - name: Verify the golden vectors are current

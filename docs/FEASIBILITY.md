@@ -258,9 +258,10 @@ version would be worse than shipping none.
 
 | Check | Result |
 |---|---|
-| Client unit + integration tests | 86 passing |
+| Client unit + integration tests | 95 passing |
 | Server tests (incl. 19 doctests) | 161 passing |
 | Cross-language golden vectors | Verified in both languages |
+| Live interop (TS client driving the real Elixir server) | 9 scenarios passing |
 | TypeScript typecheck against real `@iwsdk/core@0.5.3` | Clean |
 | Client build (ESM + `.d.ts` + bundled worker) | Succeeds |
 | `mix format --check-formatted` | Clean |
