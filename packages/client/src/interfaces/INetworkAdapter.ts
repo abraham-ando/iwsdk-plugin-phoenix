@@ -55,6 +55,20 @@ export interface INetworkAdapter {
   /** Identifier assigned to this peer by the server, or `''` before joining. */
   readonly peerId: string;
 
+  /**
+   * Numeric id the server assigned this peer, or `0` before it is known.
+   *
+   * Distinct from {@link peerId}, which is an opaque string for authentication
+   * and routing. This is the id that appears *on the wire*: it stamps the
+   * peer's own replicated entities and identifies it in ownership grants and
+   * signalling frames. An application cannot replicate anything until it knows
+   * this value, so an adapter that joins a room is expected to surface it.
+   *
+   * Optional because transports without a server — {@link OfflineAdapter} — have
+   * no one to assign it.
+   */
+  readonly networkId?: number;
+
   /** Open the connection and join the requested room. */
   connect(endpoint: string, options?: ConnectOptions): Promise<void>;
 

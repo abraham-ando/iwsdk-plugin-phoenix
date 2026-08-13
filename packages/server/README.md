@@ -34,8 +34,21 @@ defmodule MyAppWeb.UserSocket do
 end
 ```
 
-That is a working host-relayed room. For server authority, have the client join
-with `mode: 'server_authoritative'`.
+Add the room supervisor to your application's tree, so rooms are owned by the
+application rather than by whichever socket happened to open first:
+
+```elixir
+# lib/my_app/application.ex
+children = [
+  MyAppWeb.Endpoint,
+  IwsdkPhoenix.RoomSupervisor
+]
+```
+
+That is a working host-relayed room. Every socket on `room:lobby` drives the same
+room process, which is what makes network ids unique and lets peers see each
+other. For server authority, have the client join with
+`mode: 'server_authoritative'`.
 
 ## Modules
 
@@ -47,6 +60,7 @@ with `mode: 'server_authoritative'`.
 | `IwsdkPhoenix.Room.State` | Pure room state, id allocation, AoI |
 | `IwsdkPhoenix.Room.Handler` | Per-frame decisions, as pure functions |
 | `IwsdkPhoenix.Room.Server` | One process per room, with the tick loop |
+| `IwsdkPhoenix.RoomSupervisor` | Starts and reaps room processes on demand |
 | `IwsdkPhoenix.RoomChannel` | Thin Phoenix channel |
 | `IwsdkPhoenix.Physics` | Behaviour for server authority |
 | `IwsdkPhoenix.Physics.Kinematic` | Default backend, pure Elixir |

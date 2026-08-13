@@ -17,7 +17,9 @@ defmodule IwsdkPhoenix.Room.Server do
   next sleep, and skip entirely if it is already late.
   """
 
-  use GenServer
+  # :transient, so a room that stops itself after the last peer leaves is not
+  # immediately restarted by its supervisor, while a crash still is.
+  use GenServer, restart: :transient
 
   require Logger
 
@@ -38,6 +40,9 @@ defmodule IwsdkPhoenix.Room.Server do
     * `:broadcast` — 1-arity fun receiving `{peer_id, binary}` snapshots.
       Injected rather than calling `Phoenix.PubSub` directly so the loop is
       testable without a running endpoint.
+    * `:stop_when_empty` — stop the room once its last peer leaves, default
+      `false`. Rooms started on demand per socket want this; a persistent room
+      that outlives its occupants does not.
     * everything accepted by `IwsdkPhoenix.Room.State.new/2`
   """
   def start_link(opts) do
@@ -87,6 +92,7 @@ defmodule IwsdkPhoenix.Room.Server do
       room: State.new(Keyword.fetch!(opts, :id), opts),
       interval: interval,
       broadcast: Keyword.get(opts, :broadcast),
+      stop_when_empty: Keyword.get(opts, :stop_when_empty, false),
       deadline: System.monotonic_time(:millisecond) + interval
     }
 
@@ -102,7 +108,17 @@ defmodule IwsdkPhoenix.Room.Server do
 
   def handle_call({:leave, peer_id}, _from, state) do
     {room, player} = State.leave(state.room, peer_id)
-    {:reply, {:ok, player}, %{state | room: room}}
+    state = %{state | room: room}
+
+    # Reap the room with its last occupant, otherwise a server accumulates one
+    # idle tick loop per room anyone has ever visited. Only on a departure: a
+    # room that has not been joined yet is also empty, and stopping it there
+    # would kill it out from under the peer on its way in.
+    if state.stop_when_empty and State.player_count(room) == 0 do
+      {:stop, :normal, {:ok, player}, state}
+    else
+      {:reply, {:ok, player}, state}
+    end
   end
 
   def handle_call({:frame, peer_id, frame}, _from, state) do

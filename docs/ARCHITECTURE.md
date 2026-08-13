@@ -126,12 +126,24 @@ late.
 ```
 RoomChannel      thin Phoenix shim, no logic          (needs Phoenix)
     ↓
+RoomSupervisor   one room process per room id         (no dependencies)
+    ↓
+Room.Server      the room process, and the tick loop  (no dependencies)
+    ↓
 Room.Handler     per-frame decisions, pure functions  (no dependencies)
     ↓
 Room.State       membership, ids, AoI, authority      (no dependencies)
     ↓
 Physics.*        pluggable authority backend          (no dependencies)
 ```
+
+`RoomSupervisor` is the load-bearing step, and its absence was a real bug: the
+channel originally kept a `Room.State` in each socket's assigns, which gave every
+connection a private copy of the room. Every peer was allocated network id 1,
+nobody appeared in anybody else's roster, and ownership was arbitrated twice
+against two different views — all silently. A room is one process, resolved
+through a registry, started by whoever joins first and reaped with its last
+occupant.
 
 Only `RoomChannel` touches Phoenix, and it is conditionally compiled via
 `Code.ensure_loaded?(Phoenix.Channel)`. Everything below it is dependency-free

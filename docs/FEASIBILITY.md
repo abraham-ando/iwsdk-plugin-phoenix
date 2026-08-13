@@ -259,24 +259,62 @@ version would be worse than shipping none.
 
 | Check | Result |
 |---|---|
-| Client unit + integration tests | 95 passing |
-| Server tests (incl. 19 doctests) | 179 passing |
+| Client unit + integration tests | 111 passing |
+| Server tests (incl. 19 doctests) | 197 passing |
 | Cross-language golden vectors | Verified in both languages |
 | Live interop (TS client driving the real Elixir server) | 9 scenarios passing |
 | TypeScript typecheck against real `@iwsdk/core@0.5.3` | Clean |
 | Client build (ESM + `.d.ts` + bundled worker) | Succeeds |
+| Demo app typecheck + build against the *built* plugin | Succeeds |
+| Network worker in a real browser | Loads, connects, publishes |
+| `SharedArrayBuffer` ring path | Active (`crossOriginIsolated`) |
+| Two-peer discovery, replication and departure | Verified in two Chromium contexts |
 | `mix format --check-formatted` | Clean |
 
-**Not verified in this environment:** `IwsdkPhoenix.RoomChannel` has never been
-compiled, because `repo.hex.pm` is unreachable from the build container and
+### What the demo added
+
+`apps/demo` was built to exercise the plugin the way an application does, and
+that turned out to be a different thing from exercising it the way the test
+suite does. Three defects only it could find:
+
+1. **The published worker path was wrong.** `PhoenixAdapter` resolved its worker
+   with `new URL('../network.worker.js', import.meta.url)` — correct relative to
+   the source file, and wrong relative to the bundled `dist/index.js` where the
+   string is actually evaluated. The library built and tested green; every
+   *consumer* failed with `Could not resolve ../network.worker.js`.
+   `test/packaging.test.ts` now asserts against the emitted files.
+
+2. **The server-assigned network id never reached the application.** The join
+   reply carried `network_id`, and `PhoenixConnection` read only `peer_id`. An
+   application had no way to learn its own wire id, so it could not mark a single
+   entity as its own. Now plumbed through the worker to the adapter, and adopted
+   automatically by `PhoenixNetworkSystem.localOwnerId`.
+
+3. **Every socket had a private copy of its room.** `RoomChannel` built a
+   `Room.State` in each connection's assigns, so every peer was allocated network
+   id 1, nobody appeared in anybody else's roster, and ownership was arbitrated
+   independently per connection. Rooms now live in one `Room.Server` process each,
+   started on demand by `IwsdkPhoenix.RoomSupervisor`, and the channel emits the
+   SPAWN frames that let peers discover one another.
+
+The browser verification was done against a stand-in Phoenix socket — enough of
+the v2 protocol to accept a join and relay — driving the real built bundle in two
+Chromium contexts. It confirms the worker boots, the page is cross-origin
+isolated so the shared-memory ring is the live path, the assigned id reaches the
+application, and both halves of peer discovery work: the peer already present
+learns about the newcomer, the newcomer learns about the peer already present,
+and closing one tab removes its avatar from the other.
+
+**Still not verified in this environment:** `IwsdkPhoenix.RoomChannel` has never
+been compiled, because `repo.hex.pm` is unreachable from the build container and
 Phoenix could not be fetched. This is exactly why the channel was made a thin
 shim over `IwsdkPhoenix.Room.Handler` — every decision it makes lives in a
 dependency-free module with full test coverage, and what remains in the channel
 is the translation of those return values into `Phoenix.Channel` callback
-tuples. The CI workflow in `.github/workflows/ci.yml` compiles and tests it
-against a real Phoenix; treat that as the gate before relying on it.
+tuples. `IwsdkPhoenix.RoomSupervisor`, added with the channel rewrite, is
+likewise dependency-free and covered by 18 tests that run without Phoenix. The
+CI workflow in `.github/workflows/ci.yml` compiles and tests the channel against
+a real Phoenix; treat that as the gate before relying on it.
 
-Similarly, the Web Worker path has not been exercised in a browser. The
-`RingBuffer` it depends on is tested directly, including a 20,000-step
-interleaved fuzz run, and `PhoenixAdapter` accepts an injectable `workerFactory`
-precisely so a host can substitute one.
+Also unverified: an actual headset, and the demo's CDN-hosted scene assets,
+which are blocked from this container.

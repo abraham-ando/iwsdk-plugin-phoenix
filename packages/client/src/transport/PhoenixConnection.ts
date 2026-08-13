@@ -65,6 +65,15 @@ export class PhoenixConnection {
   /** Peer id assigned by the server in the join reply. */
   peerId = '';
 
+  /**
+   * Numeric network id assigned by the server in the join reply.
+   *
+   * `0` until a join succeeds. Everything the client publishes is addressed by
+   * this id, so it has to travel back to the render thread before the
+   * application can mark any entity as its own.
+   */
+  networkId = 0;
+
   constructor(
     private readonly events: PhoenixConnectionEvents,
     private readonly socketFactory: SocketFactory = defaultSocketFactory,
@@ -132,8 +141,14 @@ export class PhoenixConnection {
       channel
         .join()
         .receive('ok', (response) => {
-          const reply = (response ?? {}) as { peer_id?: string };
+          const reply = (response ?? {}) as { peer_id?: string; network_id?: number };
           this.peerId = reply.peer_id ?? '';
+          // Both are set before the state change, so a listener reacting to
+          // 'connected' already sees the identity rather than racing it.
+          this.networkId =
+            typeof reply.network_id === 'number' && Number.isInteger(reply.network_id)
+              ? reply.network_id
+              : 0;
           this.setState('connected');
           resolve();
         })
@@ -185,6 +200,7 @@ export class PhoenixConnection {
 
     this.presence = null;
     this.peerId = '';
+    this.networkId = 0;
     this.setState('disconnected');
   }
 

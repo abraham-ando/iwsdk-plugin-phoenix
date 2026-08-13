@@ -50,6 +50,43 @@ jobs:
           node scripts/generate-fixtures.mjs
           git diff --exit-code fixtures/protocol_vectors.tsv
 
+  demo:
+    name: Demo app
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # The demo consumes the plugin's build output, not its source, so this is
+      # not redundant with the client job: it is the only thing that exercises
+      # the published shape of the package. A worker path that resolves from
+      # `src` but not from `dist` builds the library fine and breaks every
+      # application that installs it — which is exactly the bug that got the
+      # demo added.
+      - run: pnpm --filter @iwsdk/plugin-phoenix build
+
+      - name: Typecheck the demo against the built plugin
+        run: pnpm --filter @iwsdk/plugin-phoenix-demo typecheck
+
+      - name: Build the demo
+        run: pnpm --filter @iwsdk/plugin-phoenix-demo build
+
+      - name: Assert the network worker was emitted and referenced
+        # Vite fingerprints the worker and rewrites the reference. If the plugin
+        # ever stops being resolvable as a worker entry, the build still
+        # succeeds and the app simply never connects.
+        run: |
+          test -n "$(find apps/demo/dist/assets -name 'network.worker-*.js' -print -quit)"
+          grep -rq 'network\.worker-' apps/demo/dist/assets/*.js
+
   server:
     name: Server (Elixir)
     runs-on: ubuntu-latest
