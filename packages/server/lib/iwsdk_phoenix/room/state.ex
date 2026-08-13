@@ -15,14 +15,15 @@ defmodule IwsdkPhoenix.Room.State do
   alias IwsdkPhoenix.Physics.Kinematic
   alias IwsdkPhoenix.Protocol
   alias IwsdkPhoenix.SpatialGrid
-
-  @max_network_id 2_147_483_647
+  alias IwsdkPhoenix.Zone.IdAllocator
 
   defstruct id: nil,
             mode: :host_relayed,
             players: %{},
             entities: %{},
-            next_network_id: 1,
+            allocator: nil,
+            allocator_state: nil,
+            migrating: MapSet.new(),
             tick: 0,
             physics_module: Kinematic,
             physics_state: nil,
@@ -54,11 +55,16 @@ defmodule IwsdkPhoenix.Room.State do
     * `:physics_opts` — forwarded to the backend's `init/1`
     * `:steal_policy` — `:deny` (default) or `:allow`, controlling whether one
       player may take an object another player already owns
+    * `:allocator` — `{fun, initial_state}` from `IwsdkPhoenix.Zone.IdAllocator`.
+      Defaults to a local counter. A deployment where players migrate between
+      zones **must** supply a globally-unique allocator, or ids will collide
+      silently across zones
   """
   @spec new(String.t(), keyword()) :: t()
   def new(id, opts \\ []) do
     physics_module = Keyword.get(opts, :physics_module, Kinematic)
     {:ok, physics_state} = physics_module.init(Keyword.get(opts, :physics_opts, []))
+    {allocator, allocator_state} = Keyword.get(opts, :allocator) || IdAllocator.local()
 
     %__MODULE__{
       id: id,
@@ -68,7 +74,9 @@ defmodule IwsdkPhoenix.Room.State do
       interest_radius: Keyword.get(opts, :interest_radius, 50.0),
       cell_size: Keyword.get(opts, :cell_size, SpatialGrid.default_cell_size()),
       grid_mode: Keyword.get(opts, :grid_mode, :full),
-      steal_policy: Keyword.get(opts, :steal_policy, :deny)
+      steal_policy: Keyword.get(opts, :steal_policy, :deny),
+      allocator: allocator,
+      allocator_state: allocator_state
     }
   end
 
@@ -135,6 +143,16 @@ defmodule IwsdkPhoenix.Room.State do
   def apply_input(%__MODULE__{mode: :host_relayed} = state, _peer_id, _input), do: {state, nil}
 
   def apply_input(%__MODULE__{} = state, peer_id, input) do
+    # Mid-handoff: the target zone owns this player's simulation now. Applying
+    # input in both places would make the two copies diverge.
+    if MapSet.member?(state.migrating, peer_id) do
+      {state, nil}
+    else
+      do_apply_input(state, peer_id, input)
+    end
+  end
+
+  defp do_apply_input(%__MODULE__{} = state, peer_id, input) do
     case Map.fetch(state.players, peer_id) do
       :error ->
         {state, nil}
@@ -244,6 +262,90 @@ defmodule IwsdkPhoenix.Room.State do
   end
 
   @doc """
+  Begin migrating a player to another zone. Phase one of a two-phase handoff.
+
+  Returns `{state, snapshot}`, or `{state, nil}` for an unknown peer. The player
+  is marked as migrating but **deliberately not removed**: if the target zone
+  refuses or crashes, `abort_migration/2` puts them straight back. Removing here
+  instead would mean a failed handoff loses the player entirely.
+
+  While marked, the source stops applying their input — otherwise both zones
+  would simulate the same player for the duration of the handoff and their
+  positions would diverge.
+  """
+  @spec begin_migration(t(), String.t()) :: {t(), map() | nil}
+  def begin_migration(%__MODULE__{} = state, peer_id) do
+    case Map.fetch(state.players, peer_id) do
+      :error ->
+        {state, nil}
+
+      {:ok, player} ->
+        owned =
+          state.entities
+          |> Enum.filter(fn {_id, entity} -> entity.owner_id == player.network_id end)
+          |> Enum.map(fn {id, _entity} -> id end)
+
+        snapshot = %{
+          peer_id: peer_id,
+          network_id: player.network_id,
+          position: player.position,
+          last_sequence: player.last_sequence,
+          owned_entities: owned
+        }
+
+        {%{state | migrating: MapSet.put(state.migrating, peer_id)}, snapshot}
+    end
+  end
+
+  @doc """
+  Phase three: the target confirmed, so drop the player here.
+
+  Safe to call for a peer that is not migrating; it behaves like `leave/2`.
+  """
+  @spec complete_migration(t(), String.t()) :: t()
+  def complete_migration(%__MODULE__{} = state, peer_id) do
+    {state, _player} = leave(state, peer_id)
+    %{state | migrating: MapSet.delete(state.migrating, peer_id)}
+  end
+
+  @doc "Undo `begin_migration/2` after a failed handoff; the player resumes here."
+  @spec abort_migration(t(), String.t()) :: t()
+  def abort_migration(%__MODULE__{} = state, peer_id) do
+    %{state | migrating: MapSet.delete(state.migrating, peer_id)}
+  end
+
+  @doc """
+  Phase two: admit a player migrating in from another zone.
+
+  The incoming `network_id` is preserved rather than reallocated. Renumbering
+  would be visible to every other client as a despawn/respawn, and any in-flight
+  frame naming the old id would land on the wrong entity. Preserving it is only
+  sound when the allocator makes ids unique across zones — see
+  `IwsdkPhoenix.Zone.IdAllocator`.
+  """
+  @spec admit_migrated(t(), map()) :: {t(), map()}
+  def admit_migrated(%__MODULE__{} = state, snapshot) do
+    player = %{
+      peer_id: snapshot.peer_id,
+      network_id: snapshot.network_id,
+      position: snapshot.position,
+      last_sequence: snapshot.last_sequence
+    }
+
+    entities =
+      Enum.reduce(Map.get(snapshot, :owned_entities, []), state.entities, fn id, acc ->
+        Map.put(acc, id, %{owner_id: snapshot.network_id})
+      end)
+
+    {%{state | players: Map.put(state.players, snapshot.peer_id, player), entities: entities},
+     player}
+  end
+
+  @doc "Whether a peer is mid-handoff."
+  @spec migrating?(t(), String.t()) :: boolean()
+  def migrating?(%__MODULE__{} = state, peer_id), do: MapSet.member?(state.migrating, peer_id)
+
+  @doc """
   Record a transform reported by its owner.
 
   Used in `:host_relayed` rooms so the server still knows where everyone is —
@@ -294,11 +396,9 @@ defmodule IwsdkPhoenix.Room.State do
   def tick(%__MODULE__{} = state), do: %{state | tick: state.tick + 1}
 
   # Network ids are consumed by the client as Int32 (elics has no unsigned
-  # 32-bit storage), so allocation stays inside the positive Int32 range and
-  # wraps rather than overflowing into negative territory.
-  defp allocate_network_id(%__MODULE__{next_network_id: next} = state) do
-    id = next
-    following = if next >= @max_network_id, do: 1, else: next + 1
-    {id, %{state | next_network_id: following}}
+  # 32-bit storage), so every allocator stays inside the positive Int32 range.
+  defp allocate_network_id(%__MODULE__{} = state) do
+    {id, allocator_state} = state.allocator.(state.allocator_state)
+    {id, %{state | allocator_state: allocator_state}}
   end
 end

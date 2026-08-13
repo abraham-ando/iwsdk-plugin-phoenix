@@ -50,6 +50,10 @@ with `mode: 'server_authoritative'`.
 | `IwsdkPhoenix.RoomChannel` | Thin Phoenix channel |
 | `IwsdkPhoenix.Physics` | Behaviour for server authority |
 | `IwsdkPhoenix.Physics.Kinematic` | Default backend, pure Elixir |
+| `IwsdkPhoenix.Zone.Handoff` | Two-phase player migration between zones |
+| `IwsdkPhoenix.Zone.IdAllocator` | Collision-free network ids across zones |
+| `IwsdkPhoenix.Persistence.Buffer` | Coalescing write-behind buffer |
+| `IwsdkPhoenix.Persistence.Writer` | Batched flush process |
 
 ## Optional dependencies
 
@@ -112,6 +116,41 @@ IwsdkPhoenix.Room.State.new("lobby", interest_radius: 50.0, cell_size: 50.0)
 Cell size should be at least the interest radius so one ring of neighbours
 covers the bubble. Pass `grid_mode: :flat` for ground-based worlds to skip the
 vertical ring (9 cells instead of 27).
+
+## Zone handoff
+
+Moving a player between zones is two-phase, because the obvious one-phase
+versions are both wrong: remove-then-add loses the player if the target is
+unreachable, and add-then-remove leaves them simulating in two places at once.
+
+```elixir
+IwsdkPhoenix.Zone.Handoff.transfer(zone_a, zone_b, "alice")
+```
+
+The player is retained in the source until the target confirms, so a failed
+handoff costs only the input during the attempt.
+
+Handoff requires ids that are unique across zones — a per-room counter would
+silently collide. Give each zone a disjoint range:
+
+```elixir
+IwsdkPhoenix.Room.State.new("zone-3",
+  allocator: IwsdkPhoenix.Zone.IdAllocator.partitioned(3)
+)
+```
+
+## Persistence
+
+Asynchronous, batched, and coalescing — a player publishing at 30 Hz costs one
+write per flush interval, not thirty per second.
+
+```elixir
+{IwsdkPhoenix.Persistence.Writer, store: MyApp.PlayerStore, interval_ms: 5_000}
+```
+
+Rooms call `Writer.record/3`, which is a cast and therefore cannot block a tick
+or fail. Failed batches are retried without overwriting newer values, and
+whatever is pending is flushed on graceful shutdown.
 
 ## License
 

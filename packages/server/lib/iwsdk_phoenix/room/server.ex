@@ -114,6 +114,29 @@ defmodule IwsdkPhoenix.Room.Server do
 
   def handle_call(:state, _from, state), do: {:reply, state.room, state}
 
+  # -- Zone handoff -----------------------------------------------------------
+  #
+  # Driven by IwsdkPhoenix.Zone.Handoff. Kept as plain calls so a zone can be
+  # anything addressable by GenServer — a local Registry entry or a Horde one.
+
+  def handle_call({:handoff_prepare, peer_id}, _from, state) do
+    {room, snapshot} = State.begin_migration(state.room, peer_id)
+    {:reply, snapshot, %{state | room: room}}
+  end
+
+  def handle_call({:handoff_commit, snapshot}, _from, state) do
+    {room, player} = State.admit_migrated(state.room, snapshot)
+    {:reply, player, %{state | room: room}}
+  end
+
+  def handle_call({:handoff_finalize, peer_id}, _from, state) do
+    {:reply, :ok, %{state | room: State.complete_migration(state.room, peer_id)}}
+  end
+
+  def handle_call({:handoff_abort, peer_id}, _from, state) do
+    {:reply, :ok, %{state | room: State.abort_migration(state.room, peer_id)}}
+  end
+
   @impl true
   def handle_info(:tick, state) do
     room = State.tick(state.room)

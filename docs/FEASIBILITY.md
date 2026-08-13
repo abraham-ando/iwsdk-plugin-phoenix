@@ -182,6 +182,9 @@ efforts than this package, and both are honest about their cost.
 | Network LOD (30/15/5 Hz bands) | Implemented on both sides; see the scope note below |
 | `INetworkAdapter` RFC surface | Implemented, with three adapters proving the abstraction |
 | Ownership transfer (server-arbitrated) | Implemented; not in the original spec, but required for grabbing shared objects |
+| Asynchronous batched persistence | Implemented as a coalescing write-behind buffer and writer process, independent of Ecto |
+| Zone handoff between processes | Implemented as a two-phase protocol; cross-*node* process placement is left to Horde |
+| Cross-zone id allocation | Implemented; not in the original spec, but required for handoff to be correct at all |
 
 ### Scope note on Network LOD
 
@@ -197,21 +200,50 @@ presenting itself as the whole mechanism.
 
 ---
 
+## 3b. A problem the specification does not mention: ids collide across zones
+
+The design describes zone handoff via Horde as a scalability feature, and
+network ids as a per-room concern. Those two are in direct conflict, and
+implementing the first exposes it.
+
+A single room can allocate ids from a plain counter — it is the only writer, so
+uniqueness is free. As soon as a player can *move between* zones, that breaks:
+zone A and zone B both start counting at 1, so a player arriving in B carrying
+id 7 collides with whatever B already calls 7. Nothing errors. Two entities
+share an id, transforms cross-apply, and two avatars smear into one another.
+
+Renumbering on arrival is not a fix. The id is the address every other client
+uses for that entity, so changing it is a visible despawn/respawn for the whole
+room, and any frame still in flight naming the old id lands on the wrong entity.
+
+`IwsdkPhoenix.Zone.IdAllocator` resolves it by making uniqueness *structural*:
+`partitioned/2` puts the zone index in the high bits and a per-zone counter in
+the low bits, so zones allocate concurrently and can never collide, with no
+coordination and no allocator to become a bottleneck. The default 8/23 split
+gives 256 zones of ~8.3M entities. A single-zone deployment keeps the plain
+counter and pays nothing.
+
+---
+
 ## 4. Specified but not implemented
 
 These were part of the design and are deliberately not in this package. Each
 would be a meaningful piece of work in its own right, and shipping a token
 version would be worse than shipping none.
 
-- **Horde clustering and zone handoff.** `horde` is declared as an optional
-  dependency and `IwsdkPhoenix.Room.Server` is already addressable through a
-  registry, so the seam exists. Actual cross-node process migration with
-  transparent socket handoff is not implemented.
+- **Cross-node process placement.** `horde` remains an optional dependency.
+  `IwsdkPhoenix.Zone.Handoff` addresses zones through any `GenServer.server()`,
+  so a `Horde.Registry` via-tuple works unchanged — but the package does not
+  ship a supervisor that migrates zone processes between nodes on failure. What
+  *is* implemented is the harder half: the player handoff protocol itself (see
+  below).
 - **WebRTC signalling and spatialised audio.** The design calls for peer
   signalling plus Web Audio `PannerNode` fed from ECS coordinates. Nothing in
   the binary protocol prevents it; it is simply not built.
-- **Ecto/PostgreSQL persistence.** No schema, no batch writers. `IwsdkPhoenix`
-  has no database dependency at all.
+- **Ecto schemas.** `IwsdkPhoenix` still has no database dependency and ships
+  no schema or migration — the application owns its tables. The batching and
+  coalescing layer *is* implemented (see below); only the Ecto-specific glue is
+  left to the caller, which is a four-line `insert_all`.
 - **Phoenix Presence integration.** `PhoenixConnection` consumes Presence on the
   client and degrades gracefully when the server does not track it, but the
   package does not ship a `Phoenix.Presence` module for the server side.
@@ -223,7 +255,7 @@ version would be worse than shipping none.
 | Check | Result |
 |---|---|
 | Client unit + integration tests | 78 passing |
-| Server tests (incl. 14 doctests) | 107 passing |
+| Server tests (incl. 19 doctests) | 146 passing |
 | Cross-language golden vectors | Verified in both languages |
 | TypeScript typecheck against real `@iwsdk/core@0.5.3` | Clean |
 | Client build (ESM + `.d.ts` + bundled worker) | Succeeds |

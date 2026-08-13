@@ -129,6 +129,9 @@ an honest client's prediction matches exactly and no correction is ever visible.
 - Spatial-hash area-of-interest filtering
 - Pluggable authority backend; the default rejects speed hacks, the diagonal
   exploit, oversized timesteps and replayed input
+- Two-phase zone handoff that never loses or duplicates a player, with
+  collision-free id allocation across zones
+- Coalescing write-behind persistence, independent of Ecto
 - Works without Phoenix for everything except the channel itself
 
 ## Documentation
@@ -172,7 +175,7 @@ pnpm build && node scripts/generate-fixtures.mjs
 
 ## Status
 
-Verified: 78 client tests, 107 server tests, cross-language parity, clean
+Verified: 78 client tests, 146 server tests, cross-language parity, clean
 typecheck against `@iwsdk/core@0.5.3`, successful build.
 
 Not yet verified in a browser: the Web Worker path (its `RingBuffer` is tested
