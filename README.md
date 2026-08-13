@@ -152,7 +152,7 @@ achievable as described, and the document explains why and what replaced it.
 ## Development
 
 ```bash
-pnpm install
+pnpm install --frozen-lockfile
 pnpm build                    # ESM + .d.ts + bundled worker
 pnpm test                     # client suite
 pnpm typecheck                # against the real @iwsdk/core
