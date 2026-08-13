@@ -1,0 +1,24 @@
+{
+  "name": "iwsdk-phoenix-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Monorepo for @iwsdk/plugin-phoenix (client) and iwsdk_phoenix (Elixir server)",
+  "license": "MIT",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "build": "pnpm --filter @iwsdk/plugin-phoenix build",
+    "test": "pnpm --filter @iwsdk/plugin-phoenix test",
+    "typecheck": "pnpm --filter @iwsdk/plugin-phoenix typecheck",
+    "test:server": "cd packages/server && mix test",
+    "fixtures": "node scripts/generate-fixtures.mjs"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  }
+}

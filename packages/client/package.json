@@ -1,0 +1,68 @@
+{
+  "name": "@iwsdk/plugin-phoenix",
+  "version": "0.1.0",
+  "description": "High-performance WebXR networking for Meta's Immersive Web SDK, powered by Phoenix Channels and the BEAM",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./worker": {
+      "import": "./dist/network.worker.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "webxr",
+    "iwsdk",
+    "three",
+    "phoenix",
+    "elixir",
+    "beam",
+    "multiplayer",
+    "networking",
+    "ecs",
+    "vr",
+    "metaquest"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "phoenix": "^1.7.0"
+  },
+  "peerDependencies": {
+    "@iwsdk/core": ">=0.5.0"
+  },
+  "peerDependenciesMeta": {
+    "@iwsdk/core": {
+      "optional": false
+    }
+  },
+  "devDependencies": {
+    "@iwsdk/core": "0.5.3",
+    "@types/phoenix": "^1.6.6",
+    "elics": "3.4.2",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  },
+  "engines": {
+    "node": ">=20.19.0"
+  }
+}
