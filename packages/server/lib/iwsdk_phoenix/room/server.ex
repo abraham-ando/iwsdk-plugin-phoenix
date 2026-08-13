@@ -61,6 +61,18 @@ defmodule IwsdkPhoenix.Room.Server do
     GenServer.call(room, {:frame, peer_id, frame})
   end
 
+  @doc """
+  Create a replicated object in the room.
+
+  Returns `{:ok, entity, spawn_frame}`. Broadcast the frame to the room so
+  every client instantiates it.
+  """
+  def spawn_entity(room, opts \\ []), do: GenServer.call(room, {:spawn_entity, opts})
+
+  @doc "Remove an object. Returns `{:ok, despawn_frame}` or `{:ok, nil}`."
+  def despawn_entity(room, network_id),
+    do: GenServer.call(room, {:despawn_entity, network_id})
+
   @doc "Current room state. Intended for tests and diagnostics."
   def state(room), do: GenServer.call(room, :state)
 
@@ -113,6 +125,16 @@ defmodule IwsdkPhoenix.Room.Server do
       {:error, reason, room} ->
         {:reply, {:error, reason}, %{state | room: room}}
     end
+  end
+
+  def handle_call({:spawn_entity, opts}, _from, state) do
+    {room, entity, frame} = State.spawn_entity(state.room, opts)
+    {:reply, {:ok, entity, frame}, %{state | room: room}}
+  end
+
+  def handle_call({:despawn_entity, network_id}, _from, state) do
+    {room, frame} = State.despawn_entity(state.room, network_id)
+    {:reply, {:ok, frame}, %{state | room: room}}
   end
 
   def handle_call(:state, _from, state), do: {:reply, state.room, state}

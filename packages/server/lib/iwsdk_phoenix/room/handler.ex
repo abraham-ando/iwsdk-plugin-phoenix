@@ -74,9 +74,13 @@ defmodule IwsdkPhoenix.Room.Handler do
       opcode == Protocol.op_signal() ->
         relay_signal(state, peer_id, frame)
 
-      # Track positions only when filtering actually needs them; otherwise stay
-      # on the zero-decode path.
-      state.interest_radius != nil and
+      # Decode only when something actually needs the positions. Two features
+      # do, for different reasons: area-of-interest filtering needs to know
+      # where players are, and server-spawned objects need their authoritative
+      # transform kept current or their replicated position goes stale. Gating
+      # this on AoI alone was a bug — a room holding objects but no interest
+      # radius replicated every object from its spawn position forever.
+      needs_positions?(state) and
           opcode in [Protocol.op_transform_update(), Protocol.op_snapshot()] ->
         state = track_positions(state, peer_id, frame)
         {:broadcast, frame, state}
@@ -178,6 +182,12 @@ defmodule IwsdkPhoenix.Room.Handler do
     end
   end
 
+  # A pure relay with neither feature enabled keeps the zero-decode fast path:
+  # peek one byte, forward the payload untouched.
+  defp needs_positions?(state) do
+    state.interest_radius != nil or map_size(state.entities) > 0
+  end
+
   defp reply_pong(state, frame) do
     case Protocol.decode(frame) do
       {:ok, :ping, %{timestamp: timestamp}} ->
@@ -190,8 +200,31 @@ defmodule IwsdkPhoenix.Room.Handler do
 
   defp track_positions(state, peer_id, frame) do
     case Protocol.decode(frame) do
-      {:ok, :transform_update, %{position: position}} ->
-        State.track_transform(state, peer_id, position)
+      {:ok, :transform_update, %{network_id: network_id, position: position, rotation: rotation}} ->
+        player = State.player(state, peer_id)
+
+        cond do
+          is_nil(player) ->
+            state
+
+          # The peer's own avatar.
+          player.network_id == network_id ->
+            State.track_transform(state, peer_id, position)
+
+          # An object it owns. Rejected otherwise, so a client cannot teleport
+          # something it does not hold.
+          true ->
+            case State.track_entity_transform(
+                   state,
+                   player.network_id,
+                   network_id,
+                   position,
+                   rotation
+                 ) do
+              {:ok, state} -> state
+              {:error, _reason} -> state
+            end
+        end
 
       {:ok, :snapshot, %{records: [%{position: position} | _]}} ->
         # The first record is the peer's own avatar by convention; that is

@@ -34,6 +34,15 @@ defmodule IwsdkPhoenix.Room.State do
 
   @type mode :: :host_relayed | :server_authoritative
 
+  @type entity :: %{
+          network_id: pos_integer(),
+          prefab_id: non_neg_integer(),
+          owner_id: non_neg_integer(),
+          position: Protocol.vec3() | nil,
+          rotation: Protocol.quat() | nil,
+          server_spawned: boolean()
+        }
+
   @type player :: %{
           peer_id: String.t(),
           network_id: pos_integer(),
@@ -233,7 +242,12 @@ defmodule IwsdkPhoenix.Room.State do
 
         state =
           if granted? do
-            %{state | entities: Map.put(state.entities, network_id, %{owner_id: owner_id})}
+            existing = Map.get(state.entities, network_id, blank_entity(network_id))
+
+            %{
+              state
+              | entities: Map.put(state.entities, network_id, %{existing | owner_id: owner_id})
+            }
           else
             state
           end
@@ -259,6 +273,108 @@ defmodule IwsdkPhoenix.Room.State do
 
   defp owner_connected?(%__MODULE__{} = state, owner_id) do
     Enum.any?(state.players, fn {_peer_id, player} -> player.network_id == owner_id end)
+  end
+
+  @doc """
+  Create a replicated entity owned by the room rather than by a player.
+
+  This is what lets a room hold *objects* — a ball, a tool, a door — and not
+  just avatars. The returned frame is the `SPAWN_ENTITY` broadcast that tells
+  every client to instantiate it.
+
+  Ownership starts at `owner_id` (0 meaning the room itself). A player takes it
+  later through `request_ownership/4`, which is the "picking it up" path.
+
+  ## Examples
+
+      iex> alias IwsdkPhoenix.Room.State
+      iex> state = State.new("lobby")
+      iex> {_state, entity, _frame} = State.spawn_entity(state, prefab_id: 3)
+      iex> entity.prefab_id
+      3
+  """
+  @spec spawn_entity(t(), keyword()) :: {t(), entity(), binary()}
+  def spawn_entity(%__MODULE__{} = state, opts \\ []) do
+    {network_id, state} = allocate_network_id(state)
+
+    entity = %{
+      network_id: network_id,
+      prefab_id: Keyword.get(opts, :prefab_id, 0),
+      owner_id: Keyword.get(opts, :owner_id, 0),
+      position: Keyword.get(opts, :position, %{x: 0.0, y: 0.0, z: 0.0}),
+      rotation: Keyword.get(opts, :rotation, %{x: 0.0, y: 0.0, z: 0.0, w: 1.0}),
+      server_spawned: true
+    }
+
+    frame =
+      Protocol.encode_spawn(%{
+        network_id: entity.network_id,
+        prefab_id: entity.prefab_id,
+        owner_id: entity.owner_id,
+        position: entity.position,
+        rotation: entity.rotation
+      })
+
+    {%{state | entities: Map.put(state.entities, network_id, entity)}, entity, frame}
+  end
+
+  @doc """
+  Remove an entity and return the `DESPAWN_ENTITY` broadcast.
+
+  Returns `{state, nil}` for an unknown id, so a duplicate despawn is harmless
+  rather than emitting a second broadcast clients would have to ignore.
+  """
+  @spec despawn_entity(t(), pos_integer()) :: {t(), binary() | nil}
+  def despawn_entity(%__MODULE__{} = state, network_id) do
+    case Map.pop(state.entities, network_id) do
+      {nil, _entities} ->
+        {state, nil}
+
+      {_entity, entities} ->
+        {%{state | entities: entities}, Protocol.encode_despawn(network_id)}
+    end
+  end
+
+  @doc "Look up an entity by network id."
+  @spec entity(t(), pos_integer()) :: entity() | nil
+  def entity(%__MODULE__{} = state, network_id), do: Map.get(state.entities, network_id)
+
+  @doc "Every server-spawned entity, ordered by id."
+  @spec entities(t()) :: [entity()]
+  def entities(%__MODULE__{} = state) do
+    state.entities
+    |> Map.values()
+    |> Enum.filter(& &1.server_spawned)
+    |> Enum.sort_by(& &1.network_id)
+  end
+
+  @doc """
+  Record a transform published by an entity's owner.
+
+  Rejected unless it comes from the current owner: accepting a transform from
+  anyone would let any client teleport any object, which is the same authority
+  hole `request_ownership/4` exists to close.
+  """
+  @spec track_entity_transform(
+          t(),
+          non_neg_integer(),
+          pos_integer(),
+          Protocol.vec3(),
+          Protocol.quat()
+        ) ::
+          {:ok, t()} | {:error, :unknown_entity | :not_owner}
+  def track_entity_transform(%__MODULE__{} = state, claimant_id, network_id, position, rotation) do
+    case Map.get(state.entities, network_id) do
+      nil ->
+        {:error, :unknown_entity}
+
+      %{owner_id: owner_id} when owner_id != claimant_id ->
+        {:error, :not_owner}
+
+      entity ->
+        updated = %{entity | position: position, rotation: rotation}
+        {:ok, %{state | entities: Map.put(state.entities, network_id, updated)}}
+    end
   end
 
   @doc """
@@ -334,7 +450,8 @@ defmodule IwsdkPhoenix.Room.State do
 
     entities =
       Enum.reduce(Map.get(snapshot, :owned_entities, []), state.entities, fn id, acc ->
-        Map.put(acc, id, %{owner_id: snapshot.network_id})
+        existing = Map.get(acc, id, blank_entity(id))
+        Map.put(acc, id, %{existing | owner_id: snapshot.network_id})
       end)
 
     {%{state | players: Map.put(state.players, snapshot.peer_id, player), entities: entities},
@@ -379,17 +496,53 @@ defmodule IwsdkPhoenix.Room.State do
   def snapshot_for(%__MODULE__{} = state, viewer_peer_id) do
     viewer = Map.get(state.players, viewer_peer_id)
 
-    state.players
-    |> Enum.reject(fn {peer_id, _player} -> peer_id == viewer_peer_id end)
-    |> Enum.filter(fn {_peer_id, player} -> visible?(state, viewer, player) end)
-    |> Enum.map(fn {_peer_id, player} ->
-      %{
-        network_id: player.network_id,
-        position: player.position,
-        rotation: %{x: 0.0, y: 0.0, z: 0.0, w: 1.0}
-      }
-    end)
-    |> Enum.sort_by(& &1.network_id)
+    avatars =
+      state.players
+      |> Enum.reject(fn {peer_id, _player} -> peer_id == viewer_peer_id end)
+      |> Enum.filter(fn {_peer_id, player} -> visible?(state, viewer, player) end)
+      |> Enum.map(fn {_peer_id, player} ->
+        %{
+          network_id: player.network_id,
+          position: player.position,
+          rotation: %{x: 0.0, y: 0.0, z: 0.0, w: 1.0}
+        }
+      end)
+
+    objects =
+      state.entities
+      |> Map.values()
+      |> Enum.filter(fn entity ->
+        # Only server-spawned entities have an authoritative transform here;
+        # a bare ownership record has nothing to replicate.
+        # An entity the viewer owns is predicted locally; echoing it back
+        # would fight that prediction, exactly as for their own avatar.
+        entity.server_spawned and not is_nil(entity.position) and
+          visible?(state, viewer, entity) and
+          entity.owner_id != viewer_network_id(viewer)
+      end)
+      |> Enum.map(fn entity ->
+        %{
+          network_id: entity.network_id,
+          position: entity.position,
+          rotation: entity.rotation
+        }
+      end)
+
+    Enum.sort_by(avatars ++ objects, & &1.network_id)
+  end
+
+  defp viewer_network_id(nil), do: nil
+  defp viewer_network_id(%{network_id: id}), do: id
+
+  defp blank_entity(network_id) do
+    %{
+      network_id: network_id,
+      prefab_id: 0,
+      owner_id: 0,
+      position: nil,
+      rotation: nil,
+      server_spawned: false
+    }
   end
 
   defp visible?(_state, nil, _player), do: true

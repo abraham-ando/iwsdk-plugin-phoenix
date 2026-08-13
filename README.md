@@ -128,6 +128,7 @@ an honest client's prediction matches exactly and no correction is ever visible.
 - Binary codec, byte-compatible with the client
 - One process per room, with a drift-free tick loop
 - Spatial-hash area-of-interest filtering
+- Server-owned replicated objects, with authority enforced on their transforms
 - Pluggable authority backend; the default rejects speed hacks, the diagonal
   exploit, oversized timesteps and replayed input
 - Two-phase zone handoff that never loses or duplicates a player, with
@@ -183,7 +184,7 @@ Elixir is unavailable.
 
 ## Status
 
-Verified: 95 client tests (incl. 9 live interop), 161 server tests, cross-language parity, clean
+Verified: 95 client tests (incl. 9 live interop), 179 server tests, cross-language parity, clean
 typecheck against `@iwsdk/core@0.5.3`, successful build.
 
 Not yet verified in a browser: the Web Worker path (its `RingBuffer` is tested

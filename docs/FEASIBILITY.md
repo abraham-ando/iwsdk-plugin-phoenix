@@ -186,6 +186,7 @@ efforts than this package, and both are honest about their cost.
 | Zone handoff between processes | Implemented as a two-phase protocol; cross-*node* process placement is left to Horde |
 | Cross-zone id allocation | Implemented; not in the original spec, but required for handoff to be correct at all |
 | WebRTC signalling relay | Implemented as an opaque, sender-stamped, length-capped `SIGNAL` frame |
+| Server-owned replicated objects | Implemented; the protocol had SPAWN/DESPAWN and the client had the hooks, but nothing could create one |
 
 ### Scope note on Network LOD
 
@@ -259,7 +260,7 @@ version would be worse than shipping none.
 | Check | Result |
 |---|---|
 | Client unit + integration tests | 95 passing |
-| Server tests (incl. 19 doctests) | 161 passing |
+| Server tests (incl. 19 doctests) | 179 passing |
 | Cross-language golden vectors | Verified in both languages |
 | Live interop (TS client driving the real Elixir server) | 9 scenarios passing |
 | TypeScript typecheck against real `@iwsdk/core@0.5.3` | Clean |

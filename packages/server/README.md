@@ -117,6 +117,24 @@ Cell size should be at least the interest radius so one ring of neighbours
 covers the bubble. Pass `grid_mode: :flat` for ground-based worlds to skip the
 vertical ring (9 cells instead of 27).
 
+## Replicated objects
+
+A room can own entities, not just avatars — a ball, a tool, a door:
+
+```elixir
+{:ok, ball, spawn_frame} =
+  IwsdkPhoenix.Room.Server.spawn_entity(room, prefab_id: 3, position: %{x: 0.0, y: 1.0, z: 0.0})
+```
+
+Broadcast `spawn_frame` and every client instantiates it. Objects are
+area-of-interest filtered like players, and excluded from their own owner's
+snapshot since that client predicts them locally.
+
+Only the current owner may move an object; a transform published by anyone else
+is relayed for compatibility but never applied to the server's copy. Combined
+with `request_ownership`, that is the complete "pick it up, move it, put it
+down" path.
+
 ## Zone handoff
 
 Moving a player between zones is two-phase, because the obvious one-phase
