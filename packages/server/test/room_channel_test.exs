@@ -9,7 +9,14 @@
 # had an escaped `\#{}` and therefore returned a constant string, so every peer
 # shared one topic and every directed signal would have been delivered to the
 # whole room. The channel had never been compiled locally, so nothing flagged it.
-if Code.ensure_loaded?(Phoenix.Channel) do
+#
+# The guard tests for the *module*, not for `Phoenix.Channel`. Phoenix being
+# loadable does not mean RoomChannel made it into this build — an earlier
+# dependency-free compile into the same build directory will leave it out — and
+# guarding on the wrong condition produced four confusing UndefinedFunctionError
+# failures rather than a clean skip. CI separately asserts the module did
+# compile, so a skip here cannot quietly hide the whole surface.
+if Code.ensure_loaded?(IwsdkPhoenix.RoomChannel) do
   defmodule IwsdkPhoenix.RoomChannelTest do
     use ExUnit.Case, async: true
 

@@ -21,6 +21,15 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      # The client suite includes a live interop test that spawns the real
+      # Elixir server and drives a session through it. Without Elixir that test
+      # skips itself, so this job needs a BEAM even though it is the TypeScript
+      # one. The guard step below fails the build if it ever skips anyway.
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: '1.17'
+          otp-version: '27'
+
       # Frozen: CI must fail on a lockfile that drifted from package.json
       # rather than silently resolving something different from local dev.
       - run: pnpm install --frozen-lockfile
@@ -86,8 +95,13 @@ jobs:
         # Proves the protocol, spatial-grid, physics and room layers stay
         # dependency-free. If this breaks, something leaked a dependency into
         # the core.
+        #
+        # MIX_BUILD_ROOT is load-bearing: without it this compiles _build/test
+        # with an empty dependency list, and the real `mix test` below reuses
+        # that same directory and finds RoomChannel missing. Giving this run its
+        # own build root keeps the two from poisoning each other.
         working-directory: packages/server
-        run: IWSDK_CORE_ONLY=1 mix test
+        run: IWSDK_CORE_ONLY=1 MIX_BUILD_ROOT=_build_core mix test
         env:
           MIX_ENV: test
 
@@ -101,6 +115,21 @@ jobs:
       - name: Compile with warnings as errors
         working-directory: packages/server
         run: mix compile --warnings-as-errors
+
+      - name: Assert RoomChannel actually compiled
+        # It is conditionally compiled on Phoenix being present, so a build
+        # problem would silently drop it and every channel test would skip —
+        # green, with the Phoenix-facing surface untested.
+        working-directory: packages/server
+        run: |
+          mix run --no-start -e '
+            unless Code.ensure_loaded?(IwsdkPhoenix.RoomChannel) do
+              IO.puts(:stderr, "RoomChannel was not compiled despite Phoenix being available")
+              System.halt(1)
+            end
+          '
+        env:
+          MIX_ENV: test
 
       - name: Full suite, including RoomChannel against a real Phoenix
         working-directory: packages/server
