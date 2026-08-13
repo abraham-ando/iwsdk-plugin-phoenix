@@ -137,6 +137,11 @@ defmodule DemoServerWeb.RoomChannelTest do
       {bob, bob_reply} = join_room("bob", room)
       drain_frames()
 
+      # `leave/1` stops the channel with reason `:left`, and ChannelTest links
+      # the channel to the test process — so without unlinking first, that exit
+      # takes the test down with it before any assertion runs.
+      Process.unlink(bob.channel_pid)
+
       # Wait for the channel to actually die: the despawn is broadcast from
       # `terminate/2`, so draining before then would be a race.
       reference = Process.monitor(bob.channel_pid)
