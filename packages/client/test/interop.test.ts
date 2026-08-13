@@ -20,6 +20,9 @@ import { OpCode } from '../src/protocol/opcodes.js';
 
 const serverDir = fileURLToPath(new URL('../../server', import.meta.url));
 
+/** Marks the start of each framed message; see the harness script. */
+const MAGIC = Buffer.from('IWSD');
+
 const hasElixir = spawnSync('elixir', ['--version'], { encoding: 'utf8' }).status === 0;
 
 /** Outbound kinds emitted by the harness. */
@@ -51,10 +54,29 @@ class Harness {
   private waiters: ((message: HarnessMessage) => void)[] = [];
   private stderr = '';
 
+  /** Anything the child printed outside the framed protocol. */
+  private noise = '';
+
   async start(): Promise<void> {
+    const env = { ...process.env, IWSDK_CORE_ONLY: '1', MIX_ENV: 'test' };
+
+    // Compile first, in a process whose stdout we discard. `mix run` prints
+    // compilation progress on a cold build, and that output would otherwise
+    // land in the same stdout we use as the binary channel. (The framing also
+    // resynchronises on a magic marker, so this is belt and braces — but a
+    // clean channel keeps failures legible.)
+    const compile = spawnSync('elixir', ['-S', 'mix', 'compile'], {
+      cwd: serverDir,
+      env,
+      encoding: 'utf8',
+    });
+    if (compile.status !== 0) {
+      throw new Error(`failed to compile the interop server: ${compile.stderr}`);
+    }
+
     this.child = spawn('elixir', ['-S', 'mix', 'run', 'test/support/interop_server.exs'], {
       cwd: serverDir,
-      env: { ...process.env, IWSDK_CORE_ONLY: '1', MIX_ENV: 'test' },
+      env,
     });
 
     this.child.stdout.on('data', (chunk: Buffer) => this.ingest(chunk));
@@ -78,13 +100,31 @@ class Harness {
     this.buffer = Buffer.concat([this.buffer, chunk]);
 
     for (;;) {
-      if (this.buffer.length < 4) return;
-      const size = this.buffer.readUInt32LE(0);
-      if (this.buffer.length < 4 + size) return;
+      // Resynchronise on the marker. stdout is shared with whatever the child
+      // or its build tooling prints, and without this a single stray line is
+      // read as a length prefix and the stream never recovers.
+      const start = this.buffer.indexOf(MAGIC);
+      if (start === -1) {
+        // Keep a tail in case a marker is split across chunks.
+        if (this.buffer.length > MAGIC.length) {
+          this.noise += this.buffer.subarray(0, this.buffer.length - MAGIC.length).toString();
+          this.buffer = this.buffer.subarray(this.buffer.length - MAGIC.length);
+        }
+        return;
+      }
 
-      const kind = this.buffer.readUInt8(4);
-      const body = this.buffer.subarray(5, 4 + size);
-      this.buffer = this.buffer.subarray(4 + size);
+      if (start > 0) {
+        this.noise += this.buffer.subarray(0, start).toString();
+        this.buffer = this.buffer.subarray(start);
+      }
+
+      if (this.buffer.length < MAGIC.length + 4) return;
+      const size = this.buffer.readUInt32LE(MAGIC.length);
+      if (this.buffer.length < MAGIC.length + 4 + size) return;
+
+      const kind = this.buffer.readUInt8(MAGIC.length + 4);
+      const body = this.buffer.subarray(MAGIC.length + 5, MAGIC.length + 4 + size);
+      this.buffer = this.buffer.subarray(MAGIC.length + 4 + size);
 
       const message = { kind, body: Buffer.from(body) };
       const waiter = this.waiters.shift();
@@ -100,7 +140,12 @@ class Harness {
 
     return new Promise((resolve, reject) => {
       const timer = setTimeout(
-        () => reject(new Error(`timed out waiting for harness. stderr: ${this.stderr}`)),
+        () =>
+          reject(
+            new Error(
+              `timed out waiting for harness.\nstderr: ${this.stderr}\nunframed stdout: ${this.noise}`,
+            ),
+          ),
         timeoutMs,
       );
       this.waiters.push((message) => {

@@ -17,7 +17,11 @@
 # *not* the game protocol — it only delimits messages on the pipe.
 #
 #     in:  <<size::32-little, tag::8, body::binary>>
-#     out: <<size::32-little, kind::8, body::binary>>
+#     out: <<"IWSD", size::32-little, kind::8, body::binary>>
+#
+# Outbound messages carry a magic marker because stdout is shared with `mix`,
+# which prints compilation progress on a cold build. Without it those bytes are
+# read as a length prefix and the stream never resynchronises.
 #
 # Inbound tags:  0 = game frame from "alice", 1 = control command (UTF-8)
 # Outbound kinds: 0 broadcast, 1 reply, 2 broadcast_all, 3 direct,
@@ -36,6 +40,9 @@ defmodule Interop do
   @kind_direct 3
   @kind_error 4
   @kind_control 5
+
+  # Marks the start of every outbound message; see emit/2.
+  @magic "IWSD"
 
   def main do
     # Binary mode: any encoding translation would corrupt the frames.
@@ -165,9 +172,18 @@ defmodule Interop do
     end
   end
 
+  # Each outbound message is prefixed with a magic marker so the reader can
+  # resynchronise. stdout is a shared channel: `mix` writes compilation progress
+  # to it on a cold build, and without a marker those bytes are read as a length
+  # prefix and the stream never recovers. The marker turns unexpected output
+  # into skippable noise rather than a permanent desync.
   defp emit(kind, body) when is_binary(body) do
     payload = <<kind::unsigned-integer-size(8), body::binary>>
-    IO.binwrite(:stdio, <<byte_size(payload)::unsigned-little-integer-size(32)>> <> payload)
+
+    IO.binwrite(
+      :stdio,
+      @magic <> <<byte_size(payload)::unsigned-little-integer-size(32)>> <> payload
+    )
   end
 end
 
