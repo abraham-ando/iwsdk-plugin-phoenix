@@ -151,3 +151,4 @@ packages/server/_build/
 packages/server/deps/
 packages/server/cover/
 packages/server/*.ez
+pnpm-lock.yaml

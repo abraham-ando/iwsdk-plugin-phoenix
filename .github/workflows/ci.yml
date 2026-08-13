@@ -21,7 +21,10 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
+      # No lockfile is committed yet, so this cannot be --frozen-lockfile.
+      # Run `pnpm install` locally and commit pnpm-lock.yaml, then tighten this
+      # to --frozen-lockfile for reproducible CI.
+      - run: pnpm install
 
       - name: Typecheck against the real @iwsdk/core
         run: pnpm typecheck
