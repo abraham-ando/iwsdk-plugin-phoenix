@@ -173,14 +173,20 @@ defmodule IwsdkPhoenix.RoomSupervisorTest do
       {:ok, first} = RoomSupervisor.ensure_started("lobby", stop_when_empty: true)
       reference = Process.monitor(first)
 
-      {:ok, _alice} = Server.join(first, "alice")
+      {:ok, alice} = Server.join(first, "alice")
       {:ok, _player} = Server.leave(first, "alice")
       assert_receive {:DOWN, ^reference, :process, ^first, :normal}, 1_000
 
       {:ok, second} = RoomSupervisor.ensure_started("lobby")
 
-      refute second == first
+      # Deliberately not `refute second == first`. The BEAM is free to hand the
+      # replacement the reaped process's PID, and on CI it did. What "fresh"
+      # actually means is empty state and an allocator back at the start.
       assert Process.alive?(second)
+      assert State.player_count(Server.state(second)) == 0
+
+      {:ok, bob} = Server.join(second, "bob")
+      assert bob.network_id == alice.network_id
     end
   end
 
