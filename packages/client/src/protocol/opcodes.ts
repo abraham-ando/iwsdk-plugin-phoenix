@@ -22,6 +22,10 @@ export enum OpCode {
   PING = 7,
   /** Latency probe response. */
   PONG = 8,
+  /** Client asks to take authority over an entity. */
+  OWNERSHIP_REQUEST = 9,
+  /** Server's verdict on an ownership request, broadcast to the whole room. */
+  OWNERSHIP_GRANT = 10,
 }
 
 /**
@@ -56,6 +60,12 @@ export const INPUT_UPDATE_BYTES = 22;
 
 /** Byte size of a {@link OpCode.RECONCILE} frame. */
 export const RECONCILE_BYTES = 21;
+
+/** Byte size of an {@link OpCode.OWNERSHIP_REQUEST} frame. */
+export const OWNERSHIP_REQUEST_BYTES = 9;
+
+/** Byte size of an {@link OpCode.OWNERSHIP_GRANT} frame. */
+export const OWNERSHIP_GRANT_BYTES = 14;
 
 /** Every multi-byte field on the wire is little-endian. */
 export const LITTLE_ENDIAN = true;

@@ -28,7 +28,8 @@ defmodule IwsdkPhoenix.Room.State do
             physics_state: nil,
             interest_radius: 50.0,
             cell_size: 50.0,
-            grid_mode: :full
+            grid_mode: :full,
+            steal_policy: :deny
 
   @type mode :: :host_relayed | :server_authoritative
 
@@ -51,6 +52,8 @@ defmodule IwsdkPhoenix.Room.State do
     * `:cell_size` — spatial grid cell edge, metres
     * `:physics_module` — a `IwsdkPhoenix.Physics` implementation
     * `:physics_opts` — forwarded to the backend's `init/1`
+    * `:steal_policy` — `:deny` (default) or `:allow`, controlling whether one
+      player may take an object another player already owns
   """
   @spec new(String.t(), keyword()) :: t()
   def new(id, opts \\ []) do
@@ -64,7 +67,8 @@ defmodule IwsdkPhoenix.Room.State do
       physics_state: physics_state,
       interest_radius: Keyword.get(opts, :interest_radius, 50.0),
       cell_size: Keyword.get(opts, :cell_size, SpatialGrid.default_cell_size()),
-      grid_mode: Keyword.get(opts, :grid_mode, :full)
+      grid_mode: Keyword.get(opts, :grid_mode, :full),
+      steal_policy: Keyword.get(opts, :steal_policy, :deny)
     }
   end
 
@@ -160,6 +164,83 @@ defmodule IwsdkPhoenix.Room.State do
 
         {state, frame}
     end
+  end
+
+  @doc """
+  Arbitrate a request for authority over an entity.
+
+  Returns `{state, grant}` where `grant` is the map to broadcast, or
+  `{state, nil}` for an unknown peer.
+
+  ## Policy
+
+  Ownership is **first-come, first-served**, decided by the server. That is the
+  only place it can be decided correctly: two players reaching for the same
+  object at the same moment will both believe they grabbed it, and only a single
+  serialisation point can break the tie. The verdict goes to the whole room, so
+  the loser learns who actually won rather than merely that it failed.
+
+    * unowned entity -> granted
+    * already owned by the requester -> granted, idempotently, so a retry after
+      a dropped packet is harmless
+    * owned by someone still connected -> denied, unless `steal_policy: :allow`
+    * owned by a peer that has since left -> granted, because otherwise a
+      disconnect would strand the object forever
+
+  `steal_policy: :allow` exists for objects that are meant to be taken from
+  another player. It is off by default: silently letting anyone seize anything
+  is rarely what an application wants, and it is the kind of default that only
+  reveals itself as wrong in front of users.
+  """
+  @spec request_ownership(t(), String.t(), non_neg_integer(), non_neg_integer()) ::
+          {t(), map() | nil}
+  def request_ownership(%__MODULE__{} = state, peer_id, network_id, request_id) do
+    case Map.fetch(state.players, peer_id) do
+      :error ->
+        {state, nil}
+
+      {:ok, requester} ->
+        current_owner = Map.get(state.entities, network_id)
+
+        granted? =
+          cond do
+            is_nil(current_owner) -> true
+            current_owner.owner_id == requester.network_id -> true
+            state.steal_policy == :allow -> true
+            not owner_connected?(state, current_owner.owner_id) -> true
+            true -> false
+          end
+
+        owner_id = if granted?, do: requester.network_id, else: current_owner.owner_id
+
+        state =
+          if granted? do
+            %{state | entities: Map.put(state.entities, network_id, %{owner_id: owner_id})}
+          else
+            state
+          end
+
+        {state,
+         %{
+           network_id: network_id,
+           owner_id: owner_id,
+           request_id: request_id,
+           granted: granted?
+         }}
+    end
+  end
+
+  @doc "Current owner's network id for an entity, or `nil` when unowned."
+  @spec owner_of(t(), non_neg_integer()) :: non_neg_integer() | nil
+  def owner_of(%__MODULE__{} = state, network_id) do
+    case Map.get(state.entities, network_id) do
+      nil -> nil
+      %{owner_id: owner_id} -> owner_id
+    end
+  end
+
+  defp owner_connected?(%__MODULE__{} = state, owner_id) do
+    Enum.any?(state.players, fn {_peer_id, player} -> player.network_id == owner_id end)
   end
 
   @doc """

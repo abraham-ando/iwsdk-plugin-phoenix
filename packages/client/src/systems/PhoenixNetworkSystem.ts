@@ -97,6 +97,32 @@ export class PhoenixNetworkSystem extends createSystem(
   onSpawn: ((request: SpawnRequest) => void) | null = null;
   onDespawn: ((networkId: number) => void) | null = null;
 
+  /**
+   * Called for every ownership verdict, granted or denied.
+   *
+   * Denials matter as much as grants: a player who reached for an object and
+   * lost the race needs their local "picking up" affordance cancelled, and the
+   * frame tells them who won.
+   */
+  onOwnershipChange:
+    | ((change: {
+        networkId: number;
+        ownerId: number;
+        granted: boolean;
+        requestId: number;
+        isLocalOwner: boolean;
+      }) => void)
+    | null = null;
+
+  /**
+   * This client's own network id, used to decide whether an ownership grant
+   * refers to us. Set it from the channel join reply.
+   */
+  localOwnerId = 0;
+
+  private nextRequestId = 1;
+  private readonly pendingOwnership = new Map<number, number>();
+
   override init(): void {
     const adapter = this.adapter;
     if (!adapter) return;
@@ -280,6 +306,71 @@ export class PhoenixNetworkSystem extends createSystem(
   }
 
   // ---------------------------------------------------------------------------
+  // Ownership
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Ask the server for authority over an entity — the "I picked this up" call.
+   *
+   * Deliberately does **not** set `isLocalOwner` optimistically. Ownership is
+   * the one piece of state where optimistic prediction is the wrong choice:
+   * when two players grab the same object at the same moment, both would
+   * predict success and both would start publishing transforms, so the object
+   * visibly fights between two positions until the server's verdict lands. It
+   * is far better to wait one round trip and be right. Predict the *animation*
+   * locally if you need immediate feedback; leave the authority to the server.
+   *
+   * @returns The request id, echoed in the matching grant, or `0` if there is
+   *   no connected adapter.
+   */
+  requestOwnership(entity: Entity): number {
+    const adapter = this.adapter;
+    const networkId = entity.getValue(Networked, 'networkId') ?? 0;
+    if (!adapter || networkId === 0) return 0;
+
+    const requestId = this.nextRequestId++;
+    this.pendingOwnership.set(requestId, networkId);
+    adapter.send(BinaryProtocol.encodeOwnershipRequest(networkId, requestId));
+    return requestId;
+  }
+
+  /** Ownership requests still awaiting a verdict. */
+  get pendingOwnershipCount(): number {
+    return this.pendingOwnership.size;
+  }
+
+  private applyOwnership(frame: {
+    networkId: number;
+    ownerId: number;
+    requestId: number;
+    granted: boolean;
+  }): void {
+    this.pendingOwnership.delete(frame.requestId);
+
+    const entity = this.index.get(
+      frame.networkId,
+      this.queries.replicated.entities,
+      this.frameCounter,
+    );
+
+    const isLocalOwner = this.localOwnerId !== 0 && frame.ownerId === this.localOwnerId;
+
+    if (entity) {
+      entity.setValue(Networked, 'ownerId', frame.ownerId);
+      entity.setValue(Networked, 'isLocalOwner', isLocalOwner);
+
+      if (!isLocalOwner && entity.hasComponent(NetworkedTransform)) {
+        // Ownership just moved away from us. Clear the interpolation buffer so
+        // the entity does not lurch from a stale sample: the first frame from
+        // the new owner should seed it fresh, exactly like a newly-seen entity.
+        entity.setValue(NetworkedTransform, 'hasSnapshot', false);
+      }
+    }
+
+    this.onOwnershipChange?.({ ...frame, isLocalOwner });
+  }
+
+  // ---------------------------------------------------------------------------
   // Inbound
   // ---------------------------------------------------------------------------
 
@@ -312,6 +403,10 @@ export class PhoenixNetworkSystem extends createSystem(
           }
           break;
         }
+
+        case OpCode.OWNERSHIP_GRANT:
+          this.applyOwnership(BinaryProtocol.decodeOwnershipGrant(message.payload));
+          break;
 
         // RECONCILE is consumed by ClientPredictionSystem, which subscribes to
         // the adapter directly. PING/PONG are handled by the stats path.

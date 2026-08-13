@@ -119,6 +119,7 @@ an honest client's prediction matches exactly and no correction is ever visible.
 - Interpolation with a render delay, plus capped dead reckoning
 - Client prediction with reconciliation and input replay
 - Distance-based publish-rate throttling
+- Server-arbitrated ownership transfer for picking up shared objects
 - Phoenix, Offline and Loopback adapters behind one `INetworkAdapter`
 
 **Server**
@@ -171,7 +172,7 @@ pnpm build && node scripts/generate-fixtures.mjs
 
 ## Status
 
-Verified: 72 client tests, 93 server tests, cross-language parity, clean
+Verified: 78 client tests, 107 server tests, cross-language parity, clean
 typecheck against `@iwsdk/core@0.5.3`, successful build.
 
 Not yet verified in a browser: the Web Worker path (its `RingBuffer` is tested

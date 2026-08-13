@@ -10,6 +10,9 @@ defmodule IwsdkPhoenix.Room.Handler do
   ## Return values
 
     * `{:broadcast, binary, state}` — forward verbatim to every other peer
+    * `{:broadcast_all, binary, state}` — send to every peer *including* the
+      sender; used for ownership verdicts, where the requester is precisely the
+      peer that most needs the answer
     * `{:reply, binary, state}` — send back to this peer only
     * `{:noreply, state}` — consumed, nothing to send
     * `{:error, reason, state}` — malformed or rejected
@@ -20,6 +23,7 @@ defmodule IwsdkPhoenix.Room.Handler do
 
   @type result ::
           {:broadcast, binary(), State.t()}
+          | {:broadcast_all, binary(), State.t()}
           | {:reply, binary(), State.t()}
           | {:noreply, State.t()}
           | {:error, atom(), State.t()}
@@ -60,6 +64,9 @@ defmodule IwsdkPhoenix.Room.Handler do
       opcode == Protocol.op_ping() ->
         reply_pong(state, frame)
 
+      opcode == Protocol.op_ownership_request() ->
+        arbitrate_ownership(state, peer_id, frame)
+
       # Track positions only when filtering actually needs them; otherwise stay
       # on the zero-decode path.
       state.interest_radius != nil and
@@ -76,6 +83,9 @@ defmodule IwsdkPhoenix.Room.Handler do
     cond do
       opcode == Protocol.op_ping() ->
         reply_pong(state, frame)
+
+      opcode == Protocol.op_ownership_request() ->
+        arbitrate_ownership(state, peer_id, frame)
 
       opcode == Protocol.op_input_update() ->
         case Protocol.decode(frame) do
@@ -97,6 +107,26 @@ defmodule IwsdkPhoenix.Room.Handler do
 
       true ->
         {:broadcast, frame, state}
+    end
+  end
+
+  # Ownership is arbitrated identically in both modes. Even a host-relayed room
+  # needs a single decision point here: two players grabbing the same object at
+  # the same instant will both believe they succeeded, and only the server can
+  # break that tie.
+  defp arbitrate_ownership(state, peer_id, frame) do
+    case Protocol.decode(frame) do
+      {:ok, :ownership_request, %{network_id: network_id, request_id: request_id}} ->
+        case State.request_ownership(state, peer_id, network_id, request_id) do
+          {state, nil} ->
+            {:noreply, state}
+
+          {state, grant} ->
+            {:broadcast_all, Protocol.encode_ownership_grant(grant), state}
+        end
+
+      _ ->
+        {:error, :malformed_frame, state}
     end
   end
 

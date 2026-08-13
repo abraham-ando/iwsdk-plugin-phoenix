@@ -29,6 +29,8 @@ a real change.
 | 6 | `RECONCILE` | server → client | 21 |
 | 7 | `PING` | client → server | 9 |
 | 8 | `PONG` | server → client | 9 |
+| 9 | `OWNERSHIP_REQUEST` | client → server | 9 |
+| 10 | `OWNERSHIP_GRANT` | server → all clients | 14 |
 
 ---
 
@@ -161,6 +163,39 @@ to the position, then replays the remainder.
 
 `f64` so `performance.now()` survives the round trip without losing sub-
 millisecond resolution.
+
+---
+
+## `OWNERSHIP_REQUEST` (9) — 9 bytes
+
+| Offset | Type | Field |
+|---|---|---|
+| 0 | `u8` | opcode = 9 |
+| 1–4 | `u32` | `networkId` |
+| 5–8 | `u32` | `requestId`, chosen by the client |
+
+`requestId` is echoed in the grant so a client with several requests in flight
+can match the answer without relying on ordering.
+
+## `OWNERSHIP_GRANT` (10) — 14 bytes
+
+| Offset | Type | Field |
+|---|---|---|
+| 0 | `u8` | opcode = 10 |
+| 1–4 | `u32` | `networkId` |
+| 5–8 | `u32` | `ownerId` after arbitration |
+| 9–12 | `u32` | `requestId` |
+| 13 | `u8` | 1 = granted, 0 = denied |
+
+Broadcast to **every** peer including the requester, because ownership is
+room-wide state: everyone needs to know who may now move the entity, and a
+denied requester learns the actual owner from the same frame.
+
+Arbitration is first-come, first-served and decided solely by the server — the
+only place it *can* be decided correctly, since two players reaching for the
+same object at the same instant will both believe they succeeded. Clients must
+therefore not claim ownership optimistically: doing so makes the object visibly
+fight between two positions until the verdict lands.
 
 ---
 

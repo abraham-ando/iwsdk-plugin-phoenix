@@ -181,6 +181,7 @@ efforts than this package, and both are honest about their cost.
 | Smallest-three quaternion compression | Implemented, with the zero-representation fix above |
 | Network LOD (30/15/5 Hz bands) | Implemented on both sides; see the scope note below |
 | `INetworkAdapter` RFC surface | Implemented, with three adapters proving the abstraction |
+| Ownership transfer (server-arbitrated) | Implemented; not in the original spec, but required for grabbing shared objects |
 
 ### Scope note on Network LOD
 
@@ -221,8 +222,8 @@ version would be worse than shipping none.
 
 | Check | Result |
 |---|---|
-| Client unit + integration tests | 72 passing |
-| Server tests (incl. 14 doctests) | 93 passing |
+| Client unit + integration tests | 78 passing |
+| Server tests (incl. 14 doctests) | 107 passing |
 | Cross-language golden vectors | Verified in both languages |
 | TypeScript typecheck against real `@iwsdk/core@0.5.3` | Clean |
 | Client build (ESM + `.d.ts` + bundled worker) | Succeeds |

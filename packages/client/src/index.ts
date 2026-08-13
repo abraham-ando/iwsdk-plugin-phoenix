@@ -20,6 +20,8 @@ export { BinaryProtocol, ProtocolError } from './protocol/BinaryProtocol.js';
 export type {
   DecodedFrame,
   InputFrame,
+  OwnershipGrantFrame,
+  OwnershipRequestFrame,
   ReconcileFrame,
   SnapshotFrame,
   SpawnFrame,
@@ -29,6 +31,8 @@ export type {
 export {
   INPUT_UPDATE_BYTES,
   LITTLE_ENDIAN,
+  OWNERSHIP_GRANT_BYTES,
+  OWNERSHIP_REQUEST_BYTES,
   OpCode,
   RECONCILE_BYTES,
   SNAPSHOT_HEADER_BYTES,

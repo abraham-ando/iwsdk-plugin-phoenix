@@ -175,7 +175,13 @@ networking interface tied to an ECS.
 
 1. **Ownership transfer.** Should `@iwsdk/network` define a handoff protocol, or
    leave it to backends? Picking something up in a shared space is a genuinely
-   common need.
+   common need, and it pairs directly with IWSDK's existing grabbing feature.
+   The reference implementation now ships one — a server-arbitrated
+   request/grant pair, first-come-first-served, with the verdict broadcast to
+   the whole room — which is offered as a concrete starting point. The
+   load-bearing detail is that clients must *not* claim ownership
+   optimistically: two players grabbing simultaneously would both predict
+   success and the object would visibly fight between them.
 2. **Spawn lifecycle.** `prefabId` implies a registry mapping ids to factories.
    Should that be standardised, or left to the application?
 3. **Serialization.** Should a default binary format ship, or should it stay

@@ -79,6 +79,12 @@ if Code.ensure_loaded?(Phoenix.Channel) do
           broadcast_from!(socket, @frame_event, {:binary, payload})
           {:noreply, assign(socket, :room, room)}
 
+        {:broadcast_all, payload, room} ->
+          # Includes the sender. Ownership verdicts go to everyone, and the
+          # requester is the peer that most needs the answer.
+          broadcast!(socket, @frame_event, {:binary, payload})
+          {:noreply, assign(socket, :room, room)}
+
         {:reply, payload, room} ->
           {:reply, {:ok, {:binary, payload}}, assign(socket, :room, room)}
 

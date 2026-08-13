@@ -95,10 +95,20 @@ defmodule IwsdkPhoenix.Room.Server do
 
   def handle_call({:frame, peer_id, frame}, _from, state) do
     case IwsdkPhoenix.Room.Handler.handle_frame(state.room, peer_id, frame) do
-      {:broadcast, payload, room} -> {:reply, {:broadcast, payload}, %{state | room: room}}
-      {:reply, payload, room} -> {:reply, {:reply, payload}, %{state | room: room}}
-      {:noreply, room} -> {:reply, :ok, %{state | room: room}}
-      {:error, reason, room} -> {:reply, {:error, reason}, %{state | room: room}}
+      {:broadcast, payload, room} ->
+        {:reply, {:broadcast, payload}, %{state | room: room}}
+
+      {:broadcast_all, payload, room} ->
+        {:reply, {:broadcast_all, payload}, %{state | room: room}}
+
+      {:reply, payload, room} ->
+        {:reply, {:reply, payload}, %{state | room: room}}
+
+      {:noreply, room} ->
+        {:reply, :ok, %{state | room: room}}
+
+      {:error, reason, room} ->
+        {:reply, {:error, reason}, %{state | room: room}}
     end
   end
 

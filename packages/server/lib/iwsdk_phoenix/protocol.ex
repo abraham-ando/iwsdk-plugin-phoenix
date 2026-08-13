@@ -37,6 +37,8 @@ defmodule IwsdkPhoenix.Protocol do
   @op_reconcile 6
   @op_ping 7
   @op_pong 8
+  @op_ownership_request 9
+  @op_ownership_grant 10
 
   @flag_quantized 0x01
 
@@ -53,6 +55,8 @@ defmodule IwsdkPhoenix.Protocol do
   def op_reconcile, do: @op_reconcile
   def op_ping, do: @op_ping
   def op_pong, do: @op_pong
+  def op_ownership_request, do: @op_ownership_request
+  def op_ownership_grant, do: @op_ownership_grant
 
   # ---------------------------------------------------------------------------
   # Decoding
@@ -153,6 +157,27 @@ defmodule IwsdkPhoenix.Protocol do
     {:ok, :despawn_entity, %{network_id: network_id}}
   end
 
+  def decode(
+        <<@op_ownership_request, network_id::unsigned-little-integer-size(32),
+          request_id::unsigned-little-integer-size(32)>>
+      ) do
+    {:ok, :ownership_request, %{network_id: network_id, request_id: request_id}}
+  end
+
+  def decode(
+        <<@op_ownership_grant, network_id::unsigned-little-integer-size(32),
+          owner_id::unsigned-little-integer-size(32),
+          request_id::unsigned-little-integer-size(32), granted::unsigned-integer-size(8)>>
+      ) do
+    {:ok, :ownership_grant,
+     %{
+       network_id: network_id,
+       owner_id: owner_id,
+       request_id: request_id,
+       granted: granted == 1
+     }}
+  end
+
   def decode(<<@op_ping, timestamp::float-little-size(64)>>) do
     {:ok, :ping, %{timestamp: timestamp}}
   end
@@ -162,7 +187,7 @@ defmodule IwsdkPhoenix.Protocol do
   end
 
   def decode(<<op::unsigned-integer-size(8), _rest::binary>>)
-      when op in 1..8 do
+      when op in 1..10 do
     # Known opcode but the body did not match: a length mismatch, not an
     # unknown frame type. Distinguishing the two makes protocol drift obvious
     # in logs instead of looking like garbage traffic.
@@ -315,6 +340,43 @@ defmodule IwsdkPhoenix.Protocol do
   @spec encode_despawn(non_neg_integer()) :: binary()
   def encode_despawn(network_id) do
     <<@op_despawn_entity, network_id::unsigned-little-integer-size(32)>>
+  end
+
+  @doc """
+  Encode an ownership request.
+
+      [0]     Uint8   OpCode (9)
+      [1..4]  Uint32  network_id
+      [5..8]  Uint32  request_id
+  """
+  @spec encode_ownership_request(non_neg_integer(), non_neg_integer()) :: binary()
+  def encode_ownership_request(network_id, request_id) do
+    <<@op_ownership_request, network_id::unsigned-little-integer-size(32),
+      request_id::unsigned-little-integer-size(32)>>
+  end
+
+  @doc """
+  Encode the server's ownership verdict.
+
+      [0]      Uint8   OpCode (10)
+      [1..4]   Uint32  network_id
+      [5..8]   Uint32  owner_id after arbitration
+      [9..12]  Uint32  request_id
+      [13]     Uint8   1 = granted, 0 = denied
+
+  Broadcast to the whole room rather than only the requester: ownership is
+  room-wide state, so every peer needs to know who may now move the entity.
+  """
+  @spec encode_ownership_grant(map()) :: binary()
+  def encode_ownership_grant(%{
+        network_id: network_id,
+        owner_id: owner_id,
+        request_id: request_id,
+        granted: granted
+      }) do
+    <<@op_ownership_grant, network_id::unsigned-little-integer-size(32),
+      owner_id::unsigned-little-integer-size(32), request_id::unsigned-little-integer-size(32),
+      if(granted, do: 1, else: 0)::unsigned-integer-size(8)>>
   end
 
   @doc "Encode a latency probe or its reply."

@@ -519,6 +519,158 @@ describe('telemetry', () => {
   });
 });
 
+describe('ownership transfer', () => {
+  /** World plus a peer standing in for the server's arbitration. */
+  function scenario() {
+    const bus = new LoopbackNetwork(0);
+    const local = bus.createPeer('local');
+    const server = bus.createPeer('server');
+
+    const { world } = makeWorld(local);
+    void local.connect('memory://');
+    void server.connect('memory://');
+
+    const net = loose(world).getSystem(PhoenixNetworkSystem) as PhoenixNetworkSystem;
+    net.localOwnerId = 42;
+
+    // An object currently owned by someone else.
+    const prop = makeEntity(world, { networkId: 100, isLocalOwner: false });
+
+    return { world, bus, server, net, prop };
+  }
+
+  it('sends a request and does not claim ownership optimistically', () => {
+    const { world, net, prop } = scenario();
+
+    const requestId = net.requestOwnership(prop);
+
+    expect(requestId).toBeGreaterThan(0);
+    expect(net.pendingOwnershipCount).toBe(1);
+    // Critical: two players grabbing at once would both predict success and
+    // fight over the transform. Wait for the verdict instead.
+    expect(prop.getValue(Networked, 'isLocalOwner')).toBe(false);
+
+    world.update(1 / 90, 0);
+    expect(prop.getValue(Networked, 'isLocalOwner')).toBe(false);
+  });
+
+  it('takes ownership when the grant arrives', () => {
+    const { world, bus, server, net, prop } = scenario();
+
+    const requestId = net.requestOwnership(prop);
+
+    server.send(
+      BinaryProtocol.encodeOwnershipGrant({
+        networkId: 100,
+        ownerId: 42,
+        requestId,
+        granted: true,
+      }),
+    );
+    bus.advance(0);
+    world.update(1 / 90, 0);
+
+    expect(prop.getValue(Networked, 'isLocalOwner')).toBe(true);
+    expect(prop.getValue(Networked, 'ownerId')).toBe(42);
+    expect(net.pendingOwnershipCount).toBe(0);
+  });
+
+  it('records the real owner on a denial', () => {
+    const { world, bus, server, net, prop } = scenario();
+
+    const requestId = net.requestOwnership(prop);
+
+    server.send(
+      BinaryProtocol.encodeOwnershipGrant({
+        networkId: 100,
+        ownerId: 7, // somebody else won
+        requestId,
+        granted: false,
+      }),
+    );
+    bus.advance(0);
+    world.update(1 / 90, 0);
+
+    expect(prop.getValue(Networked, 'isLocalOwner')).toBe(false);
+    expect(prop.getValue(Networked, 'ownerId')).toBe(7);
+  });
+
+  it('reports both outcomes through onOwnershipChange', () => {
+    const { world, bus, server, net, prop } = scenario();
+    const seen: { granted: boolean; isLocalOwner: boolean }[] = [];
+    net.onOwnershipChange = (change) =>
+      seen.push({ granted: change.granted, isLocalOwner: change.isLocalOwner });
+
+    server.send(
+      BinaryProtocol.encodeOwnershipGrant({
+        networkId: 100,
+        ownerId: 42,
+        requestId: net.requestOwnership(prop),
+        granted: true,
+      }),
+    );
+    bus.advance(0);
+    world.update(1 / 90, 0);
+
+    server.send(
+      BinaryProtocol.encodeOwnershipGrant({
+        networkId: 100,
+        ownerId: 9,
+        requestId: net.requestOwnership(prop),
+        granted: false,
+      }),
+    );
+    bus.advance(0);
+    world.update(1 / 90, 0);
+
+    expect(seen).toEqual([
+      { granted: true, isLocalOwner: true },
+      { granted: false, isLocalOwner: false },
+    ]);
+  });
+
+  it('resets the interpolation buffer when ownership moves away', () => {
+    // Otherwise the entity lurches from a stale sample instead of being seeded
+    // fresh by its new owner's first frame.
+    const { world, bus, server, net, prop } = scenario();
+
+    // Take ownership, then lose it.
+    server.send(
+      BinaryProtocol.encodeOwnershipGrant({
+        networkId: 100,
+        ownerId: 42,
+        requestId: net.requestOwnership(prop),
+        granted: true,
+      }),
+    );
+    bus.advance(0);
+    world.update(1 / 90, 0);
+    expect(prop.getValue(Networked, 'isLocalOwner')).toBe(true);
+
+    server.send(
+      BinaryProtocol.encodeOwnershipGrant({
+        networkId: 100,
+        ownerId: 9,
+        requestId: 0,
+        granted: true,
+      }),
+    );
+    bus.advance(0);
+    world.update(1 / 90, 0);
+
+    expect(prop.getValue(Networked, 'isLocalOwner')).toBe(false);
+    expect(prop.getValue(NetworkedTransform, 'hasSnapshot')).toBe(false);
+  });
+
+  it('refuses to request ownership for an unassigned network id', () => {
+    const { world, net } = scenario();
+    const orphan = makeEntity(world, { networkId: 0, isLocalOwner: false });
+
+    expect(net.requestOwnership(orphan)).toBe(0);
+    expect(net.pendingOwnershipCount).toBe(0);
+  });
+});
+
 describe('plugin lifecycle', () => {
   it('requires an endpoint unless offline or given an adapter', () => {
     const world = new World({ entityCapacity: 16, checksOn: false });

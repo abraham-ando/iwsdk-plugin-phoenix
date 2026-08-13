@@ -10,6 +10,8 @@
 import {
   INPUT_UPDATE_BYTES,
   LITTLE_ENDIAN,
+  OWNERSHIP_GRANT_BYTES,
+  OWNERSHIP_REQUEST_BYTES,
   OpCode,
   RECONCILE_BYTES,
   SNAPSHOT_HEADER_BYTES,
@@ -70,6 +72,22 @@ export interface SpawnFrame {
   rotation: QuaternionLike;
 }
 
+/** Decoded {@link OpCode.OWNERSHIP_REQUEST} frame. */
+export interface OwnershipRequestFrame {
+  networkId: number;
+  /** Client-chosen id, echoed in the grant so a client can match its request. */
+  requestId: number;
+}
+
+/** Decoded {@link OpCode.OWNERSHIP_GRANT} frame. */
+export interface OwnershipGrantFrame {
+  networkId: number;
+  /** Owner after arbitration. Meaningful whether or not the request succeeded. */
+  ownerId: number;
+  requestId: number;
+  granted: boolean;
+}
+
 /** Union of everything {@link BinaryProtocol.decode} can return. */
 export type DecodedFrame =
   | { opCode: OpCode.TRANSFORM_UPDATE; transform: TransformRecord }
@@ -78,7 +96,9 @@ export type DecodedFrame =
   | { opCode: OpCode.RECONCILE; reconcile: ReconcileFrame }
   | { opCode: OpCode.SPAWN_ENTITY; spawn: SpawnFrame }
   | { opCode: OpCode.DESPAWN_ENTITY; networkId: number }
-  | { opCode: OpCode.PING | OpCode.PONG; timestamp: number };
+  | { opCode: OpCode.PING | OpCode.PONG; timestamp: number }
+  | { opCode: OpCode.OWNERSHIP_REQUEST; ownershipRequest: OwnershipRequestFrame }
+  | { opCode: OpCode.OWNERSHIP_GRANT; ownershipGrant: OwnershipGrantFrame };
 
 /** Thrown when a frame cannot be interpreted. */
 export class ProtocolError extends Error {
@@ -453,6 +473,94 @@ export class BinaryProtocol {
   }
 
   // ---------------------------------------------------------------------------
+  // Ownership transfer
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Ask the server for authority over an entity.
+   *
+   * ```text
+   * [0]     Uint8   OpCode (9)
+   * [1..4]  Uint32  networkId
+   * [5..8]  Uint32  requestId
+   * ```
+   *
+   * `requestId` is chosen by the client and echoed back in the grant, so a
+   * client that has several requests in flight can tell which one was answered
+   * without inferring it from ordering.
+   */
+  static encodeOwnershipRequest(networkId: number, requestId: number): ArrayBuffer {
+    const buffer = new ArrayBuffer(OWNERSHIP_REQUEST_BYTES);
+    const view = new DataView(buffer);
+    view.setUint8(0, OpCode.OWNERSHIP_REQUEST);
+    view.setUint32(1, networkId, LITTLE_ENDIAN);
+    view.setUint32(5, requestId >>> 0, LITTLE_ENDIAN);
+    return buffer;
+  }
+
+  /** Decode an {@link OpCode.OWNERSHIP_REQUEST} frame. */
+  static decodeOwnershipRequest(
+    buffer: ArrayBufferLike,
+    byteOffset = 0,
+  ): OwnershipRequestFrame {
+    const view = new DataView(buffer as ArrayBuffer, byteOffset);
+    if (view.byteLength < OWNERSHIP_REQUEST_BYTES) {
+      throw new ProtocolError(
+        `OWNERSHIP_REQUEST needs ${OWNERSHIP_REQUEST_BYTES} bytes, got ${view.byteLength}`,
+      );
+    }
+    return {
+      networkId: view.getUint32(1, LITTLE_ENDIAN),
+      requestId: view.getUint32(5, LITTLE_ENDIAN),
+    };
+  }
+
+  /**
+   * The server's verdict, broadcast to the entire room.
+   *
+   * ```text
+   * [0]      Uint8   OpCode (10)
+   * [1..4]   Uint32  networkId
+   * [5..8]   Uint32  ownerId after arbitration
+   * [9..12]  Uint32  requestId
+   * [13]     Uint8   1 = granted, 0 = denied
+   * ```
+   *
+   * It goes to everyone, not just the requester, because ownership is room-wide
+   * state: every peer needs to know who may now move the entity, and a denied
+   * requester still learns the current owner from the same frame.
+   */
+  static encodeOwnershipGrant(frame: OwnershipGrantFrame): ArrayBuffer {
+    const buffer = new ArrayBuffer(OWNERSHIP_GRANT_BYTES);
+    const view = new DataView(buffer);
+    view.setUint8(0, OpCode.OWNERSHIP_GRANT);
+    view.setUint32(1, frame.networkId, LITTLE_ENDIAN);
+    view.setUint32(5, frame.ownerId >>> 0, LITTLE_ENDIAN);
+    view.setUint32(9, frame.requestId >>> 0, LITTLE_ENDIAN);
+    view.setUint8(13, frame.granted ? 1 : 0);
+    return buffer;
+  }
+
+  /** Decode an {@link OpCode.OWNERSHIP_GRANT} frame. */
+  static decodeOwnershipGrant(
+    buffer: ArrayBufferLike,
+    byteOffset = 0,
+  ): OwnershipGrantFrame {
+    const view = new DataView(buffer as ArrayBuffer, byteOffset);
+    if (view.byteLength < OWNERSHIP_GRANT_BYTES) {
+      throw new ProtocolError(
+        `OWNERSHIP_GRANT needs ${OWNERSHIP_GRANT_BYTES} bytes, got ${view.byteLength}`,
+      );
+    }
+    return {
+      networkId: view.getUint32(1, LITTLE_ENDIAN),
+      ownerId: view.getUint32(5, LITTLE_ENDIAN),
+      requestId: view.getUint32(9, LITTLE_ENDIAN),
+      granted: view.getUint8(13) === 1,
+    };
+  }
+
+  // ---------------------------------------------------------------------------
   // Generic dispatch
   // ---------------------------------------------------------------------------
 
@@ -498,6 +606,16 @@ export class BinaryProtocol {
         }
         return { opCode, networkId: view.getUint32(1, LITTLE_ENDIAN) };
       }
+      case OpCode.OWNERSHIP_REQUEST:
+        return {
+          opCode,
+          ownershipRequest: BinaryProtocol.decodeOwnershipRequest(buffer, byteOffset),
+        };
+      case OpCode.OWNERSHIP_GRANT:
+        return {
+          opCode,
+          ownershipGrant: BinaryProtocol.decodeOwnershipGrant(buffer, byteOffset),
+        };
       case OpCode.PING:
       case OpCode.PONG: {
         const view = new DataView(buffer as ArrayBuffer, byteOffset);

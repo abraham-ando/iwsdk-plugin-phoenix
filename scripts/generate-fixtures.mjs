@@ -259,6 +259,40 @@ for (const [x, z, mx, my, yaw, dt, speed, maxDeltaMs] of movements) {
   );
 }
 
+comment('');
+
+// ---------------------------------------------------------------------------
+// Ownership transfer
+// ---------------------------------------------------------------------------
+comment('ownership_request <networkId> <requestId> <hex>');
+for (const [networkId, requestId] of [
+  [1, 1],
+  [4294967295, 65535],
+]) {
+  row(
+    'ownership_request',
+    String(networkId),
+    String(requestId),
+    hex(BinaryProtocol.encodeOwnershipRequest(networkId, requestId)),
+  );
+}
+comment('');
+
+comment('ownership_grant <networkId> <ownerId> <requestId> <granted:0|1> <hex>');
+for (const frame of [
+  { networkId: 7, ownerId: 3, requestId: 1, granted: true },
+  { networkId: 7, ownerId: 9, requestId: 2, granted: false },
+]) {
+  row(
+    'ownership_grant',
+    String(frame.networkId),
+    String(frame.ownerId),
+    String(frame.requestId),
+    frame.granted ? '1' : '0',
+    hex(BinaryProtocol.encodeOwnershipGrant(frame)),
+  );
+}
+
 const outputPath = join(root, 'fixtures/protocol_vectors.tsv');
 mkdirSync(dirname(outputPath), { recursive: true });
 writeFileSync(outputPath, `${lines.join('\n')}\n`, 'utf8');

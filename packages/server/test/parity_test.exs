@@ -193,6 +193,48 @@ defmodule IwsdkPhoenix.ParityTest do
     end
   end
 
+  describe "ownership transfer" do
+    test "OWNERSHIP_REQUEST matches byte for byte" do
+      for [network_id, request_id, hex] <- Fixtures.rows("ownership_request") do
+        encoded =
+          Protocol.encode_ownership_request(
+            Fixtures.to_integer(network_id),
+            Fixtures.to_integer(request_id)
+          )
+
+        assert Fixtures.to_hex(encoded) == String.trim(hex)
+        assert byte_size(encoded) == 9
+      end
+    end
+
+    test "OWNERSHIP_GRANT matches byte for byte" do
+      for [network_id, owner_id, request_id, granted, hex] <-
+            Fixtures.rows("ownership_grant") do
+        encoded =
+          Protocol.encode_ownership_grant(%{
+            network_id: Fixtures.to_integer(network_id),
+            owner_id: Fixtures.to_integer(owner_id),
+            request_id: Fixtures.to_integer(request_id),
+            granted: granted == "1"
+          })
+
+        assert Fixtures.to_hex(encoded) == String.trim(hex)
+        assert byte_size(encoded) == 14
+      end
+    end
+
+    test "grants decode with the granted flag intact" do
+      for [network_id, owner_id, _request_id, granted, hex] <-
+            Fixtures.rows("ownership_grant") do
+        assert {:ok, :ownership_grant, decoded} = Protocol.decode(Fixtures.from_hex(hex))
+
+        assert decoded.network_id == Fixtures.to_integer(network_id)
+        assert decoded.owner_id == Fixtures.to_integer(owner_id)
+        assert decoded.granted == (granted == "1")
+      end
+    end
+  end
+
   describe "movement integration" do
     test "reproduces the client's prediction step exactly" do
       for [x, z, mx, my, yaw, dt, speed, max_delta, out_x, out_z] <-
