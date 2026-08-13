@@ -39,9 +39,18 @@ export class LoopbackNetwork {
     private readonly random: () => number = Math.random,
   ) {}
 
-  /** Create a peer attached to this bus. */
-  createPeer(peerId: string): LoopbackAdapter {
-    const peer = new LoopbackAdapter(this, peerId);
+  /** Ids handed out by {@link createPeer}, mirroring the server's allocator. */
+  private nextNetworkId = 1;
+
+  /**
+   * Create a peer attached to this bus.
+   *
+   * @param networkId Wire id for the peer. Defaults to the next value from an
+   *   incrementing counter, which is what the Elixir room does, so a loopback
+   *   session exercises the same id-driven code paths as a real one.
+   */
+  createPeer(peerId: string, networkId = this.nextNetworkId++): LoopbackAdapter {
+    const peer = new LoopbackAdapter(this, peerId, networkId);
     return peer;
   }
 
@@ -112,6 +121,7 @@ export class LoopbackAdapter implements INetworkAdapter {
   constructor(
     private readonly network: LoopbackNetwork,
     public readonly peerId: string,
+    public readonly networkId = 0,
   ) {}
 
   get state(): ConnectionState {

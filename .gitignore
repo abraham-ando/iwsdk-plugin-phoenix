@@ -151,3 +151,7 @@ packages/server/_build/
 packages/server/deps/
 packages/server/cover/
 packages/server/*.ez
+
+# Elixir: the dependency-free CI run gets its own build root so it cannot
+# poison the one the full suite uses.
+packages/server/_build_core/

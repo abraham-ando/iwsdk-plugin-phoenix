@@ -49,6 +49,7 @@ export class PhoenixAdapter implements INetworkAdapter {
   private ring: RingBuffer | null = null;
   private currentState: ConnectionState = 'disconnected';
   private currentPeerId = '';
+  private currentNetworkId = 0;
 
   private readonly messageListeners = new ListenerSet<NetworkMessage>();
   private readonly joinListeners = new ListenerSet<string>();
@@ -71,6 +72,10 @@ export class PhoenixAdapter implements INetworkAdapter {
 
   get peerId(): string {
     return this.currentPeerId;
+  }
+
+  get networkId(): number {
+    return this.currentNetworkId;
   }
 
   /** True when the shared-memory fast path is active. */
@@ -128,6 +133,7 @@ export class PhoenixAdapter implements INetworkAdapter {
 
     this.ring = null;
     this.currentPeerId = '';
+    this.currentNetworkId = 0;
     this.setState('disconnected');
   }
 
@@ -188,6 +194,9 @@ export class PhoenixAdapter implements INetworkAdapter {
     switch (message.type) {
       case 'STATE': {
         this.currentPeerId = message.peerId;
+        this.currentNetworkId = message.networkId;
+        // Identity first, then the state change: a listener that reacts to
+        // 'connected' by stamping its own entities must not observe id 0.
         this.setState(message.state);
         if (message.state === 'connected') {
           this.pendingConnect?.resolve();
@@ -241,9 +250,16 @@ export class PhoenixAdapter implements INetworkAdapter {
  * `new URL(..., import.meta.url)` is the form every modern bundler (Vite,
  * Rollup, webpack 5, esbuild) recognises as a worker reference, so the emitted
  * `dist/network.worker.js` is picked up and fingerprinted automatically.
+ *
+ * The path is relative to the **built** file, not to this source file. tsup
+ * bundles `src/**` down to a single `dist/index.js` and copies this string
+ * through untouched, so what matters is that `dist/index.js` and
+ * `dist/network.worker.js` are siblings. Getting this wrong does not fail the
+ * library build — it fails in the *consuming* application's build, which is why
+ * `test/packaging.test.ts` asserts it against the real emitted files.
  */
 function defaultWorkerFactory(): Worker {
-  return new Worker(new URL('../network.worker.js', import.meta.url), {
+  return new Worker(new URL('./network.worker.js', import.meta.url), {
     type: 'module',
     name: 'iwsdk-phoenix-network',
   });

@@ -45,7 +45,12 @@ const connection = new PhoenixConnection({
     post({ type: 'PEER_LEAVE', peerId });
   },
   onState(state) {
-    post({ type: 'STATE', state, peerId: connection.peerId });
+    post({
+      type: 'STATE',
+      state,
+      peerId: connection.peerId,
+      networkId: connection.networkId,
+    });
   },
   onError(message) {
     post({ type: 'ERROR', message });

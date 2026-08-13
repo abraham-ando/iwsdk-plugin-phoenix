@@ -142,6 +142,17 @@ defmodule IwsdkPhoenix.Room.State do
   def player_count(%__MODULE__{} = state), do: map_size(state.players)
 
   @doc """
+  Every connected peer, ordered by network id.
+
+  Ordered so a client that joins late instantiates the room in the same order
+  every time, which keeps a session reproducible when something goes wrong.
+  """
+  @spec players(t()) :: [player()]
+  def players(%__MODULE__{} = state) do
+    state.players |> Map.values() |> Enum.sort_by(& &1.network_id)
+  end
+
+  @doc """
   Apply one client input under server authority.
 
   Returns `{state, reconcile_frame}` where the frame is the correction to send

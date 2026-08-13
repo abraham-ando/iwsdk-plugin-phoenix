@@ -116,8 +116,12 @@ export class PhoenixNetworkSystem extends createSystem(
     | null = null;
 
   /**
-   * This client's own network id, used to decide whether an ownership grant
-   * refers to us. Set it from the channel join reply.
+   * This client's own network id.
+   *
+   * Adopted automatically from the adapter's join reply; an application only
+   * needs to assign it by hand when driving a transport that cannot supply one.
+   * Used to decide whether an ownership grant refers to us, and to filter our
+   * own broadcast signalling back out.
    */
   localOwnerId = 0;
 
@@ -140,6 +144,16 @@ export class PhoenixNetworkSystem extends createSystem(
     this.unsubscribes.push(
       adapter.onMessage((message) => this.handleMessage(message)),
     );
+
+    // The server assigns this client's wire id in the join reply. Adopt it as
+    // soon as it exists, and again on every reconnect, so an application never
+    // has to thread the identity through by hand.
+    this.adoptLocalOwnerId(adapter);
+    if (adapter.onStateChange) {
+      this.unsubscribes.push(
+        adapter.onStateChange(() => this.adoptLocalOwnerId(adapter)),
+      );
+    }
 
     // Keep the id index warm as entities come and go.
     this.unsubscribes.push(
@@ -180,6 +194,21 @@ export class PhoenixNetworkSystem extends createSystem(
   /** The configured adapter, or `null` when the plugin was installed offline. */
   get adapter(): INetworkAdapter | null {
     return (this.config.adapter.value as INetworkAdapter | null) ?? null;
+  }
+
+  /**
+   * Copy the adapter's server-assigned id onto {@link localOwnerId}.
+   *
+   * Deliberately one-way: an id of `0` means "not known yet" and never
+   * overwrites one we already hold. A dropped socket keeps reporting 0 while it
+   * reconnects, and clearing our identity in the meantime would make every
+   * ownership grant that arrives on reconnect look like it belonged to someone
+   * else. The room re-issues the same id for the same peer, so holding on to
+   * the last known value is also the correct answer.
+   */
+  private adoptLocalOwnerId(adapter: INetworkAdapter): void {
+    const assigned = adapter.networkId ?? 0;
+    if (assigned !== 0) this.localOwnerId = assigned;
   }
 
   // ---------------------------------------------------------------------------

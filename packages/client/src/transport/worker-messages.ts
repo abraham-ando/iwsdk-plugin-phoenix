@@ -24,7 +24,13 @@ export type MainToWorkerMessage =
 
 /** Worker -> render thread. */
 export type WorkerToMainMessage =
-  | { type: 'STATE'; state: ConnectionState; peerId: string }
+  | {
+      type: 'STATE';
+      state: ConnectionState;
+      peerId: string;
+      /** Server-assigned network id; `0` until the room join succeeds. */
+      networkId: number;
+    }
   | { type: 'FRAME'; payload: ArrayBuffer; senderId: string }
   | { type: 'PEER_JOIN'; peerId: string }
   | { type: 'PEER_LEAVE'; peerId: string }

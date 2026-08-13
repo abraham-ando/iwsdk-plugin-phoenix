@@ -13,7 +13,10 @@
     "test": "pnpm --filter @iwsdk/plugin-phoenix test",
     "typecheck": "pnpm --filter @iwsdk/plugin-phoenix typecheck",
     "test:server": "cd packages/server && mix test",
-    "fixtures": "node scripts/generate-fixtures.mjs"
+    "fixtures": "node scripts/generate-fixtures.mjs",
+    "demo": "pnpm build && pnpm --filter @iwsdk/plugin-phoenix-demo dev",
+    "demo:build": "pnpm build && pnpm --filter @iwsdk/plugin-phoenix-demo build",
+    "demo:typecheck": "pnpm --filter @iwsdk/plugin-phoenix-demo typecheck"
   },
   "devDependencies": {
     "@types/node": "^22.20.1",
