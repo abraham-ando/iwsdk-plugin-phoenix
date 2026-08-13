@@ -157,6 +157,20 @@ if Code.ensure_loaded?(Phoenix.Channel) do
       end
     end
 
+    # A frame published to this peer's own topic: directed signalling.
+    #
+    # Phoenix routes a broadcast through `handle_out/3` — whose generated
+    # catch-all pushes it straight to the client — only when it arrives on the
+    # channel's *own* topic. One addressed to a peer topic we subscribed to in
+    # `join/3` lands here as an ordinary message instead, and has to be pushed by
+    # hand. Without this clause the catch-all below swallowed it and every
+    # directed signal vanished silently: the sender saw its frame accepted, the
+    # recipient never heard from it, and nothing anywhere logged a thing.
+    def handle_info(%Phoenix.Socket.Broadcast{event: @frame_event, payload: payload}, socket) do
+      push(socket, @frame_event, payload)
+      {:noreply, socket}
+    end
+
     def handle_info(_message, socket), do: {:noreply, socket}
 
     @impl true

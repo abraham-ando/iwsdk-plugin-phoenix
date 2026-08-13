@@ -24,7 +24,14 @@ With no configuration it runs **single player**: the plugin installs its offline
 adapter, every system runs its normal code path, and nothing is published. The
 scene loads its models from a CDN, so the first run needs network access.
 
-To connect to a room, copy `.env.example` to `.env.local` and set an endpoint:
+To connect to a room, start [`apps/demo_server`](../demo_server) — the smallest
+Phoenix app that hosts the channel:
+
+```sh
+cd apps/demo_server && mix deps.get && mix phx.server
+```
+
+Then copy `.env.example` to `.env.local` and point at it:
 
 ```sh
 VITE_PHOENIX_ENDPOINT=ws://localhost:4000/socket
