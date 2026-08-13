@@ -133,8 +133,14 @@ if Code.ensure_loaded?(Phoenix.Channel) do
       end
     end
 
-    @doc false
-    def peer_topic(peer_id), do: "iwsdk:peer:\#{peer_id}"
+    @doc """
+    Topic a peer subscribes to for messages addressed to it alone.
+
+    Must interpolate: a constant topic would deliver every directed signal to
+    every peer, which is both the fan-out and the privacy leak that routing
+    exists to avoid.
+    """
+    def peer_topic(peer_id), do: "iwsdk:peer:#{peer_id}"
 
     # Prefer an id established at socket authentication; fall back to the
     # channel's own join ref so an unauthenticated dev server still works.
