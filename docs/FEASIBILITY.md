@@ -266,6 +266,7 @@ version would be worse than shipping none.
 | TypeScript typecheck against real `@iwsdk/core@0.5.3` | Clean |
 | Client build (ESM + `.d.ts` + bundled worker) | Succeeds |
 | Demo app typecheck + build against the *built* plugin | Succeeds |
+| `RoomChannel` through a real Phoenix socket (`apps/demo_server`) | Join, discovery, relay, ownership, signalling, departure |
 | Network worker in a real browser | Loads, connects, publishes |
 | `SharedArrayBuffer` ring path | Active (`crossOriginIsolated`) |
 | Two-peer discovery, replication and departure | Verified in two Chromium contexts |
@@ -305,16 +306,32 @@ application, and both halves of peer discovery work: the peer already present
 learns about the newcomer, the newcomer learns about the peer already present,
 and closing one tab removes its avatar from the other.
 
-**Still not verified in this environment:** `IwsdkPhoenix.RoomChannel` has never
-been compiled, because `repo.hex.pm` is unreachable from the build container and
-Phoenix could not be fetched. This is exactly why the channel was made a thin
-shim over `IwsdkPhoenix.Room.Handler` — every decision it makes lives in a
-dependency-free module with full test coverage, and what remains in the channel
-is the translation of those return values into `Phoenix.Channel` callback
-tuples. `IwsdkPhoenix.RoomSupervisor`, added with the channel rewrite, is
-likewise dependency-free and covered by 18 tests that run without Phoenix. The
-CI workflow in `.github/workflows/ci.yml` compiles and tests the channel against
-a real Phoenix; treat that as the gate before relying on it.
+### Closing the channel's coverage gap
+
+Keeping every decision in dependency-free modules is what let this package be
+built where `repo.hex.pm` is unreachable — but it left one surface uncovered by
+construction: the channel itself. `RoomChannel` translates `Room.Handler` return
+values into `Phoenix.Channel` callbacks, subscribes sockets to topics and emits
+the discovery frames, and none of that can be exercised without Phoenix.
+
+`apps/demo_server` exists to close that. It is the smallest Phoenix application
+that hosts a room — one socket, one channel, one health check, no Ecto or
+templates — and its test suite drives the real channel through a real socket:
+distinct ids per peer, mutual discovery, despawn on departure, relay without
+echo, ownership arbitration and denial, directed signalling reaching exactly one
+peer, server-stamped signal senders, and client-authority rejection.
+
+Each of those assertions corresponds to something that was wrong at some point:
+per-socket room state handing both peers id 1, nothing announcing an arrival,
+and a `peer_topic/1` that returned a constant and so fanned every directed
+signal out to the whole room.
+
+**Still not verified in this environment:** `IwsdkPhoenix.RoomChannel` and
+`apps/demo_server` have never been compiled here, because `repo.hex.pm` is
+unreachable from the build container and Phoenix could not be fetched.
+`IwsdkPhoenix.RoomSupervisor` is dependency-free and covered by 21 tests that run
+without Phoenix. CI compiles and runs everything against a real Phoenix; treat
+that as the gate before relying on it.
 
 Also unverified: an actual headset, and the demo's CDN-hosted scene assets,
 which are blocked from this container.

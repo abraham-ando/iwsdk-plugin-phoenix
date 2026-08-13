@@ -158,3 +158,44 @@ jobs:
       - name: Full suite, including RoomChannel against a real Phoenix
         working-directory: packages/server
         run: mix test
+
+  demo-server:
+    name: Demo server (Phoenix)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: '1.17'
+          otp-version: '27'
+
+      - name: Cache deps and build
+        uses: actions/cache@v4
+        with:
+          path: |
+            apps/demo_server/deps
+            apps/demo_server/_build
+          key: ${{ runner.os }}-demo-server-${{ hashFiles('apps/demo_server/mix.exs') }}
+          restore-keys: ${{ runner.os }}-demo-server-
+
+      - run: mix deps.get
+        working-directory: apps/demo_server
+
+      - name: Check formatting
+        working-directory: apps/demo_server
+        run: mix format --check-formatted
+
+      - name: Compile with warnings as errors
+        working-directory: apps/demo_server
+        run: mix compile --warnings-as-errors
+        env:
+          MIX_ENV: test
+
+      # The reason this app exists. `iwsdk_phoenix` keeps its logic in
+      # dependency-free modules so the room can be tested without Phoenix, which
+      # leaves the channel — join, discovery, routing, departure — covered by
+      # nothing. These tests drive the real channel through a real socket.
+      - name: Channel tests against a real Phoenix socket
+        working-directory: apps/demo_server
+        run: mix test

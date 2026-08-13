@@ -3,13 +3,14 @@
 WebXR multiplayer for [Meta's Immersive Web SDK](https://github.com/facebook/immersive-web-sdk),
 backed by [Phoenix Channels](https://hexdocs.pm/phoenix/channels.html) and the BEAM.
 
-Two packages and a demo, one wire protocol:
+Two packages and two demo apps, one wire protocol:
 
 | Package | Language | Purpose |
 |---|---|---|
 | [`@iwsdk/plugin-phoenix`](packages/client) | TypeScript | IWSDK plugin: ECS components, systems, worker transport |
 | [`iwsdk_phoenix`](packages/server) | Elixir | Phoenix channel, room processes, spatial filtering, server authority |
 | [`apps/demo`](apps/demo) | TypeScript | A real IWSDK app using both, scaffolded with `npm create @iwsdk@latest` |
+| [`apps/demo_server`](apps/demo_server) | Elixir | The smallest Phoenix app that hosts a room, and the channel's end-to-end tests |
 
 ## Why this pairing
 
@@ -175,7 +176,14 @@ pnpm install --frozen-lockfile
 pnpm demo                     # builds the plugin, starts the demo
 ```
 
-It runs single player out of the box. Set `VITE_PHOENIX_ENDPOINT` (see
+It runs single player out of the box. For multiplayer, start the demo server
+too:
+
+```bash
+cd apps/demo_server && mix deps.get && mix phx.server
+```
+
+Set `VITE_PHOENIX_ENDPOINT=ws://localhost:4000/socket` (see
 [`apps/demo/.env.example`](apps/demo/.env.example)) and open two tabs to watch
 them find each other, replicate head poses, and argue over who is holding the
 plant.
@@ -197,6 +205,9 @@ pnpm demo:build               # the demo, against the built plugin
 cd packages/server
 mix deps.get && mix test      # full server suite
 IWSDK_CORE_ONLY=1 mix test    # core suite, no dependencies, no network
+
+cd ../../apps/demo_server
+mix deps.get && mix test      # the channel, through a real Phoenix socket
 ```
 
 ### Cross-language parity
