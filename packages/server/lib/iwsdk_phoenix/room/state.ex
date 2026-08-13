@@ -341,6 +341,14 @@ defmodule IwsdkPhoenix.Room.State do
      player}
   end
 
+  @doc "Find the peer that owns a network id, or nil."
+  @spec peer_id_of(t(), non_neg_integer()) :: String.t() | nil
+  def peer_id_of(%__MODULE__{} = state, network_id) do
+    Enum.find_value(state.players, fn {peer_id, player} ->
+      if player.network_id == network_id, do: peer_id
+    end)
+  end
+
   @doc "Whether a peer is mid-handoff."
   @spec migrating?(t(), String.t()) :: boolean()
   def migrating?(%__MODULE__{} = state, peer_id), do: MapSet.member?(state.migrating, peer_id)

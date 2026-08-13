@@ -31,6 +31,7 @@ a real change.
 | 8 | `PONG` | server → client | 9 |
 | 9 | `OWNERSHIP_REQUEST` | client → server | 9 |
 | 10 | `OWNERSHIP_GRANT` | server → all clients | 14 |
+| 11 | `SIGNAL` | client → one peer, relayed | 11 + payload |
 
 ---
 
@@ -196,6 +197,35 @@ only place it *can* be decided correctly, since two players reaching for the
 same object at the same instant will both believe they succeeded. Clients must
 therefore not claim ownership optimistically: doing so makes the object visibly
 fight between two positions until the verdict lands.
+
+---
+
+## `SIGNAL` (11) — 11 bytes + payload
+
+| Offset | Type | Field |
+|---|---|---|
+| 0 | `u8` | opcode = 11 |
+| 1–4 | `u32` | `targetNetworkId`, or 0 for everyone else |
+| 5–8 | `u32` | `senderNetworkId`, **stamped by the server** |
+| 9–10 | `u16` | payload length, max 16384 |
+| 11… | bytes | opaque payload |
+
+Carries WebRTC negotiation — SDP offers and answers, ICE candidates — without
+the server parsing any of it. That opacity is the point: codecs, trickle ICE and
+renegotiation can all change with no server-side change at all.
+
+Two rules make the relay safe:
+
+- **The sender field is overwritten server-side**, never trusted from the
+  client. Otherwise a peer could answer a call in someone else's name and hijack
+  the negotiation.
+- **The payload is length-capped at 16 KiB.** This is the only frame where a
+  client hands the server a length-prefixed blob to forward, and an unbounded
+  length is precisely how a relay becomes an amplification vector.
+
+A directed signal reaches exactly one peer; it is never fanned out to the room,
+which would be both wasteful and a privacy leak. Target `0` broadcasts, which
+peers use to announce themselves before they know anyone's id.
 
 ---
 

@@ -120,6 +120,7 @@ an honest client's prediction matches exactly and no correction is ever visible.
 - Client prediction with reconciliation and input replay
 - Distance-based publish-rate throttling
 - Server-arbitrated ownership transfer for picking up shared objects
+- Opaque WebRTC signalling relay for peer-to-peer voice
 - Phoenix, Offline and Loopback adapters behind one `INetworkAdapter`
 
 **Server**
@@ -175,7 +176,7 @@ pnpm build && node scripts/generate-fixtures.mjs
 
 ## Status
 
-Verified: 78 client tests, 146 server tests, cross-language parity, clean
+Verified: 86 client tests, 161 server tests, cross-language parity, clean
 typecheck against `@iwsdk/core@0.5.3`, successful build.
 
 Not yet verified in a browser: the Web Worker path (its `RingBuffer` is tested

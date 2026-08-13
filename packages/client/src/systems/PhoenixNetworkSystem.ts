@@ -13,6 +13,7 @@ import type { INetworkAdapter, NetworkMessage } from '../interfaces/INetworkAdap
 import {
   BinaryProtocol,
   ProtocolError,
+  type SignalFrame,
   type TransformRecord,
 } from '../protocol/BinaryProtocol.js';
 import { OpCode } from '../protocol/opcodes.js';
@@ -119,6 +120,15 @@ export class PhoenixNetworkSystem extends createSystem(
    * refers to us. Set it from the channel join reply.
    */
   localOwnerId = 0;
+
+  /**
+   * Called for every signalling frame addressed to this client.
+   *
+   * The payload is opaque here — typically JSON-encoded SDP or an ICE
+   * candidate. Feed it to your `RTCPeerConnection`; this package only carries
+   * it, which is what lets WebRTC negotiation evolve without a server change.
+   */
+  onSignal: ((signal: SignalFrame) => void) | null = null;
 
   private nextRequestId = 1;
   private readonly pendingOwnership = new Map<number, number>();
@@ -371,6 +381,34 @@ export class PhoenixNetworkSystem extends createSystem(
   }
 
   // ---------------------------------------------------------------------------
+  // Signalling
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Relay an opaque payload to one peer, or to the whole room.
+   *
+   * @param targetNetworkId Recipient, or 0 to reach every other peer — useful
+   *   for announcing yourself before you know anyone's id.
+   * @param payload SDP, an ICE candidate, or anything else your negotiation
+   *   needs. Capped at 16 KiB by the protocol.
+   * @returns `false` when there is no connected adapter.
+   */
+  sendSignal(targetNetworkId: number, payload: Uint8Array | string): boolean {
+    const adapter = this.adapter;
+    if (!adapter || adapter.state !== 'connected') return false;
+
+    const frame =
+      typeof payload === 'string'
+        ? BinaryProtocol.encodeSignalText(targetNetworkId, payload)
+        : BinaryProtocol.encodeSignal(targetNetworkId, payload);
+
+    // The sender field is left at 0: the server overwrites it with our real id,
+    // so it cannot be forged.
+    adapter.send(frame);
+    return true;
+  }
+
+  // ---------------------------------------------------------------------------
   // Inbound
   // ---------------------------------------------------------------------------
 
@@ -407,6 +445,13 @@ export class PhoenixNetworkSystem extends createSystem(
         case OpCode.OWNERSHIP_GRANT:
           this.applyOwnership(BinaryProtocol.decodeOwnershipGrant(message.payload));
           break;
+
+        case OpCode.SIGNAL: {
+          const signal = BinaryProtocol.decodeSignal(message.payload);
+          // Ignore our own broadcast coming back; only relevant for target 0.
+          if (signal.senderNetworkId !== this.localOwnerId) this.onSignal?.(signal);
+          break;
+        }
 
         // RECONCILE is consumed by ClientPredictionSystem, which subscribes to
         // the adapter directly. PING/PONG are handled by the stats path.

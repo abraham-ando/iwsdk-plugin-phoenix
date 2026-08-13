@@ -101,6 +101,9 @@ defmodule IwsdkPhoenix.Room.Server do
       {:broadcast_all, payload, room} ->
         {:reply, {:broadcast_all, payload}, %{state | room: room}}
 
+      {:direct, target_peer, payload, room} ->
+        {:reply, {:direct, target_peer, payload}, %{state | room: room}}
+
       {:reply, payload, room} ->
         {:reply, {:reply, payload}, %{state | room: room}}
 

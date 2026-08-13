@@ -64,3 +64,8 @@ ownership_request	4294967295	65535	09ffffffffffff0000
 # ownership_grant <networkId> <ownerId> <requestId> <granted:0|1> <hex>
 ownership_grant	7	3	1	1	0a07000000030000000100000001
 ownership_grant	7	9	2	0	0a07000000090000000200000000
+# 
+# signal <targetNetworkId> <senderNetworkId> <payload-utf8> <hex>
+signal	0	0		0b00000000000000000000
+signal	7	3	hello	0b0700000003000000050068656c6c6f
+signal	4294967295	1	{"type":"offer","sdp":"v=0"}	0bffffffff010000001c007b2274797065223a226f66666572222c22736470223a22763d30227d

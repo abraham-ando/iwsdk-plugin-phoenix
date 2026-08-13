@@ -39,6 +39,9 @@ defmodule IwsdkPhoenix.Protocol do
   @op_pong 8
   @op_ownership_request 9
   @op_ownership_grant 10
+  @op_signal 11
+
+  @signal_max_payload 16 * 1024
 
   @flag_quantized 0x01
 
@@ -57,6 +60,10 @@ defmodule IwsdkPhoenix.Protocol do
   def op_pong, do: @op_pong
   def op_ownership_request, do: @op_ownership_request
   def op_ownership_grant, do: @op_ownership_grant
+  def op_signal, do: @op_signal
+
+  @doc "Largest signalling payload accepted, in bytes."
+  def signal_max_payload, do: @signal_max_payload
 
   # ---------------------------------------------------------------------------
   # Decoding
@@ -178,6 +185,14 @@ defmodule IwsdkPhoenix.Protocol do
      }}
   end
 
+  def decode(
+        <<@op_signal, target::unsigned-little-integer-size(32),
+          sender::unsigned-little-integer-size(32), length::unsigned-little-integer-size(16),
+          payload::binary-size(length)>>
+      ) do
+    {:ok, :signal, %{target_network_id: target, sender_network_id: sender, payload: payload}}
+  end
+
   def decode(<<@op_ping, timestamp::float-little-size(64)>>) do
     {:ok, :ping, %{timestamp: timestamp}}
   end
@@ -187,7 +202,7 @@ defmodule IwsdkPhoenix.Protocol do
   end
 
   def decode(<<op::unsigned-integer-size(8), _rest::binary>>)
-      when op in 1..10 do
+      when op in 1..11 do
     # Known opcode but the body did not match: a length mismatch, not an
     # unknown frame type. Distinguishing the two makes protocol drift obvious
     # in logs instead of looking like garbage traffic.
@@ -378,6 +393,45 @@ defmodule IwsdkPhoenix.Protocol do
       owner_id::unsigned-little-integer-size(32), request_id::unsigned-little-integer-size(32),
       if(granted, do: 1, else: 0)::unsigned-integer-size(8)>>
   end
+
+  @doc """
+  Encode an opaque signalling frame for relay.
+
+      [0]      Uint8   OpCode (11)
+      [1..4]   Uint32  target_network_id, 0 = everyone else
+      [5..8]   Uint32  sender_network_id, stamped by the server
+      [9..10]  Uint16  payload length
+      [11..]   payload
+
+  The server never parses the payload, so WebRTC negotiation can evolve — new
+  codecs, trickle ICE, renegotiation — without any server change.
+  """
+  @spec encode_signal(non_neg_integer(), binary(), non_neg_integer()) :: binary()
+  def encode_signal(target_network_id, payload, sender_network_id \\ 0)
+      when byte_size(payload) <= @signal_max_payload do
+    <<@op_signal, target_network_id::unsigned-little-integer-size(32),
+      sender_network_id::unsigned-little-integer-size(32),
+      byte_size(payload)::unsigned-little-integer-size(16), payload::binary>>
+  end
+
+  @doc """
+  Rewrite a signalling frame's sender field.
+
+  The server stamps the true sender rather than trusting the client's value,
+  so a peer cannot impersonate another during negotiation — which would let it
+  hijack a call by answering in someone else's name.
+  """
+  @spec stamp_signal_sender(binary(), non_neg_integer()) :: {:ok, binary()} | {:error, atom()}
+  def stamp_signal_sender(
+        <<@op_signal, target::binary-size(4), _sender::binary-size(4), rest::binary>>,
+        sender_network_id
+      ) do
+    {:ok,
+     <<@op_signal, target::binary, sender_network_id::unsigned-little-integer-size(32),
+       rest::binary>>}
+  end
+
+  def stamp_signal_sender(_frame, _sender), do: {:error, :not_a_signal_frame}
 
   @doc "Encode a latency probe or its reply."
   @spec encode_ping(float(), boolean()) :: binary()

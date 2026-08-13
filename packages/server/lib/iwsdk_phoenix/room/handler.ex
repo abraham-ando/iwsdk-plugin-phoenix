@@ -13,6 +13,9 @@ defmodule IwsdkPhoenix.Room.Handler do
     * `{:broadcast_all, binary, state}` — send to every peer *including* the
       sender; used for ownership verdicts, where the requester is precisely the
       peer that most needs the answer
+    * `{:direct, peer_id, binary, state}` — send to exactly one peer; used for
+      signalling, which is a conversation between two peers and must not be
+      fanned out to the room
     * `{:reply, binary, state}` — send back to this peer only
     * `{:noreply, state}` — consumed, nothing to send
     * `{:error, reason, state}` — malformed or rejected
@@ -24,6 +27,7 @@ defmodule IwsdkPhoenix.Room.Handler do
   @type result ::
           {:broadcast, binary(), State.t()}
           | {:broadcast_all, binary(), State.t()}
+          | {:direct, String.t(), binary(), State.t()}
           | {:reply, binary(), State.t()}
           | {:noreply, State.t()}
           | {:error, atom(), State.t()}
@@ -67,6 +71,9 @@ defmodule IwsdkPhoenix.Room.Handler do
       opcode == Protocol.op_ownership_request() ->
         arbitrate_ownership(state, peer_id, frame)
 
+      opcode == Protocol.op_signal() ->
+        relay_signal(state, peer_id, frame)
+
       # Track positions only when filtering actually needs them; otherwise stay
       # on the zero-decode path.
       state.interest_radius != nil and
@@ -86,6 +93,9 @@ defmodule IwsdkPhoenix.Room.Handler do
 
       opcode == Protocol.op_ownership_request() ->
         arbitrate_ownership(state, peer_id, frame)
+
+      opcode == Protocol.op_signal() ->
+        relay_signal(state, peer_id, frame)
 
       opcode == Protocol.op_input_update() ->
         case Protocol.decode(frame) do
@@ -127,6 +137,44 @@ defmodule IwsdkPhoenix.Room.Handler do
 
       _ ->
         {:error, :malformed_frame, state}
+    end
+  end
+
+  # Signalling is a two-party conversation. The server's only jobs are to stamp
+  # the true sender (so a peer cannot answer in someone else's name) and to
+  # deliver it to the addressed peer rather than the whole room.
+  defp relay_signal(state, peer_id, frame) do
+    sender = State.player(state, peer_id)
+
+    cond do
+      is_nil(sender) ->
+        {:noreply, state}
+
+      true ->
+        case Protocol.decode(frame) do
+          {:ok, :signal, %{target_network_id: target}} ->
+            {:ok, stamped} = Protocol.stamp_signal_sender(frame, sender.network_id)
+
+            cond do
+              # 0 addresses the whole room: used to announce presence before any
+              # peer knows the others' ids.
+              target == 0 ->
+                {:broadcast, stamped, state}
+
+              # Addressing yourself is meaningless and would loop.
+              target == sender.network_id ->
+                {:noreply, state}
+
+              true ->
+                case State.peer_id_of(state, target) do
+                  nil -> {:error, :unknown_signal_target, state}
+                  target_peer -> {:direct, target_peer, stamped, state}
+                end
+            end
+
+          _ ->
+            {:error, :malformed_frame, state}
+        end
     end
   end
 

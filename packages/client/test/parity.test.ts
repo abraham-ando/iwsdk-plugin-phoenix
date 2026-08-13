@@ -150,6 +150,22 @@ describe('golden vectors', () => {
     }
   });
 
+  it('SIGNAL matches', () => {
+    const cases = of('signal');
+    expect(cases.length).toBeGreaterThan(0);
+
+    for (const [target, sender, text, expected] of cases) {
+      const frame = BinaryProtocol.encodeSignalText(num(target), text ?? '', num(sender));
+      expect(hex(frame)).toBe(expected);
+
+      // And it decodes back to the same text on this side.
+      const decoded = BinaryProtocol.decodeSignal(frame);
+      expect(BinaryProtocol.decodeSignalText(decoded)).toBe(text ?? '');
+      expect(decoded.targetNetworkId).toBe(num(target));
+      expect(decoded.senderNetworkId).toBe(num(sender));
+    }
+  });
+
   it('movement integration matches', () => {
     const cases = of('movement');
     expect(cases.length).toBeGreaterThan(0);

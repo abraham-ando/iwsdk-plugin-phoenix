@@ -13,6 +13,8 @@ import {
   OWNERSHIP_GRANT_BYTES,
   OWNERSHIP_REQUEST_BYTES,
   OpCode,
+  SIGNAL_HEADER_BYTES,
+  SIGNAL_MAX_PAYLOAD_BYTES,
   RECONCILE_BYTES,
   SNAPSHOT_HEADER_BYTES,
   SNAPSHOT_RECORD_BYTES,
@@ -88,6 +90,16 @@ export interface OwnershipGrantFrame {
   granted: boolean;
 }
 
+/** Decoded {@link OpCode.SIGNAL} frame. */
+export interface SignalFrame {
+  /** Intended recipient, or 0 to reach everyone else in the room. */
+  targetNetworkId: number;
+  /** Sender, stamped by the server so it cannot be forged by the client. */
+  senderNetworkId: number;
+  /** Opaque body — SDP or ICE, as far as this package is concerned. */
+  payload: Uint8Array;
+}
+
 /** Union of everything {@link BinaryProtocol.decode} can return. */
 export type DecodedFrame =
   | { opCode: OpCode.TRANSFORM_UPDATE; transform: TransformRecord }
@@ -98,7 +110,8 @@ export type DecodedFrame =
   | { opCode: OpCode.DESPAWN_ENTITY; networkId: number }
   | { opCode: OpCode.PING | OpCode.PONG; timestamp: number }
   | { opCode: OpCode.OWNERSHIP_REQUEST; ownershipRequest: OwnershipRequestFrame }
-  | { opCode: OpCode.OWNERSHIP_GRANT; ownershipGrant: OwnershipGrantFrame };
+  | { opCode: OpCode.OWNERSHIP_GRANT; ownershipGrant: OwnershipGrantFrame }
+  | { opCode: OpCode.SIGNAL; signal: SignalFrame };
 
 /** Thrown when a frame cannot be interpreted. */
 export class ProtocolError extends Error {
@@ -561,6 +574,97 @@ export class BinaryProtocol {
   }
 
   // ---------------------------------------------------------------------------
+  // SIGNAL — opaque peer-to-peer relay
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Wrap an opaque signalling payload for relay through the server.
+   *
+   * ```text
+   * [0]      Uint8   OpCode (11)
+   * [1..4]   Uint32  targetNetworkId, 0 = everyone else
+   * [5..8]   Uint32  senderNetworkId, stamped by the server
+   * [9..10]  Uint16  payload length
+   * [11..]   payload
+   * ```
+   *
+   * The server never parses the payload. Keeping WebRTC negotiation opaque
+   * means SDP and ICE can evolve — new codecs, trickle ICE, renegotiation —
+   * without touching the server at all.
+   *
+   * `senderNetworkId` is overwritten server-side rather than trusted from the
+   * client, so a peer cannot impersonate another during negotiation.
+   */
+  static encodeSignal(
+    targetNetworkId: number,
+    payload: Uint8Array,
+    senderNetworkId = 0,
+  ): ArrayBuffer {
+    if (payload.byteLength > SIGNAL_MAX_PAYLOAD_BYTES) {
+      throw new ProtocolError(
+        `SIGNAL payload of ${payload.byteLength} bytes exceeds the ${SIGNAL_MAX_PAYLOAD_BYTES} byte cap`,
+      );
+    }
+
+    const buffer = new ArrayBuffer(SIGNAL_HEADER_BYTES + payload.byteLength);
+    const view = new DataView(buffer);
+
+    view.setUint8(0, OpCode.SIGNAL);
+    view.setUint32(1, targetNetworkId >>> 0, LITTLE_ENDIAN);
+    view.setUint32(5, senderNetworkId >>> 0, LITTLE_ENDIAN);
+    view.setUint16(9, payload.byteLength, LITTLE_ENDIAN);
+    new Uint8Array(buffer, SIGNAL_HEADER_BYTES).set(payload);
+
+    return buffer;
+  }
+
+  /** Decode a {@link OpCode.SIGNAL} frame. */
+  static decodeSignal(buffer: ArrayBufferLike, byteOffset = 0): SignalFrame {
+    const view = new DataView(buffer as ArrayBuffer, byteOffset);
+    if (view.byteLength < SIGNAL_HEADER_BYTES) {
+      throw new ProtocolError('SIGNAL frame is shorter than its header');
+    }
+
+    const length = view.getUint16(9, LITTLE_ENDIAN);
+    if (view.byteLength < SIGNAL_HEADER_BYTES + length) {
+      throw new ProtocolError(
+        `SIGNAL declares ${length} payload bytes but frame carries ${view.byteLength - SIGNAL_HEADER_BYTES}`,
+      );
+    }
+
+    return {
+      targetNetworkId: view.getUint32(1, LITTLE_ENDIAN),
+      senderNetworkId: view.getUint32(5, LITTLE_ENDIAN),
+      // Copy rather than view: the caller keeps this past the frame's lifetime,
+      // and on the ring-buffer path the backing bytes are reused immediately.
+      payload: new Uint8Array(
+        (buffer as ArrayBuffer).slice(
+          byteOffset + SIGNAL_HEADER_BYTES,
+          byteOffset + SIGNAL_HEADER_BYTES + length,
+        ),
+      ),
+    };
+  }
+
+  /** Convenience: encode a UTF-8 string payload, e.g. JSON-encoded SDP. */
+  static encodeSignalText(
+    targetNetworkId: number,
+    text: string,
+    senderNetworkId = 0,
+  ): ArrayBuffer {
+    return BinaryProtocol.encodeSignal(
+      targetNetworkId,
+      new TextEncoder().encode(text),
+      senderNetworkId,
+    );
+  }
+
+  /** Convenience: read a signalling payload back as UTF-8 text. */
+  static decodeSignalText(frame: SignalFrame): string {
+    return new TextDecoder().decode(frame.payload);
+  }
+
+  // ---------------------------------------------------------------------------
   // Generic dispatch
   // ---------------------------------------------------------------------------
 
@@ -616,6 +720,8 @@ export class BinaryProtocol {
           opCode,
           ownershipGrant: BinaryProtocol.decodeOwnershipGrant(buffer, byteOffset),
         };
+      case OpCode.SIGNAL:
+        return { opCode, signal: BinaryProtocol.decodeSignal(buffer, byteOffset) };
       case OpCode.PING:
       case OpCode.PONG: {
         const view = new DataView(buffer as ArrayBuffer, byteOffset);

@@ -10,6 +10,7 @@ import {
   RECONCILE_BYTES,
   SNAPSHOT_HEADER_BYTES,
   SNAPSHOT_RECORD_BYTES,
+  SIGNAL_MAX_PAYLOAD_BYTES,
   SNAPSHOT_RECORD_QUANTIZED_BYTES,
   TRANSFORM_UPDATE_BYTES,
 } from '../src/protocol/opcodes.js';
@@ -246,6 +247,68 @@ describe('SPAWN / DESPAWN', () => {
     expect(decoded.opCode).toBe(OpCode.DESPAWN_ENTITY);
     if (decoded.opCode === OpCode.DESPAWN_ENTITY) {
       expect(decoded.networkId).toBe(88);
+    }
+  });
+});
+
+describe('SIGNAL', () => {
+  it('round-trips an opaque binary payload', () => {
+    const payload = new Uint8Array([0, 255, 128, 7, 42]);
+    const decoded = BinaryProtocol.decodeSignal(
+      BinaryProtocol.encodeSignal(7, payload, 3),
+    );
+
+    expect(decoded.targetNetworkId).toBe(7);
+    expect(decoded.senderNetworkId).toBe(3);
+    expect(Array.from(decoded.payload)).toEqual(Array.from(payload));
+  });
+
+  it('round-trips UTF-8 text, including non-ASCII', () => {
+    const text = '{"type":"offer","sdp":"v=0","note":"caf\u00e9 \ud83c\udfa7"}';
+    const decoded = BinaryProtocol.decodeSignal(
+      BinaryProtocol.encodeSignalText(1, text),
+    );
+
+    expect(BinaryProtocol.decodeSignalText(decoded)).toBe(text);
+  });
+
+  it('handles an empty payload', () => {
+    const decoded = BinaryProtocol.decodeSignal(
+      BinaryProtocol.encodeSignal(1, new Uint8Array(0)),
+    );
+    expect(decoded.payload.byteLength).toBe(0);
+  });
+
+  it('copies the payload rather than viewing the frame', () => {
+    // On the ring-buffer path the backing bytes are reused immediately, so a
+    // view would be corrupted by the very next frame.
+    const frame = BinaryProtocol.encodeSignal(1, new Uint8Array([1, 2, 3]));
+    const decoded = BinaryProtocol.decodeSignal(frame);
+
+    new Uint8Array(frame).fill(0);
+    expect(Array.from(decoded.payload)).toEqual([1, 2, 3]);
+  });
+
+  it('rejects a payload past the 16 KiB cap', () => {
+    // An unbounded length is how a relay becomes an amplification vector.
+    expect(() =>
+      BinaryProtocol.encodeSignal(1, new Uint8Array(SIGNAL_MAX_PAYLOAD_BYTES + 1)),
+    ).toThrow(ProtocolError);
+  });
+
+  it('rejects a frame whose declared length exceeds its body', () => {
+    const frame = BinaryProtocol.encodeSignal(1, new Uint8Array([1, 2, 3]));
+    new DataView(frame).setUint16(9, 9999, true);
+    expect(() => BinaryProtocol.decodeSignal(frame)).toThrow(ProtocolError);
+  });
+
+  it('routes through the generic dispatcher', () => {
+    const decoded = BinaryProtocol.decode(
+      BinaryProtocol.encodeSignalText(5, 'ping', 9),
+    );
+    expect(decoded.opCode).toBe(OpCode.SIGNAL);
+    if (decoded.opCode === OpCode.SIGNAL) {
+      expect(decoded.signal.targetNetworkId).toBe(5);
     }
   });
 });

@@ -185,6 +185,7 @@ efforts than this package, and both are honest about their cost.
 | Asynchronous batched persistence | Implemented as a coalescing write-behind buffer and writer process, independent of Ecto |
 | Zone handoff between processes | Implemented as a two-phase protocol; cross-*node* process placement is left to Horde |
 | Cross-zone id allocation | Implemented; not in the original spec, but required for handoff to be correct at all |
+| WebRTC signalling relay | Implemented as an opaque, sender-stamped, length-capped `SIGNAL` frame |
 
 ### Scope note on Network LOD
 
@@ -237,9 +238,12 @@ version would be worse than shipping none.
   ship a supervisor that migrates zone processes between nodes on failure. What
   *is* implemented is the harder half: the player handoff protocol itself (see
   below).
-- **WebRTC signalling and spatialised audio.** The design calls for peer
-  signalling plus Web Audio `PannerNode` fed from ECS coordinates. Nothing in
-  the binary protocol prevents it; it is simply not built.
+- **Spatialised audio playback.** IWSDK already ships `AudioSource`,
+  `DistanceModel` and `AudioSystem`, so positional audio is the host SDK's job,
+  not this package's — reimplementing a `PannerNode` layer here would duplicate
+  it. What *was* missing is the networking half, and that is now built: the
+  `SIGNAL` frame relays WebRTC negotiation between peers (see below). Wiring a
+  negotiated `MediaStream` into IWSDK's audio graph remains application code.
 - **Ecto schemas.** `IwsdkPhoenix` still has no database dependency and ships
   no schema or migration — the application owns its tables. The batching and
   coalescing layer *is* implemented (see below); only the Ecto-specific glue is
@@ -254,8 +258,8 @@ version would be worse than shipping none.
 
 | Check | Result |
 |---|---|
-| Client unit + integration tests | 78 passing |
-| Server tests (incl. 19 doctests) | 146 passing |
+| Client unit + integration tests | 86 passing |
+| Server tests (incl. 19 doctests) | 161 passing |
 | Cross-language golden vectors | Verified in both languages |
 | TypeScript typecheck against real `@iwsdk/core@0.5.3` | Clean |
 | Client build (ESM + `.d.ts` + bundled worker) | Succeeds |

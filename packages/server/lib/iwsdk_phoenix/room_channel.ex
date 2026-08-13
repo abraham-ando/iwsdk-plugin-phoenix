@@ -79,6 +79,16 @@ if Code.ensure_loaded?(Phoenix.Channel) do
           broadcast_from!(socket, @frame_event, {:binary, payload})
           {:noreply, assign(socket, :room, room)}
 
+        {:direct, target_peer, payload, room} ->
+          # Signalling is between two peers; fanning it out would leak the
+          # negotiation to the room. Each socket subscribes to its own topic.
+          socket.endpoint.broadcast(peer_topic(target_peer), @frame_event, {
+            :binary,
+            payload
+          })
+
+          {:noreply, assign(socket, :room, room)}
+
         {:broadcast_all, payload, room} ->
           # Includes the sender. Ownership verdicts go to everyone, and the
           # requester is the peer that most needs the answer.
@@ -122,6 +132,9 @@ if Code.ensure_loaded?(Phoenix.Channel) do
           :ok
       end
     end
+
+    @doc false
+    def peer_topic(peer_id), do: "iwsdk:peer:\#{peer_id}"
 
     # Prefer an id established at socket authentication; fall back to the
     # channel's own join ref so an unauthenticated dev server still works.

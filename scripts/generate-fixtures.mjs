@@ -293,6 +293,26 @@ for (const frame of [
   );
 }
 
+comment('');
+
+// ---------------------------------------------------------------------------
+// SIGNAL relay
+// ---------------------------------------------------------------------------
+comment('signal <targetNetworkId> <senderNetworkId> <payload-utf8> <hex>');
+for (const [target, sender, text] of [
+  [0, 0, ''],
+  [7, 3, 'hello'],
+  [4294967295, 1, '{"type":"offer","sdp":"v=0"}'],
+]) {
+  row(
+    'signal',
+    String(target),
+    String(sender),
+    text,
+    hex(BinaryProtocol.encodeSignalText(target, text, sender)),
+  );
+}
+
 const outputPath = join(root, 'fixtures/protocol_vectors.tsv');
 mkdirSync(dirname(outputPath), { recursive: true });
 writeFileSync(outputPath, `${lines.join('\n')}\n`, 'utf8');
