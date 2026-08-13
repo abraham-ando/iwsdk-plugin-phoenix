@@ -25,6 +25,17 @@ const MAGIC = Buffer.from('IWSD');
 
 const hasElixir = spawnSync('elixir', ['--version'], { encoding: 'utf8' }).status === 0;
 
+/**
+ * On a developer machine without Elixir this suite skips, so the rest of the
+ * tests stay runnable. In CI it must never skip: a skipped suite is a green
+ * build that has quietly lost all cross-runtime coverage.
+ *
+ * Asserting that here, rather than by scraping vitest's output from the
+ * workflow, keeps the guarantee next to the thing it guards — and avoids
+ * depending on log formatting, which broke the moment CI enabled colour.
+ */
+const requireElixir = Boolean(process.env.CI) && process.env.IWSDK_ALLOW_NO_ELIXIR !== '1';
+
 /** Outbound kinds emitted by the harness. */
 const Kind = {
   BROADCAST: 0,
@@ -174,6 +185,19 @@ class Harness {
 }
 
 const maybe = hasElixir ? describe : describe.skip;
+
+// A hard failure rather than a skip, so CI cannot go green without this.
+if (!hasElixir && requireElixir) {
+  describe('interop with the Elixir server', () => {
+    it('requires Elixir on PATH in CI', () => {
+      throw new Error(
+        'Elixir is not available, so the live interop suite would skip and CI ' +
+          'would report a green build with no cross-runtime coverage. Install ' +
+          'Elixir, or set IWSDK_ALLOW_NO_ELIXIR=1 to accept the loss knowingly.',
+      );
+    });
+  });
+}
 
 maybe('interop with the Elixir server', () => {
   const harness = new Harness();
