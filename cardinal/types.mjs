@@ -88,8 +88,11 @@ export const TYPES = Object.freeze({
     slots: 3,
     read: (v, o) =>
       `[${v}.getFloat32(${o}, true), ${v}.getFloat32(${o} + 4, true), ${v}.getFloat32(${o} + 8, true)]`,
+    // `?? 0` is not defensiveness: the client package compiles with
+    // `noUncheckedIndexedAccess`, so an index into a `number[]` is typed
+    // `number | undefined` and the generated file would not compile without it.
     write: (v, o, x) =>
-      `${v}.setFloat32(${o}, ${x}[0], true); ${v}.setFloat32(${o} + 4, ${x}[1], true); ${v}.setFloat32(${o} + 8, ${x}[2], true)`,
+      `${v}.setFloat32(${o}, ${x}[0] ?? 0, true); ${v}.setFloat32(${o} + 4, ${x}[1] ?? 0, true); ${v}.setFloat32(${o} + 8, ${x}[2] ?? 0, true)`,
     samples: [
       [0, 0, 0],
       [1, -2, 3.5],
