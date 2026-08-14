@@ -13,6 +13,7 @@ defmodule IwsdkPhoenix.Room.State do
   """
 
   alias IwsdkPhoenix.Cardinal.Cache
+  alias IwsdkPhoenix.World.Weather
   alias IwsdkPhoenix.Physics.Kinematic
   alias IwsdkPhoenix.Protocol
   alias IwsdkPhoenix.SpatialGrid
@@ -32,7 +33,9 @@ defmodule IwsdkPhoenix.Room.State do
             cell_size: 50.0,
             grid_mode: :full,
             steal_policy: :deny,
-            components: %{}
+            components: %{},
+            world_time_ms: 0,
+            weather: nil
 
   @type mode :: :host_relayed | :server_authoritative
 
@@ -87,7 +90,9 @@ defmodule IwsdkPhoenix.Room.State do
       grid_mode: Keyword.get(opts, :grid_mode, :full),
       steal_policy: Keyword.get(opts, :steal_policy, :deny),
       allocator: allocator,
-      allocator_state: allocator_state
+      allocator_state: allocator_state,
+      world_time_ms: 0,
+      weather: Weather.new(id, 0)
     }
   end
 
@@ -359,6 +364,44 @@ defmodule IwsdkPhoenix.Room.State do
              components: Cache.drop_entity(state.components, network_id)
          }, Protocol.encode_despawn(network_id)}
     end
+  end
+
+  @doc """
+  Move the world forward by `elapsed_ms`.
+
+  Everything that evolves without players goes through here, and everything
+  that goes through here must be a pure function of the elapsed span — that is
+  what lets a sector stop when empty and catch up on waking rather than
+  burning a tick loop on an empty world.
+  """
+  @spec advance(t(), integer()) :: t()
+  def advance(%__MODULE__{} = state, elapsed_ms) when elapsed_ms <= 0, do: state
+
+  def advance(%__MODULE__{} = state, elapsed_ms) do
+    %{
+      state
+      | world_time_ms: state.world_time_ms + elapsed_ms,
+        weather: Weather.advance(state.weather, elapsed_ms, state.id, state.world_time_ms)
+    }
+  end
+
+  @doc "The part of a sector worth carrying between visits."
+  @spec snapshot(t()) :: map()
+  def snapshot(%__MODULE__{} = state) do
+    %{world_time_ms: state.world_time_ms, weather: state.weather}
+  end
+
+  @doc """
+  Restore a snapshot, then advance by `elapsed_ms`.
+
+  Pass `0` for elapsed when the snapshot came from a different node epoch: its
+  `last_seen_ms` is then in a time base that no longer exists, and any elapsed
+  span computed from it would be arbitrary.
+  """
+  @spec restore(t(), map(), integer()) :: t()
+  def restore(%__MODULE__{} = state, snapshot, elapsed_ms) do
+    %{state | world_time_ms: snapshot.world_time_ms, weather: snapshot.weather}
+    |> advance(elapsed_ms)
   end
 
   @doc "Record component values published by a peer."
