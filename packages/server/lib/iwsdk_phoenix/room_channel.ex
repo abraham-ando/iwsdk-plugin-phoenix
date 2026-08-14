@@ -300,10 +300,17 @@ if Code.ensure_loaded?(Phoenix.Channel) do
         RoomSupervisor.ensure_running()
       end
 
+      persistent = Map.get(params, "persistent", false) == true
+
       RoomSupervisor.ensure_started(room_id,
         mode: mode,
         interest_radius: Map.get(params, "interest_radius", 50.0),
-        stop_when_empty: true,
+        # A persistent sector keeps running rather than being reaped. Its
+        # snapshot machinery still writes on stop, which is what a node
+        # restart exercises; stopping an idle persistent sector and reloading
+        # it on demand is a follow-up the same machinery already supports.
+        stop_when_empty: not persistent,
+        persistent: persistent,
         broadcast: broadcaster(mode, socket.endpoint)
       )
     end

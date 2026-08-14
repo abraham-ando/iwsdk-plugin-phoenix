@@ -458,4 +458,31 @@ defmodule DemoServerWeb.RoomChannelTest do
       assert_reply(reference, :error, %{reason: "client_authority_denied"})
     end
   end
+  describe "persistent sectors" do
+    test "a room is ephemeral unless the join asks otherwise" do
+      # Today's behaviour, and the default: a demo lobby should not accumulate
+      # world state nobody asked for.
+      {socket, _reply} = join_room("alice", unique_room())
+
+      room = socket.assigns.room
+      ref = Process.monitor(room)
+      # The test process is linked to the channel, which shuts down on leave.
+      Process.unlink(socket.channel_pid)
+      leave(socket)
+
+      assert_receive {:DOWN, ^ref, :process, _pid, _reason}, 2000
+    end
+
+    test "a persistent room survives its last peer" do
+      {socket, _reply} = join_room("alice", unique_room(), %{"persistent" => true})
+
+      room = socket.assigns.room
+      ref = Process.monitor(room)
+      Process.unlink(socket.channel_pid)
+      leave(socket)
+
+      refute_receive {:DOWN, ^ref, :process, _pid, _reason}, 500
+      assert Process.alive?(room)
+    end
+  end
 end
