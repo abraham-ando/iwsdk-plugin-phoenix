@@ -94,6 +94,17 @@ export interface PhoenixNetworkingOptions {
   /** Register {@link NetworkLODSystem}. @defaultValue true */
   networkLod?: boolean;
 
+  /**
+   * Size each remote entity's interpolation buffer from its measured arrival
+   * jitter rather than a fixed value. @defaultValue true
+   *
+   * A fixed delay has to be chosen for the worst connection anyone might have,
+   * which taxes everyone else — 100 ms of presentation lag buys nothing on a
+   * local network. Set false to keep whatever the application writes to
+   * `NetworkedTransform.interpolationDelayMs`.
+   */
+  adaptiveInterpolation?: boolean;
+
   /** Metres/second used by prediction; must match the server. @defaultValue 4.5 */
   moveSpeed?: number;
 }
@@ -198,6 +209,7 @@ export function installPhoenixNetworking(
     batchOutbound = true,
     quantize = false,
     networkLod = true,
+    adaptiveInterpolation = true,
     moveSpeed = 4.5,
   } = options;
 
@@ -236,7 +248,14 @@ export function installPhoenixNetworking(
 
   world.registerSystem(PhoenixNetworkSystem, {
     priority: SystemPriority.NETWORK,
-    configData: { adapter, isOffline, sendRateHz, batchOutbound, quantize },
+    configData: {
+      adapter,
+      isOffline,
+      sendRateHz,
+      batchOutbound,
+      quantize,
+      adaptiveInterpolation,
+    },
   });
 
   world.registerSystem(NetworkInterpolationSystem, {

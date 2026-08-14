@@ -95,6 +95,8 @@ export type { SpawnRequest } from './systems/PhoenixNetworkSystem.js';
 export { clamp, distanceSquared, lerpVec3, slerpQuat } from './math/interpolation.js';
 export type { MutableVector } from './math/interpolation.js';
 export { clampToUnitDisc, integrateMovement } from './math/movement.js';
+export { JitterEstimator } from './math/jitter.js';
+export type { JitterEstimatorOptions } from './math/jitter.js';
 export type { MovementStep } from './math/movement.js';
 
 // Cardinal — generated component runtime

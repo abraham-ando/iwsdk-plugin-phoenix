@@ -18,6 +18,7 @@ import {
 } from '../protocol/BinaryProtocol.js';
 import { OpCode } from '../protocol/opcodes.js';
 import type { MutableVector } from '../math/interpolation.js';
+import { JitterEstimator } from '../math/jitter.js';
 import { CARDINAL_REGISTRY } from '../cardinal/components.generated.js';
 import { CardinalPublisher } from '../cardinal/publish.js';
 import type { ComponentRecord } from '../protocol/BinaryProtocol.js';
@@ -83,10 +84,21 @@ export class PhoenixNetworkSystem extends createSystem(
      * position-only check would freeze every remote avatar's head.
      */
     rotationEpsilon: { type: Types.Float32, default: 0.0087 },
+    /**
+     * Size each remote entity's interpolation buffer from its measured
+     * arrival jitter, instead of the fixed default.
+     *
+     * On by default: a fixed delay has to be chosen for the worst connection
+     * anyone might have, which taxes everyone else. Set false to hand
+     * `NetworkedTransform.interpolationDelayMs` back to the application.
+     */
+    adaptiveInterpolation: { type: Types.Boolean, default: true },
   },
 ) {
   private readonly index = new EntityIndex();
   private readonly cardinal = new CardinalPublisher();
+  /** One jitter estimator per remote entity, keyed by network id. */
+  private readonly jitter = new Map<number, JitterEstimator>();
   private readonly unsubscribes: (() => void)[] = [];
 
   /** Scratch list reused every tick so batching allocates nothing steady-state. */
@@ -508,6 +520,7 @@ export class PhoenixNetworkSystem extends createSystem(
             // Forget its publish history too, so a reused id starts clean
             // rather than being suppressed by a dead entity's last bytes.
             this.cardinal.forget(decoded.networkId);
+            this.jitter.delete(decoded.networkId);
             this.onDespawn?.(decoded.networkId);
           }
           break;
@@ -643,6 +656,42 @@ export class PhoenixNetworkSystem extends createSystem(
       velocity[1] = 0;
       velocity[2] = 0;
     }
+
+    this.updateInterpolationDelay(entity, now);
+  }
+
+  /**
+   * Size this entity's interpolation buffer from its measured arrival jitter.
+   *
+   * Written here rather than in `NetworkInterpolationSystem` because this is
+   * where samples arrive: the estimator needs the arrival instant, and the
+   * interpolation system only ever reads the result.
+   *
+   * The send rate comes from `Networked.sendRateHz`, which `NetworkLODSystem`
+   * maintains — so a rate change is understood as a rate change rather than
+   * measured as jitter.
+   */
+  private updateInterpolationDelay(entity: Entity, arrivalMs: number): void {
+    if (!this.config.adaptiveInterpolation.value) return;
+
+    const networkId = entity.getValue(Networked, 'networkId') ?? 0;
+    if (networkId === 0) return;
+
+    let estimator = this.jitter.get(networkId);
+    if (!estimator) {
+      estimator = new JitterEstimator();
+      this.jitter.set(networkId, estimator);
+    }
+
+    const sendRateHz =
+      entity.getValue(Networked, 'sendRateHz') || this.config.sendRateHz.value;
+
+    estimator.addSample(arrivalMs, sendRateHz);
+    entity.setValue(
+      NetworkedTransform,
+      'interpolationDelayMs',
+      estimator.delayFor(sendRateHz),
+    );
   }
 
   // ---------------------------------------------------------------------------

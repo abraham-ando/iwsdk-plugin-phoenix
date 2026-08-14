@@ -123,7 +123,11 @@ describe('inbound replication', () => {
     const local = bus.createPeer('local');
     const remote = bus.createPeer('remote');
 
-    const { world } = makeWorld(local);
+    // Adaptation off: these cases pin down the interpolation *math*, and they
+    // do it by reasoning about an exact delay. Letting the buffer resize
+    // itself under them would test two things at once and pin neither.
+    // Adaptation has its own tests below.
+    const { world } = makeWorld(local, { adaptiveInterpolation: false });
     void local.connect('memory://');
     void remote.connect('memory://');
 
@@ -219,6 +223,66 @@ describe('inbound replication', () => {
     clock += 60000;
     world.update(1 / 90, 0);
     expect(positionOf(replica)[0]).toBeCloseTo(capped, 6);
+  });
+
+  it('sizes the interpolation buffer from measured arrivals', () => {
+    // With adaptation on, a well-behaved 30 Hz stream should be rendered far
+    // closer to live than the fixed 100 ms default — that saving is the whole
+    // point of measuring.
+    const bus = new LoopbackNetwork(0);
+    const local = bus.createPeer('local');
+    const remote = bus.createPeer('remote');
+    const { world } = makeWorld(local);
+    void local.connect('memory://');
+    void remote.connect('memory://');
+
+    const replica = makeEntity(world, {
+      networkId: 7,
+      isLocalOwner: false,
+      position: [0, 0, 0],
+    });
+
+    for (let i = 0; i < 20; i++) {
+      clock += 1000 / 30;
+      remote.broadcast(
+        BinaryProtocol.encodeTransform(7, { x: i, y: 0, z: 0 }, { x: 0, y: 0, z: 0, w: 1 }),
+      );
+      bus.advance(0);
+      world.update(1 / 90, 0);
+    }
+
+    const delay = replica.getValue(NetworkedTransform, 'interpolationDelayMs') as number;
+    expect(delay).toBeLessThan(100);
+    // And never below one send interval plus margin, or every frame would be
+    // extrapolating instead of interpolating.
+    expect(delay).toBeGreaterThanOrEqual(1000 / 30 + 20 - 0.001);
+  });
+
+  it('leaves the delay alone when adaptation is switched off', () => {
+    const bus = new LoopbackNetwork(0);
+    const local = bus.createPeer('local');
+    const remote = bus.createPeer('remote');
+    const { world } = makeWorld(local, { adaptiveInterpolation: false });
+    void local.connect('memory://');
+    void remote.connect('memory://');
+
+    const replica = makeEntity(world, {
+      networkId: 7,
+      isLocalOwner: false,
+      position: [0, 0, 0],
+    });
+    replica.setValue(NetworkedTransform, 'interpolationDelayMs', 175);
+
+    for (let i = 0; i < 20; i++) {
+      clock += 1000 / 30;
+      remote.broadcast(
+        BinaryProtocol.encodeTransform(7, { x: i, y: 0, z: 0 }, { x: 0, y: 0, z: 0, w: 1 }),
+      );
+      bus.advance(0);
+      world.update(1 / 90, 0);
+    }
+
+    expect(replica.getValue(NetworkedTransform, 'interpolationDelayMs')).toBe(175);
   });
 
   it('ignores frames addressed to an entity this client owns', () => {

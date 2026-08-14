@@ -67,9 +67,14 @@ export const NetworkedTransform = createComponent(
     /** `performance.now()` of the previous sample, in milliseconds. */
     previousTime: { type: Types.Float64, default: 0 },
     /**
-     * How far behind live the entity is rendered, in milliseconds. One and a
-     * half server ticks is the usual choice: enough to absorb ordinary jitter
-     * without adding visible lag.
+     * How far behind live the entity is rendered, in milliseconds.
+     *
+     * **Computed, not configured**, unless the plugin was installed with
+     * `adaptiveInterpolation: false`. `PhoenixNetworkSystem` measures each
+     * remote entity's arrival jitter and sizes its buffer accordingly, so a
+     * peer on a local network is rendered barely behind live while one on a
+     * poor connection gets the headroom it actually needs. The 100 ms default
+     * is only what an entity shows before its first samples arrive.
      */
     interpolationDelayMs: { type: Types.Float32, default: 100 },
     /**
