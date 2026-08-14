@@ -12,6 +12,7 @@ defmodule IwsdkPhoenix.Room.State do
   drives it from channel callbacks.
   """
 
+  alias IwsdkPhoenix.Cardinal.Cache
   alias IwsdkPhoenix.Physics.Kinematic
   alias IwsdkPhoenix.Protocol
   alias IwsdkPhoenix.SpatialGrid
@@ -30,7 +31,8 @@ defmodule IwsdkPhoenix.Room.State do
             interest_radius: 50.0,
             cell_size: 50.0,
             grid_mode: :full,
-            steal_policy: :deny
+            steal_policy: :deny,
+            components: %{}
 
   @type mode :: :host_relayed | :server_authoritative
 
@@ -124,12 +126,19 @@ defmodule IwsdkPhoenix.Room.State do
         {state, nil}
 
       {player, players} ->
-        entities =
-          state.entities
-          |> Enum.reject(fn {_id, entity} -> entity.owner_id == player.network_id end)
-          |> Map.new()
+        {dropped, kept} =
+          Enum.split_with(state.entities, fn {_id, entity} ->
+            entity.owner_id == player.network_id
+          end)
 
-        {%{state | players: players, entities: entities}, player}
+        # The departing peer's avatar and everything it owned leave the cache
+        # with them. Without this the cache grows without bound and replays a
+        # dead entity's state to every future joiner.
+        components =
+          [player.network_id | Enum.map(dropped, fn {id, _entity} -> id end)]
+          |> Enum.reduce(state.components, &Cache.drop_entity(&2, &1))
+
+        {%{state | players: players, entities: Map.new(kept), components: components}, player}
     end
   end
 
@@ -342,8 +351,26 @@ defmodule IwsdkPhoenix.Room.State do
         {state, nil}
 
       {_entity, entities} ->
-        {%{state | entities: entities}, Protocol.encode_despawn(network_id)}
+        # Folded into the same update that removes the entity, so the two can
+        # never diverge and leave the cache replaying a ghost.
+        {%{
+           state
+           | entities: entities,
+             components: Cache.drop_entity(state.components, network_id)
+         }, Protocol.encode_despawn(network_id)}
     end
+  end
+
+  @doc "Record component values published by a peer."
+  @spec put_components(t(), [map()], mode()) :: t()
+  def put_components(%__MODULE__{} = state, records, mode) do
+    %{state | components: Cache.put(state.components, mode, records)}
+  end
+
+  @doc "Frames replaying every cached component; `[]` when there is nothing."
+  @spec component_frames(t()) :: [binary()]
+  def component_frames(%__MODULE__{} = state) do
+    Cache.frames(state.components, state.tick)
   end
 
   @doc "Look up an entity by network id."
