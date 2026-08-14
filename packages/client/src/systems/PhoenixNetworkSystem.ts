@@ -596,6 +596,9 @@ export class PhoenixNetworkSystem extends createSystem(
       entity.setValue(NetworkStats, 'framesSent', this.framesSent);
       entity.setValue(NetworkStats, 'bytesReceived', this.bytesReceived);
       entity.setValue(NetworkStats, 'bytesSent', this.bytesSent);
+      // Until clock sync existed nothing ever wrote this field, so every
+      // reader saw a permanent zero.
+      entity.setValue(NetworkStats, 'rttMs', adapter.clockEstimate?.rttMs ?? 0);
       if (isDrainable(adapter)) {
         entity.setValue(NetworkStats, 'dropped', adapter.droppedFrames);
       }

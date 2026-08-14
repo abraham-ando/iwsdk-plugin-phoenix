@@ -7,6 +7,7 @@
  * `LoopbackAdapter` / `OfflineAdapter` prove the abstraction holds for
  * transports that are not networked at all.
  */
+import type { ClockReading } from '../transport/clock-loop.js';
 
 /** A frame received from the transport. */
 export interface NetworkMessage {
@@ -68,6 +69,16 @@ export interface INetworkAdapter {
    * no one to assign it.
    */
   readonly networkId?: number;
+
+  /**
+   * Latest clock-synchronization reading, expressed against *this* thread's
+   * clock.
+   *
+   * Optional for the same reason {@link networkId} is: a transport with no
+   * server has no clock to synchronize against. Consumers must treat an
+   * absent property and a `null` value alike.
+   */
+  readonly clockEstimate?: ClockReading | null;
 
   /** Open the connection and join the requested room. */
   connect(endpoint: string, options?: ConnectOptions): Promise<void>;

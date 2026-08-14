@@ -9,6 +9,8 @@ import {
   type NetworkMessage,
   type Unsubscribe,
 } from '../interfaces/INetworkAdapter.js';
+import { combineWorkerOffset } from '../math/clock-sync.js';
+import type { ClockReading } from '../transport/clock-loop.js';
 import { RingBuffer, isSharedMemoryAvailable } from '../transport/RingBuffer.js';
 import type {
   MainToWorkerMessage,
@@ -50,6 +52,7 @@ export class PhoenixAdapter implements INetworkAdapter {
   private currentState: ConnectionState = 'disconnected';
   private currentPeerId = '';
   private currentNetworkId = 0;
+  private clockReading: ClockReading | null = null;
 
   private readonly messageListeners = new ListenerSet<NetworkMessage>();
   private readonly joinListeners = new ListenerSet<string>();
@@ -76,6 +79,11 @@ export class PhoenixAdapter implements INetworkAdapter {
 
   get networkId(): number {
     return this.currentNetworkId;
+  }
+
+  /** See {@link INetworkAdapter.clockEstimate}; already on this thread's clock. */
+  get clockEstimate(): ClockReading | null {
+    return this.clockReading;
   }
 
   /** True when the shared-memory fast path is active. */
@@ -212,6 +220,22 @@ export class PhoenixAdapter implements INetworkAdapter {
           senderId: message.senderId,
           payload: message.payload,
         });
+        break;
+      }
+
+      case 'CLOCK': {
+        const { offsetMs, rttMs, epoch, workerTimeOrigin } = message;
+        this.clockReading = {
+          // The worker measured against its own clock. Folding the origin
+          // difference in here means no consumer on this thread ever has to
+          // know the measurement happened somewhere else.
+          offsetMs:
+            offsetMs === null
+              ? null
+              : combineWorkerOffset(offsetMs, workerTimeOrigin, performance.timeOrigin),
+          rttMs,
+          epoch,
+        };
         break;
       }
 

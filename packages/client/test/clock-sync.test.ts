@@ -4,6 +4,7 @@ import {
   SlewedOffset,
   combineWorkerOffset,
 } from '../src/math/clock-sync.js';
+import { createNetworkClock } from '../src/plugin.js';
 
 /**
  * Build one exchange with a known true offset and chosen one-way delays.
@@ -130,5 +131,46 @@ describe('combineWorkerOffset', () => {
 
   it('is the identity when both clocks share an origin', () => {
     expect(combineWorkerOffset(500, 1_700_000_000_000, 1_700_000_000_000)).toBe(500);
+  });
+});
+
+describe('NetworkClock', () => {
+  it('falls back to local time while unsynced, without pretending otherwise', () => {
+    const clock = createNetworkClock({ clockEstimate: null });
+
+    const before = performance.now();
+    expect(clock.serverNow()).toBeGreaterThanOrEqual(before);
+    expect(clock.synced()).toBe(false);
+    expect(clock.rttMs()).toBe(0);
+    expect(clock.epoch()).toBeNull();
+  });
+
+  it('applies the estimate once synced', () => {
+    const clock = createNetworkClock({
+      clockEstimate: { offsetMs: 5000, rttMs: 40, epoch: 3 },
+    });
+
+    expect(clock.synced()).toBe(true);
+    expect(clock.epoch()).toBe(3);
+    expect(clock.rttMs()).toBe(40);
+    expect(clock.serverNow() - performance.now()).toBeCloseTo(5000, 0);
+  });
+
+  it('stays RTT-only against a server that cannot sync', () => {
+    const clock = createNetworkClock({
+      clockEstimate: { offsetMs: null, rttMs: 40, epoch: null },
+    });
+
+    expect(clock.synced()).toBe(false);
+    expect(clock.rttMs()).toBe(40);
+    expect(clock.epoch()).toBeNull();
+  });
+
+  it('treats an adapter with no clock support as unsynced', () => {
+    // Offline and loopback adapters have no server to sync against; absent and
+    // null have to behave alike or every consumer needs two checks.
+    const clock = createNetworkClock({});
+    expect(clock.synced()).toBe(false);
+    expect(clock.rttMs()).toBe(0);
   });
 });

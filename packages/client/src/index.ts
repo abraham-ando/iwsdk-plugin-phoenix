@@ -97,9 +97,20 @@ export type { MutableVector } from './math/interpolation.js';
 export { clampToUnitDisc, integrateMovement } from './math/movement.js';
 export type { MovementStep } from './math/movement.js';
 
+// Clock synchronization
+export {
+  ClockSyncEstimator,
+  SlewedOffset,
+  combineWorkerOffset,
+} from './math/clock-sync.js';
+export type { ClockEstimate, ClockSample } from './math/clock-sync.js';
+export { ClockLoop } from './transport/clock-loop.js';
+export type { ClockLoopOptions, ClockReading } from './transport/clock-loop.js';
+
 // Plugin entrypoint
-export { SystemPriority, installPhoenixNetworking } from './plugin.js';
+export { SystemPriority, createNetworkClock, installPhoenixNetworking } from './plugin.js';
 export type {
+  NetworkClock,
   PhoenixNetworkingHandle,
   PhoenixNetworkingOptions,
 } from './plugin.js';

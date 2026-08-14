@@ -16,6 +16,8 @@ import {
   NetworkedTransform,
 } from './components/index.js';
 import type { INetworkAdapter } from './interfaces/INetworkAdapter.js';
+import { SlewedOffset } from './math/clock-sync.js';
+import type { ClockReading } from './transport/clock-loop.js';
 import { ClientPredictionSystem } from './systems/ClientPredictionSystem.js';
 import { NetworkInterpolationSystem } from './systems/NetworkInterpolationSystem.js';
 import { NetworkLODSystem } from './systems/NetworkLODSystem.js';
@@ -95,10 +97,70 @@ export interface PhoenixNetworkingOptions {
   moveSpeed?: number;
 }
 
+/**
+ * A live view of the server's clock. Every method is safe to call per frame.
+ *
+ * The point of a shared time base is that a timestamp means the same thing on
+ * both ends of the wire — which is what lets the receiver decide how stale a
+ * snapshot is, rather than assuming.
+ */
+export interface NetworkClock {
+  /**
+   * Estimated server time in milliseconds.
+   *
+   * Falls back to local `performance.now()` until an estimate exists, so it is
+   * always usable; check {@link synced} when the distinction matters.
+   */
+  serverNow(): number;
+  /** Round-trip time in milliseconds; `0` until measured. */
+  rttMs(): number;
+  /** Server node's boot identifier; `null` until synced. */
+  epoch(): number | null;
+  /** True once a full offset estimate exists. */
+  synced(): boolean;
+}
+
+/**
+ * Build a clock over whatever the adapter currently believes.
+ *
+ * The slew lives here, on the reading side, rather than in the worker: a fresh
+ * estimate should bend `serverNow()` toward the truth, never jump it, and only
+ * the reader knows how often it is being asked.
+ */
+export function createNetworkClock(
+  adapter: Pick<INetworkAdapter, 'clockEstimate'>,
+): NetworkClock {
+  const slew = new SlewedOffset();
+  const reading = (): ClockReading | null => adapter.clockEstimate ?? null;
+
+  return {
+    serverNow() {
+      const current = reading();
+      if (!current || current.offsetMs === null || current.epoch === null) {
+        return performance.now();
+      }
+
+      const now = performance.now();
+      return (
+        now +
+        slew.update(
+          { offsetMs: current.offsetMs, rttMs: current.rttMs, epoch: current.epoch },
+          now,
+        )
+      );
+    },
+    rttMs: () => reading()?.rttMs ?? 0,
+    epoch: () => reading()?.epoch ?? null,
+    synced: () => reading()?.offsetMs != null,
+  };
+}
+
 /** What {@link installPhoenixNetworking} hands back. */
 export interface PhoenixNetworkingHandle {
   /** The transport in use. */
   adapter: INetworkAdapter;
+  /** Estimated server clock; see {@link NetworkClock}. */
+  clock: NetworkClock;
   /** Resolves once the room is joined; resolves immediately when offline. */
   ready: Promise<void>;
   /** Disconnect and unregister every system this call added. */
@@ -183,6 +245,7 @@ export function installPhoenixNetworking(
 
   return {
     adapter,
+    clock: createNetworkClock(adapter),
     ready,
     dispose() {
       adapter.disconnect();
