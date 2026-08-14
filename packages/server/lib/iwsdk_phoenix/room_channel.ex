@@ -173,7 +173,38 @@ if Code.ensure_loaded?(Phoenix.Channel) do
 
     def handle_info(_message, socket), do: {:noreply, socket}
 
+    # Clock sync, answered here rather than in the room.
+    #
+    # Both server stamps are taken at this process's edges, and the room
+    # GenServer never enters the picture: a room busy with a tick would add its
+    # queueing delay to `t2 - t1`, and the client would silently attribute that
+    # to the network. The offset it computes is only as honest as these two
+    # stamps are close to the socket.
+    #
+    # The literal `7` is `Protocol.op_ping()`. A module attribute cannot be
+    # used in a pattern here because this clause is generated inside `quote`,
+    # and a function call in a pattern is not allowed at all.
     @impl true
+    def handle_in(@frame_event, {:binary, <<7, _::binary>> = frame}, socket) do
+      t1 = IwsdkPhoenix.Clock.now_ms()
+
+      case Protocol.decode(frame) do
+        {:ok, :ping, %{timestamp: t0}} ->
+          pong =
+            Protocol.encode_pong(
+              t0,
+              t1,
+              IwsdkPhoenix.Clock.now_ms(),
+              IwsdkPhoenix.Clock.epoch()
+            )
+
+          {:reply, {:ok, {:binary, pong}}, socket}
+
+        _ ->
+          {:reply, {:error, %{reason: "malformed_frame"}}, socket}
+      end
+    end
+
     def handle_in(@frame_event, {:binary, frame}, socket) do
       case Server.handle_frame(socket.assigns.room, socket.assigns.peer_id, frame) do
         {:broadcast, payload} ->

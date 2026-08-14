@@ -192,14 +192,39 @@ defmodule DemoServerWeb.RoomChannelTest do
       assert_reply(reference, :error, %{reason: "expected_binary_payload"})
     end
 
-    test "answers a ping" do
+    test "answers a ping with the extended pong a clock estimate needs" do
+      IwsdkPhoenix.Clock.put_epoch(777)
       {alice, _reply} = join_room("alice", unique_room())
 
       reference = push(alice, "frame", {:binary, Protocol.encode_ping(1234.5)})
 
       assert_reply(reference, :ok, {:binary, pong})
-      assert {:ok, :pong, %{timestamp: timestamp}} = Protocol.decode(pong)
+      assert byte_size(pong) == 29
+
+      assert {:ok, :pong, %{timestamp: timestamp, t1: t1, t2: t2, epoch: 777}} =
+               Protocol.decode(pong)
+
+      # The echo is what lets a client match a reply to the ping it sent, and
+      # refuse a sample it cannot attribute.
       assert_in_delta timestamp, 1234.5, 0.0001
+      # Receive before send, or the offset formula is being fed nonsense.
+      assert t1 <= t2
+    end
+
+    test "a swapped epoch shows up on the very next pong" do
+      # The restart-and-handoff scenario, without restarting anything: the
+      # epoch is what tells a client its offset estimate has become fiction.
+      {alice, _reply} = join_room("alice", unique_room())
+
+      IwsdkPhoenix.Clock.put_epoch(1)
+      reference = push(alice, "frame", {:binary, Protocol.encode_ping(1.0)})
+      assert_reply(reference, :ok, {:binary, first})
+      assert {:ok, :pong, %{epoch: 1}} = Protocol.decode(first)
+
+      IwsdkPhoenix.Clock.put_epoch(2)
+      reference = push(alice, "frame", {:binary, Protocol.encode_ping(2.0)})
+      assert_reply(reference, :ok, {:binary, second})
+      assert {:ok, :pong, %{epoch: 2}} = Protocol.decode(second)
     end
   end
 
