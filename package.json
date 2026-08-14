@@ -10,7 +10,7 @@
   },
   "scripts": {
     "build": "pnpm --filter @iwsdk/plugin-phoenix build",
-    "test": "node scripts/check-single-three.mjs && pnpm --filter @iwsdk/plugin-phoenix test",
+    "test": "node scripts/check-single-three.mjs && node scripts/check-cardinal-drift.mjs && node --test 'scripts/__tests__/**/*.test.mjs' && pnpm --filter @iwsdk/plugin-phoenix test",
     "typecheck": "pnpm --filter @iwsdk/plugin-phoenix typecheck",
     "test:server": "cd packages/server && mix test",
     "fixtures": "node scripts/generate-fixtures.mjs",

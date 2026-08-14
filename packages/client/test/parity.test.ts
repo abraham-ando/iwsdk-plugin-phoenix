@@ -15,6 +15,11 @@ import { describe, expect, it } from 'vitest';
 import { BinaryProtocol } from '../src/protocol/BinaryProtocol.js';
 import { compressQuaternion } from '../src/protocol/quaternion-compression.js';
 import { integrateMovement } from '../src/math/movement.js';
+import {
+  CARDINAL_REGISTRY,
+  SCHEMA_HASH,
+} from '../src/cardinal/components.generated.js';
+import { cardinalOf, valuesFor } from './cardinal-fixtures.js';
 
 const fixturePath = fileURLToPath(
   new URL('../../../fixtures/protocol_vectors.tsv', import.meta.url),
@@ -195,5 +200,29 @@ describe('golden vectors', () => {
       expect(result.x).toBeCloseTo(num(outX), 12);
       expect(result.z).toBeCloseTo(num(outZ), 12);
     }
+  });
+
+  it('Cardinal component vectors match', () => {
+    // Generated per component, so adding one to the schema creates its parity
+    // proof without anyone writing a test.
+    const cases = cardinalOf('cardinal');
+    expect(cases.length).toBeGreaterThan(0);
+
+    for (const row of cases) {
+      const componentId = Number(row[0]);
+      const expected = row.at(-1)!;
+      const values = valuesFor(componentId, row.slice(1, -1));
+
+      const spec = CARDINAL_REGISTRY.get(componentId)!;
+      const view = new DataView(new ArrayBuffer(spec.bytes));
+      spec.encode(view, 0, values);
+      expect(hex(view.buffer)).toBe(expected);
+    }
+  });
+
+  it('Cardinal schema hash matches the fixture', () => {
+    // If the two languages ever computed the hash differently, this row is
+    // what arbitrates between them.
+    expect(SCHEMA_HASH).toBe(cardinalOf('cardinal_schema_hash')[0]![0]);
   });
 });

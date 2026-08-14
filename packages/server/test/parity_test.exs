@@ -274,4 +274,36 @@ defmodule IwsdkPhoenix.ParityTest do
       end
     end
   end
+
+  describe "cardinal components" do
+    alias IwsdkPhoenix.Cardinal.Registry
+    alias IwsdkPhoenix.CardinalFixtures
+
+    test "component vectors match byte for byte" do
+      # Generated per component: adding one to the schema creates its parity
+      # proof here without anyone writing a test.
+      rows = CardinalFixtures.rows("cardinal")
+      assert rows != []
+
+      for row <- rows do
+        [id | rest] = row
+        {hex, flat} = List.pop_at(rest, -1)
+        component_id = String.to_integer(String.trim(id))
+
+        case Registry.module_for(component_id) do
+          nil ->
+            flunk("no module for component #{component_id}")
+
+          module ->
+            value = CardinalFixtures.to_struct(component_id, flat)
+            assert Base.encode16(module.encode(value), case: :lower) == String.trim(hex)
+        end
+      end
+    end
+
+    test "schema hash matches the fixture" do
+      [[fixture_hash]] = CardinalFixtures.rows("cardinal_schema_hash")
+      assert Registry.schema_hash() == String.trim(fixture_hash)
+    end
+  end
 end
