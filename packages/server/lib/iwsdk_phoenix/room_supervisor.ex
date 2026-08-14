@@ -58,6 +58,9 @@ defmodule IwsdkPhoenix.RoomSupervisor do
   def init(_opts) do
     children = [
       {Registry, keys: :unique, name: @registry},
+      # Before the DynamicSupervisor: a room reads its snapshot during `init/1`,
+      # so the table has to exist before any room can start.
+      IwsdkPhoenix.World.Snapshots,
       {DynamicSupervisor, strategy: :one_for_one, name: @rooms}
     ]
 
