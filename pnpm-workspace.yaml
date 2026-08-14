@@ -1,3 +1,11 @@
 packages:
   - 'packages/client'
   - 'apps/*'
+
+# One Three instance, graph-wide. IWSDK's own examples pin exactly this alias
+# in the app manifest, which is enough under npm's hoisting but not under
+# pnpm's isolation — @iwsdk/core's plain `three: *` dependency resolves to a
+# second, real three, and with it a second @pmndrs/uikit whose `instanceof`
+# checks fail across the copies. `scripts/check-single-three.mjs` guards this.
+overrides:
+  three: npm:super-three@0.181.0
