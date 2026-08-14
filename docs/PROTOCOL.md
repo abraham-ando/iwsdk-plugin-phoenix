@@ -28,7 +28,7 @@ a real change.
 | 5 | `SNAPSHOT` | both | 8 + n·32, or 8 + n·20 quantized |
 | 6 | `RECONCILE` | server → client | 21 |
 | 7 | `PING` | client → server | 9 |
-| 8 | `PONG` | server → client | 9 |
+| 8 | `PONG` | server → client | 9 (legacy) / 29 |
 | 9 | `OWNERSHIP_REQUEST` | client → server | 9 |
 | 10 | `OWNERSHIP_GRANT` | server → all clients | 14 |
 | 11 | `SIGNAL` | client → one peer, relayed | 11 + payload |
@@ -155,15 +155,52 @@ to the position, then replays the remainder.
 | 0 | `u8` | opcode = 4 |
 | 1–4 | `u32` | `networkId` |
 
-## `PING` (7) / `PONG` (8) — 9 bytes
+## `PING` (7) — 9 bytes
 
 | Offset | Type | Field |
 |---|---|---|
-| 0 | `u8` | opcode |
-| 1–8 | `f64` | timestamp |
+| 0 | `u8` | opcode = 7 |
+| 1–8 | `f64` | `t0`, the client's send time |
 
 `f64` so `performance.now()` survives the round trip without losing sub-
 millisecond resolution.
+
+## `PONG` (8) — 9 bytes (legacy) or 29 bytes
+
+| Offset | Type | Field |
+|---|---|---|
+| 0 | `u8` | opcode = 8 |
+| 1–8 | `f64` | `t0`, echo of the client's send time |
+| 9–16 | `f64` | `t1`, server receive time |
+| 17–24 | `f64` | `t2`, server send time |
+| 25–28 | `u32` | `epoch`, the server node's boot identifier |
+
+The two forms are told apart by **length**, not by a version number: there is
+no version negotiation in this protocol. A server predating clock
+synchronization replies with the 9-byte form — opcode plus the echo alone —
+and a client receiving one falls back to measuring round-trip time without an
+offset. Degraded, never wrong.
+
+The client stamps `t3`, the moment the reply lands, on its own clock; sending
+it would be meaningless since it belongs to the receiver. From one exchange:
+
+```
+offset = ((t1 − t0) + (t2 − t3)) / 2
+rtt    = (t3 − t0) − (t2 − t1)
+```
+
+Server times are `System.monotonic_time` milliseconds — an origin that is
+arbitrary, differs per node, and changes on restart, but never runs backwards
+the way a wall clock corrected by NTP does. `epoch` is what makes that
+arbitrary origin safe: a random `u32` drawn once at node boot, so a change
+tells the client every offset it has computed now describes a clock that no
+longer exists. Two nodes carry two epochs, which is how a future cross-node
+handoff announces itself with no coordination protocol.
+
+`PONG` travels as the **push reply** to the `PING`, not as a broadcast frame,
+and is answered inside the channel process without entering the room. A room
+busy with a tick would add its queueing delay to `t2 − t1`, and the client
+would silently attribute that to the network.
 
 ---
 
