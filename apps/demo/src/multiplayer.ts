@@ -36,6 +36,7 @@ import {
 import type { PhoenixNetworkingHandle } from '@iwsdk/plugin-phoenix';
 import { createAvatar, disposeAvatar } from './avatar.js';
 import type { DemoHud } from './hud.js';
+import { spawnPointFor } from './spawn.js';
 
 /**
  * Network id of the shared plant.
@@ -85,6 +86,9 @@ export class MultiplayerSystem extends createSystem(
 
   /** Ownership requests we have sent and not yet had answered. */
   private readonly awaitingOwnership = new Set<number>();
+
+  /** Guards {@link takeSpawnPoint} against firing on every reconnect. */
+  private hasSpawned = false;
 
   init(): void {
     this.headPosition = new Vector3();
@@ -141,12 +145,14 @@ export class MultiplayerSystem extends createSystem(
         // Our id only exists once the join reply lands, so this is the earliest
         // point at which the local avatar can be published under it.
         this.localAvatar.setValue(Networked, 'networkId', network.localOwnerId);
+        this.takeSpawnPoint(network.localOwnerId);
       }) ?? (() => {}),
     );
 
     // …and once now, in case the socket connected before this system started.
     this.hud?.setConnection(net.adapter.state, network.localOwnerId);
     this.localAvatar.setValue(Networked, 'networkId', network.localOwnerId);
+    this.takeSpawnPoint(network.localOwnerId);
   }
 
   update(): void {
@@ -172,6 +178,25 @@ export class MultiplayerSystem extends createSystem(
 
   destroy(): void {
     for (const networkId of [...this.peers.keys()]) this.removePeer(networkId);
+  }
+
+  /**
+   * Stand this player where its network id says it should stand.
+   *
+   * Once only. `onStateChange` fires again on every reconnect, and teleporting
+   * a player back to their spawn because a socket blipped would be a worse bug
+   * than the overlap this fixes. The room re-issues the same id to the same
+   * peer anyway, so there is nothing to correct.
+   */
+  private takeSpawnPoint(networkId: number): void {
+    if (networkId === 0 || this.hasSpawned) return;
+    this.hasSpawned = true;
+
+    const spawn = spawnPointFor(networkId);
+    // The rig, not the head: the head's transform is relative to it, and
+    // locomotion moves the same object afterwards.
+    this.player.position.set(spawn.x, this.player.position.y, spawn.z);
+    this.player.rotation.y = spawn.yaw;
   }
 
   /** The plugin handle, or `null` when the demo runs single player. */
