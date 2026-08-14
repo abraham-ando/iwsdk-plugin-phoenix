@@ -21,13 +21,60 @@ already half-built, AI workloads — all sit on this one. They are explicitly
 out of scope here, as are: string/map field types, per-field delta encoding,
 component persistence, and any change to the existing hand-written frames.
 
-A constraint recorded for the AI layer, established during this design:
-WebGPU inside immersive WebXR sessions is **not implemented on Meta Quest**
-(three.js issue #32858, filed by Meta's own WebXR spec editor; `@iwsdk/core`
-0.5.3 instantiates only `WebGLRenderer`). Client-side GPU compute can only be
-a non-per-frame side channel next to WebGL rendering, paying a CPU round
-trip. Nothing in Cardinal layer 0 depends on this; it is recorded so layer 3
-starts from facts.
+Nothing in layer 0 depends on the findings below; they are recorded here so
+the later layers start from verified facts rather than from a fresh round of
+optimistic research.
+
+### Recorded for layer 1 — the two components worth building
+
+Both came out of an external research pass on 2026-08-14 and survived
+verification. Neither belongs to layer 0, and both should open the layer 1
+spec.
+
+**Persistent sectors.** Today a room dies with its last occupant —
+`room/server.ex:113`, *"Reap the room with its last occupant"* — so the world
+only exists while someone is watching it. A sector process that keeps ticking
+when empty, at a macro rate (~0.5 Hz) rather than the nominal 30 Hz, with its
+state in ETS, turns ephemeral rooms into a continuous world. This is
+idiomatic BEAM and fills a real gap.
+
+**Environment derived from the shared clock.** Day/night and weather as
+*pure functions of server time*:
+
+```
+sun_angle = ((t mod day_length) / day_length) × 2π
+```
+
+Network cost: zero bytes. Both sides compute it. This is exactly the
+"shared formula, not shared binary" pattern `Physics.Kinematic` already uses
+and this document generalizes — and its prerequisite, a common clock, shipped
+in `2026-08-14-clock-sync-design.md`. One caveat to carry forward: a Markov
+weather chain needs randomness, so "deterministic" holds only if the seed
+derives from the shared time — `hash(epoch, sector_id, tick_index)` — which
+must be specified, not assumed.
+
+### Recorded for layer 3 — what GPU compute can and cannot do
+
+WebGPU *rendering* inside an immersive WebXR session is **not implemented on
+Meta Quest** (three.js issue #32858, filed by Meta's own WebXR spec editor;
+`@iwsdk/core` 0.5.3 instantiates only `WebGLRenderer`).
+
+WebGPU *compute* is a separate question, and the answer changed recently:
+Quest Browser 146.0 (21 April 2026) shipped "Experimental WebGPU" per Meta's
+release notes, so a headless `GPUComputePipeline` is instantiable. The
+limitation is not getting work onto the GPU but getting results back:
+**WebGPU→WebGL has no zero-copy path.** WebGL offers no `importExternalTexture`
+equivalent, so the only route is a mappable staging buffer, an asynchronous
+`mapAsync` costing at least a frame, a CPU read, and a re-upload — and on
+Quest's tile-based GPU a readback forces a pipeline flush, the classic mobile
+stall.
+
+The consequence is a shape rule, not a yes or no: GPU compute can only pay
+for itself where the output is *far smaller* than the input. Culling ten
+thousand frustum tests down to a bitfield qualifies. Interpolating transforms
+does not — every byte computed is read straight back, so the round trip
+costs more than the arithmetic it replaces. Any proposal here must arrive
+with a measured `mapAsync` latency on device, not an estimate.
 
 ## Section 1 — The schema
 
@@ -247,6 +294,17 @@ above tests the committed schema.
 - Persisting component caches through `IwsdkPhoenix.Persistence` (natural
   later extension; the cache shape is already persistence-friendly).
 - Any change to existing hand-written frames or their vectors.
+
+## A note on Havok parity
+
+`docs/FEASIBILITY.md:107-138` records that hosting `havok_physics.wasm` on the
+BEAM via Wasmex for "strict 1:1 client/server parity" is not achievable as
+described — it is an Emscripten build importing a large `env` table, and Havok
+offers no bit-identical guarantee across builds regardless. That proposal has
+now been re-suggested by external research twice. It will keep arriving,
+because a model that has not read this repository has no way to know it was
+already investigated. The working route is unchanged: share the *formula*,
+pin it with golden vectors — which is what this document generalizes.
 
 ## A note on JSON Patch
 
