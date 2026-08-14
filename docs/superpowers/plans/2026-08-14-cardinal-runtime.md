@@ -19,7 +19,19 @@
 - Generated files are **committed**, deterministic (sorted by id, no timestamps), and carry a `GENERATED — do not edit` header.
 - No new runtime dependencies, client or server.
 - TDD: each task writes its failing test first and commits when green.
-- Repo facts this plan relies on (verified 2026-08-14): `Room.State` is a flat `defstruct` with no component concept; `PhoenixNetworkSystem.handleMessage` is the single ingestion switch (around line 449); `Handler.dispatch/4` branches per mode with `cond`; `Handler.validate_join/1` reads string-keyed params; the client passes join params in `PhoenixConnection.connect` (around line 113); `elics` has no unsigned 32-bit storage type, so `u32` maps to `Types.Int32`.
+- The generator runs as `node --experimental-strip-types scripts/generate-cardinal.mjs` — it imports the generated TypeScript so the golden vectors are produced by the codec that actually ships.
+- Repo facts this plan relies on, **each verified against the code on 2026-08-14** — the ones marked ⚠ contradicted an earlier draft of this plan and are the reason for this list:
+  - `Room.State` is a flat `defstruct` with no component concept.
+  - `PhoenixNetworkSystem.handleMessage` is the single ingestion switch (~line 449).
+  - `Handler.dispatch/4` branches per mode with `cond`; `Handler.validate_join/1` reads string-keyed params and is already covered by tests in `packages/server/test/room_test.exs:300`.
+  - The client passes join params in `PhoenixConnection.connect` (~line 113).
+  - `elics` has no unsigned 32-bit storage type, so `u32` maps to `Types.Int32`.
+  - ⚠ **Multi-slot fields are reached with `entity.getVectorView(Component, 'field')`, never `getValue`/`setValue`.** Every `Vec3`/`Vec4` access in the repo uses the view; `setValue` appears only on scalars. Using `getValue` on a vector field fails *silently* — it returns `undefined` and the component publishes zeros.
+  - ⚠ **The quaternion codec is `compressQuaternion` / `decompressQuaternion`** (`protocol/quaternion-compression.ts`) and `compress_quaternion` / `decompress_quaternion` (`IwsdkPhoenix.Protocol.Quantization`). It speaks `{x, y, z, w}` objects, while elics `Vec4` storage is a 4-slot array — conversion is required at the boundary.
+  - ⚠ **`jason` is an *optional* dependency of `packages/server`.** Nothing in the test path may require it, which is why the fixture format is flat scalars rather than JSON.
+  - ⚠ **There is no ownership predicate to reuse in `handler.ex`.** In `host_relayed` the transform path *swallows* ownership failures and relays anyway; `client_authority_denied` exists only in `server_authoritative`. Components follow this exactly — see Task 9.
+  - ⚠ **`entity.addComponent(Component)` takes no initial values**; set them afterwards (`packages/client/test/replication.test.ts:62`).
+  - `SpatialGrid.cell_topic/1` exists but is not wired to any broadcast: area-of-interest filtering happens through `SpatialGrid.within?/3` on the server-authoritative snapshot path only. Component frames therefore ride the same unfiltered room broadcast as transforms in `host_relayed` — consistent, and out of scope here.
 
 ## File Structure
 
@@ -55,14 +67,19 @@
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces: `TYPES` — a frozen object keyed by type name, each entry `{ bytes, ts, elixir, read, write, samples }` where `ts` is the elics `Types.*` member name, `elixir` is a typespec string, `read(view, offset)` / `write(view, offset, value)` emit **source-code strings**, and `samples` is an array of representative values. Also `fieldSize(field)`, `fieldTypeName(field)`. Tasks 2–4 consume all of these.
+- Produces: `TYPES` — a frozen object keyed by type name, each entry `{ bytes, arity, ts, elixir, read, write, samples }` where `arity` is how many numeric slots elics stores (1 for scalars, 3 for `vec3`, 4 for `quat`), `ts` is the elics `Types.*` member name, `elixir` is a typespec string, `read(view, offset)` / `write(view, offset, value)` emit **source-code strings**, and `samples` is an array of representative values. Also `fieldSize(field)`, `fieldTypeName(field)`, `fieldArity(field)`. Tasks 2–4 consume all of these.
 
 - [ ] **Step 1: Write the failing test**
 
 ```js
 // scripts/__tests__/cardinal-types.test.mjs
 import { describe, expect, it } from 'vitest';
-import { TYPES, fieldSize } from '../../cardinal/types.mjs';
+import {
+  TYPES,
+  fieldSize,
+  fieldSlots,
+  isVectorField,
+} from '../../cardinal/types.mjs';
 
 describe('cardinal type table', () => {
   it('gives every v1 scalar a byte size', () => {
@@ -104,6 +121,32 @@ describe('cardinal type table', () => {
     // Not 16: the existing u32 quaternion codec is reused wholesale.
     expect(TYPES.quat.bytes).toBe(4);
     expect(TYPES.quat.ts).toBe('Vec4');
+  });
+
+  it('knows which fields are multi-slot, because that picks the ECS accessor', () => {
+    // elics hands out a typed-array view for multi-slot fields and a plain
+    // value for single-slot ones. Choosing wrong fails silently: the read
+    // returns undefined and the component publishes zeros forever.
+    expect(fieldSlots({ name: 'hp', type: 'f32' })).toBe(1);
+    expect(fieldSlots({ name: 'p', type: 'vec3' })).toBe(3);
+    expect(fieldSlots({ name: 'r', type: 'quat' })).toBe(4);
+    expect(fieldSlots({ name: 's', type: 'array', of: 'u32', length: 16 })).toBe(16);
+
+    expect(isVectorField({ name: 'hp', type: 'f32' })).toBe(false);
+    expect(isVectorField({ name: 'p', type: 'vec3' })).toBe(true);
+    expect(isVectorField({ name: 'r', type: 'quat' })).toBe(true);
+  });
+
+  it('names the real quaternion codec functions', () => {
+    // The repo exports compressQuaternion / decompressQuaternion — not
+    // pack/unpack. A wrong name here becomes a generated file that will not
+    // even parse, so pin it.
+    const emitted = [
+      TYPES.quat.read('view', '0'),
+      TYPES.quat.write('view', '0', 'value'),
+    ].join(' ');
+    expect(emitted).toContain('decompressQuaternion');
+    expect(emitted).toContain('compressQuaternion');
   });
 });
 ```
@@ -199,6 +242,7 @@ export const TYPES = Object.freeze({
     bytes: 12,
     ts: 'Vec3',
     elixir: 'IwsdkPhoenix.Protocol.vec3()',
+    slots: 3,
     read: (v, o) =>
       `[${v}.getFloat32(${o}, true), ${v}.getFloat32(${o} + 4, true), ${v}.getFloat32(${o} + 8, true)]`,
     write: (v, o, x) =>
@@ -208,12 +252,35 @@ export const TYPES = Object.freeze({
   quat: {
     bytes: 4,
     ts: 'Vec4',
+    // Storage is an elics Vec4 (a 4-slot array), but the existing codec speaks
+    // `{x, y, z, w}` objects — hence the conversion on both sides. Verified
+    // names: `compressQuaternion` / `decompressQuaternion` in
+    // protocol/quaternion-compression.ts.
     elixir: 'IwsdkPhoenix.Protocol.quat()',
-    read: (v, o) => `unpackQuaternion(${v}.getUint32(${o}, true))`,
-    write: (v, o, x) => `${v}.setUint32(${o}, packQuaternion(${x}), true)`,
+    slots: 4,
+    read: (v, o) => `quatToSlots(decompressQuaternion(${v}.getUint32(${o}, true)))`,
+    write: (v, o, x) => `${v}.setUint32(${o}, compressQuaternion(slotsToQuat(${x})), true)`,
     samples: [[0, 0, 0, 1], [0, 0.7071067811865476, 0, 0.7071067811865476]],
   },
 });
+
+/**
+ * How many storage slots a field occupies.
+ *
+ * This is what decides the ECS accessor: elics hands out a typed-array view
+ * for multi-slot fields (`getVectorView`) and a plain value for single-slot
+ * ones (`getValue`). Getting it wrong is silent — you read `undefined` and
+ * publish zeros.
+ */
+export function fieldSlots(field) {
+  if (field.type === 'array') return field.length;
+  return TYPES[fieldTypeName(field)].slots ?? 1;
+}
+
+/** True when a field must be reached through `getVectorView`. */
+export function isVectorField(field) {
+  return fieldSlots(field) > 1;
+}
 
 /** Name of a field's element type, for both scalars and arrays. */
 export function fieldTypeName(field) {
@@ -664,14 +731,20 @@ Expected: FAIL — the generated module does not exist.
  * Output is deterministic: sorted by id, no timestamps. That is what lets
  * `check-cardinal-drift.mjs` be a plain diff.
  *
- *   node scripts/generate-cardinal.mjs
+ *   node --experimental-strip-types scripts/generate-cardinal.mjs
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { components } from '../cardinal/components.mjs';
-import { TYPES, fieldSize, fieldTypeName } from '../cardinal/types.mjs';
+import {
+  TYPES,
+  fieldSize,
+  fieldSlots,
+  fieldTypeName,
+  isVectorField,
+} from '../cardinal/types.mjs';
 import { componentSize, schemaHash, validateSchema } from '../cardinal/validate.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -684,7 +757,7 @@ const BANNER = (source) => `/**
  * GENERATED by scripts/generate-cardinal.mjs -- do not edit.
  *
  * Source of truth: ${source}
- * Regenerate with: node scripts/generate-cardinal.mjs
+ * Regenerate with: node --experimental-strip-types scripts/generate-cardinal.mjs
  */`;
 
 // ---------------------------------------------------------------------------
@@ -761,9 +834,18 @@ function clientArtifact() {
   if (usesQuat) {
     lines.push(
       "import {",
-      '  packQuaternion,',
-      '  unpackQuaternion,',
+      '  compressQuaternion,',
+      '  decompressQuaternion,',
       "} from '../protocol/quaternion-compression.js';",
+      '',
+      '/** The codec speaks `{x,y,z,w}`; elics Vec4 storage is a 4-slot array. */',
+      'function quatToSlots(q: { x: number; y: number; z: number; w: number }): number[] {',
+      '  return [q.x, q.y, q.z, q.w];',
+      '}',
+      '',
+      'function slotsToQuat(slots: number[]): { x: number; y: number; z: number; w: number } {',
+      '  return { x: slots[0] ?? 0, y: slots[1] ?? 0, z: slots[2] ?? 0, w: slots[3] ?? 1 };',
+      '}',
     );
   }
 
@@ -775,6 +857,14 @@ function clientArtifact() {
     '  name: string;',
     '  /** Constant — the wire format relies on it to skip records. */',
     '  bytes: number;',
+    '  /**',
+    '   * Field names and slot counts, in declaration order.',
+    '   *',
+    '   * Exposed because a consumer that only has an id needs the structure to',
+    '   * make sense of a flat value list — the golden-vector reader is exactly',
+    '   * that case.',
+    '   */',
+    '  fields: readonly { name: string; slots: number }[];',
     '  component: AnyComponent;',
     '  encode(view: DataView, offset: number, data: Record<string, unknown>): void;',
     '  decode(view: DataView, offset: number): Record<string, unknown>;',
@@ -831,17 +921,37 @@ function clientArtifact() {
       `    id: ${component.id},`,
       `    name: '${component.name}',`,
       `    bytes: ${componentSize(component)},`,
+      `    fields: [`,
+      ...component.fields.map(
+        (f) => `      { name: '${f.name}', slots: ${fieldSlots(f)} },`,
+      ),
+      `    ],`,
       `    component: ${component.name} as unknown as AnyComponent,`,
       `    encode: encode${component.name},`,
       `    decode: decode${component.name},`,
       `    read: (entity: Entity) => ({`,
-      ...component.fields.map(
-        (f) => `      ${f.name}: entity.getValue(${component.name}, '${f.name}'),`,
+      // Multi-slot fields live in flat typed arrays; elics exposes them only
+      // as views. `getValue` on one returns undefined, which would publish
+      // zeros forever without ever erroring — hence the split.
+      ...component.fields.map((f) =>
+        isVectorField(f)
+          ? `      ${f.name}: Array.from(entity.getVectorView(${component.name}, '${f.name}')),`
+          : `      ${f.name}: entity.getValue(${component.name}, '${f.name}'),`,
       ),
       `    }),`,
       `    write: (entity: Entity, data: Record<string, unknown>) => {`,
-      ...component.fields.map(
-        (f) => `      entity.setValue(${component.name}, '${f.name}', data.${f.name} as never);`,
+      ...component.fields.flatMap((f) =>
+        isVectorField(f)
+          ? [
+              `      {`,
+              `        const view = entity.getVectorView(${component.name}, '${f.name}');`,
+              `        const source = data.${f.name} as number[];`,
+              `        for (let i = 0; i < ${fieldSlots(f)}; i++) view[i] = source[i] ?? 0;`,
+              `      }`,
+            ]
+          : [
+              `      entity.setValue(${component.name}, '${f.name}', data.${f.name} as never);`,
+            ],
       ),
       `    },`,
       `  }],`,
@@ -874,7 +984,7 @@ console.log(`Wrote ${clientPath}`);
 
 - [ ] **Step 4: Generate and run the test**
 
-Run: `node scripts/generate-cardinal.mjs && pnpm --filter @iwsdk/plugin-phoenix test -- cardinal-components`
+Run: `node --experimental-strip-types scripts/generate-cardinal.mjs && pnpm --filter @iwsdk/plugin-phoenix test -- cardinal-components`
 Expected: PASS, 8 tests.
 
 If `world.registerComponent` is not the exact API in this IWSDK version, check how `plugin.ts` registers `Networked` (it chains `.registerComponent(...)`) and match that call shape in the emitted `registerCardinalComponents`.
@@ -1033,7 +1143,7 @@ function serverArtifact() {
     '# GENERATED by scripts/generate-cardinal.mjs -- do not edit.',
     '#',
     '# Source of truth: cardinal/components.mjs',
-    '# Regenerate with: node scripts/generate-cardinal.mjs',
+    '# Regenerate with: node --experimental-strip-types scripts/generate-cardinal.mjs',
     '',
   ];
 
@@ -1074,12 +1184,15 @@ function serverArtifact() {
       }
 
       if (typeName === 'quat') {
+        // Verified names: compress_quaternion / decompress_quaternion in
+        // IwsdkPhoenix.Protocol.Quantization. They take and return
+        // `%{x:, y:, z:, w:}` maps, which is exactly the struct field shape.
         encodeParts.push(
-          `      <<IwsdkPhoenix.Protocol.Quantization.pack_quaternion(struct.${key})::unsigned-little-integer-size(32)>>`,
+          `      <<IwsdkPhoenix.Protocol.Quantization.compress_quaternion(struct.${key})::unsigned-little-integer-size(32)>>`,
         );
         decodePatterns.push(`${key}_packed::unsigned-little-integer-size(32)`);
         decodeAssigns.push(
-          `      ${key}: IwsdkPhoenix.Protocol.Quantization.unpack_quaternion(${key}_packed),`,
+          `      ${key}: IwsdkPhoenix.Protocol.Quantization.decompress_quaternion(${key}_packed),`,
         );
         continue;
       }
@@ -1188,10 +1301,15 @@ console.log(`Wrote ${serverPath}`);
 
 - [ ] **Step 4: Generate and run the test**
 
-Run: `node scripts/generate-cardinal.mjs && cd packages/server && mix test test/cardinal_components_test.exs`
+Run: `node --experimental-strip-types scripts/generate-cardinal.mjs && cd packages/server && mix test test/cardinal_components_test.exs`
 Expected: PASS, 8 tests, **zero compiler warnings**. If Elixir warns about an unused variable in a decode pattern, prefix it with `_` in the generator's pattern emission — do not silence the warning globally.
 
-Check the quantization function names against `packages/server/lib/iwsdk_phoenix/protocol/quantization.ex` and the client's `quaternion-compression.ts` before running; the generator hard-codes `pack_quaternion` / `unpack_quaternion` and `packQuaternion` / `unpackQuaternion`, and the starting schema has no `quat` field, so a mismatch will not surface until one is added.
+The quaternion function names are verified and pinned by a test in Task 1
+(`compressQuaternion` / `decompressQuaternion`, `compress_quaternion` /
+`decompress_quaternion`). They matter here because the starting schema has no
+`quat` field: a wrong name would not surface until someone added one, months
+later, as a generated file that will not parse. Task 1's assertion is what
+makes that impossible.
 
 - [ ] **Step 5: Commit**
 
@@ -1249,80 +1367,298 @@ function sampleRows(component) {
   );
 }
 
+/**
+ * Flatten a value object into tab fields, in declaration order.
+ *
+ * Values are written as bare numbers rather than JSON: the existing fixture
+ * format is tab-separated scalars (see the `quat` rows in
+ * protocol_vectors.tsv), and — decisively — `jason` is an *optional*
+ * dependency of the server package, so a JSON payload could not be read at
+ * all when the suite runs dependency-free. A reader recovers the structure by
+ * looking the component up and walking its fields, consuming `fieldSlots`
+ * numbers each.
+ */
+function flattenValues(component, values) {
+  const out = [];
+  for (const field of component.fields) {
+    const value = values[field.name];
+    if (isVectorField(field)) out.push(...value.map(num));
+    else out.push(num(value));
+  }
+  return out;
+}
+
+/** Canonical number formatting: booleans as 0/1, floats never in exponent form. */
+function num(value) {
+  if (typeof value === 'boolean') return value ? '1' : '0';
+  return Number.isInteger(value) ? String(value) : value.toFixed(10).replace(/0+$/, '0');
+}
+```
+
+The vectors must be encoded **through the shipped client codec** — a second
+encoder written here would prove only that it agrees with itself. That means
+importing the generated TypeScript, which in turn means two ordering rules
+this generator must obey, both of which broke an earlier draft:
+
+1. **Write the client artifact before importing it.** On a first run the file
+   does not exist yet; the write has to happen earlier in the script.
+2. **Import once, at the top level** — not inside the component loop.
+
+So the bottom of the generator reads, in this exact order:
+
+```js
+// 1. Write the two code artifacts first — the vectors depend on the client one.
+const clientPath = join(root, 'packages/client/src/cardinal/components.generated.ts');
+mkdirSync(dirname(clientPath), { recursive: true });
+writeFileSync(clientPath, clientArtifact());
+
+const serverPath = join(
+  root,
+  'packages/server/lib/iwsdk_phoenix/cardinal/components.generated.ex',
+);
+mkdirSync(dirname(serverPath), { recursive: true });
+writeFileSync(serverPath, serverArtifact());
+
+// 2. Now the file exists, so the shipped codec can be loaded and used.
+//    Requires `node --experimental-strip-types`; see the header comment.
+const { CARDINAL_REGISTRY } = await import(clientPath);
+
 const vectorLines = [
   '# Cardinal component golden vectors.',
   '# GENERATED by scripts/generate-cardinal.mjs -- do not edit by hand.',
-  '# Tab-separated. Values are JSON; binaries are lowercase hex.',
+  '# Tab-separated. Values are bare numbers (bools as 0/1); binaries are',
+  '# lowercase hex. Field structure is recovered from the component id.',
   '#',
   '# cardinal_schema_hash <hash>',
   `cardinal_schema_hash\t${hash}`,
   '#',
-  '# cardinal <componentId> <valuesJson> <hex>',
+  '# cardinal <componentId> <field values, flattened> <hex>',
 ];
 
 for (const component of sorted) {
+  const spec = CARDINAL_REGISTRY.get(component.id);
   for (const values of sampleRows(component)) {
-    // Encode through the generated client codec, so the vectors prove what
-    // actually ships rather than a second implementation written here.
-    const { CARDINAL_REGISTRY } = await import(
-      '../packages/client/src/cardinal/components.generated.ts'
-    );
-    const spec = CARDINAL_REGISTRY.get(component.id);
     const view = new DataView(new ArrayBuffer(spec.bytes));
     spec.encode(view, 0, values);
-    const hex = Buffer.from(view.buffer).toString('hex');
-    vectorLines.push(`cardinal\t${component.id}\t${JSON.stringify(values)}\t${hex}`);
+    vectorLines.push(
+      [
+        'cardinal',
+        component.id,
+        ...flattenValues(component, values),
+        Buffer.from(view.buffer).toString('hex'),
+      ].join('\t'),
+    );
   }
 }
 
-writeFileSync(join(root, 'fixtures/cardinal_vectors.tsv'), vectorLines.join('\n') + '\n');
-console.log(`Wrote ${join(root, 'fixtures/cardinal_vectors.tsv')}`);
+// 3. Vectors last.
+const vectorPath = join(root, 'fixtures/cardinal_vectors.tsv');
+writeFileSync(vectorPath, vectorLines.join('\n') + '\n');
+
+for (const path of [clientPath, serverPath, vectorPath]) console.log(`Wrote ${path}`);
 ```
 
-Importing a `.ts` file from a plain Node script will not work directly. Two ways out, pick one and note it in the file's header comment:
-- run the generator as `node --experimental-strip-types scripts/generate-cardinal.mjs` (the repo already uses this flag for scratch verification), or
-- have the generator build the bytes from `TYPES` directly, duplicating the layout walk it already does for codegen.
-
-Prefer the first: reusing the shipped codec is the whole point of the vectors.
+Delete the standalone `writeFileSync(clientPath, ...)` and
+`writeFileSync(serverPath, ...)` blocks from Tasks 3 and 4 when you reach this
+step — this ordered block replaces both. Add
+`node --experimental-strip-types` to the generator's header comment and to
+every command in this plan that runs it.
 
 - [ ] **Step 2: Write the failing parity assertions**
 
-`packages/client/test/parity.test.ts`, next to the existing loops and in their style — read how `of()` and `hex()` are defined at the top of that file and load the new fixture the same way the existing one is loaded:
+Create `packages/client/test/cardinal-fixtures.ts` — a sibling loader for the
+new file, in the same shape as the one at the top of `parity.test.ts`:
+
+```ts
+/**
+ * Reader for `fixtures/cardinal_vectors.tsv`.
+ *
+ * Values arrive as a flat run of numbers because the fixture format is
+ * tab-separated scalars; the component's own field list is what recovers the
+ * structure. The registry carries that list precisely so this reader — and
+ * its Elixir twin — need no schema of their own.
+ */
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { CARDINAL_REGISTRY } from '../src/cardinal/components.generated.js';
+
+const path = fileURLToPath(
+  new URL('../../../fixtures/cardinal_vectors.tsv', import.meta.url),
+);
+
+const rows = readFileSync(path, 'utf8')
+  .split('\n')
+  .filter((line) => line.trim() !== '' && !line.startsWith('#'))
+  .map((line) => line.split('\t'));
+
+/** Rows of one kind, with the kind column stripped. */
+export const cardinalOf = (kind: string): string[][] =>
+  rows.filter((row) => row[0] === kind).map((row) => row.slice(1));
+
+/** Rebuild a value object from a component id and its flat number fields. */
+export function valuesFor(componentId: number, flat: string[]): Record<string, unknown> {
+  const spec = CARDINAL_REGISTRY.get(componentId);
+  if (!spec) throw new Error(`no component with id ${componentId}`);
+
+  const values: Record<string, unknown> = {};
+  let cursor = 0;
+  for (const field of spec.fields) {
+    if (field.slots === 1) {
+      values[field.name] = Number(flat[cursor]);
+      cursor += 1;
+    } else {
+      values[field.name] = flat
+        .slice(cursor, cursor + field.slots)
+        .map((entry) => Number(entry));
+      cursor += field.slots;
+    }
+  }
+  return values;
+}
+```
+
+Then in `parity.test.ts`, alongside the existing vector tests:
 
 ```ts
   it('Cardinal component vectors match', () => {
-    const rows = cardinalRows('cardinal');
-    expect(rows.length).toBeGreaterThan(0);
+    const cases = cardinalOf('cardinal');
+    expect(cases.length).toBeGreaterThan(0);
 
-    for (const [id, valuesJson, expected] of rows) {
-      const spec = CARDINAL_REGISTRY.get(Number(id))!;
-      expect(spec, `no component with id ${id}`).toBeDefined();
+    for (const row of cases) {
+      const componentId = Number(row[0]);
+      const expected = row.at(-1)!;
+      const values = valuesFor(componentId, row.slice(1, -1));
+
+      const spec = CARDINAL_REGISTRY.get(componentId)!;
       const view = new DataView(new ArrayBuffer(spec.bytes));
-      spec.encode(view, 0, JSON.parse(valuesJson!));
+      spec.encode(view, 0, values);
       expect(hex(view.buffer)).toBe(expected);
     }
   });
 
   it('schema hash matches the fixture', () => {
-    const [[fixtureHash]] = cardinalRows('cardinal_schema_hash');
-    expect(SCHEMA_HASH).toBe(fixtureHash);
+    expect(SCHEMA_HASH).toBe(cardinalOf('cardinal_schema_hash')[0]![0]);
   });
 ```
 
-`packages/server/test/parity_test.exs`, mirroring the existing `Fixtures` helper — add a sibling that reads `fixtures/cardinal_vectors.tsv`:
+Create `packages/server/test/support/cardinal_fixtures.ex` — the Elixir twin.
+Note it uses **no JSON decoder**: `jason` is an *optional* dependency of this
+package, so a helper that needed it would fail in the dependency-free test
+run.
+
+```elixir
+defmodule IwsdkPhoenix.CardinalFixtures do
+  @moduledoc """
+  Reader for `fixtures/cardinal_vectors.tsv`.
+
+  The twin of `packages/client/test/cardinal-fixtures.ts`. Values are a flat
+  run of numbers, and the component's own field order recovers the structure —
+  no JSON is involved, deliberately: `jason` is optional here, and the core
+  suite must run without it.
+  """
+
+  alias IwsdkPhoenix.Cardinal.Registry
+
+  @fixture_path Path.expand("../../../../fixtures/cardinal_vectors.tsv", __DIR__)
+
+  def fixture_path, do: @fixture_path
+
+  @doc "Rows of one kind, kind column stripped."
+  def rows(kind) do
+    @fixture_path
+    |> File.read!()
+    |> String.split("\n", trim: true)
+    |> Enum.reject(&String.starts_with?(&1, "#"))
+    |> Enum.map(&String.split(&1, "\t"))
+    |> Enum.filter(&match?([^kind | _], &1))
+    |> Enum.map(fn [_kind | fields] -> fields end)
+  end
+
+  @doc """
+  Rebuild a component struct from its id and flat field values.
+
+  Order comes from the module's generated `field_order/0`, never from struct
+  key order — Elixir sorts struct keys, and the fixture is written in
+  declaration order. Slot counts come from each field's default: a map means a
+  vector, a list means an array, anything else is a scalar. That keeps this
+  helper free of a second copy of the schema.
+  """
+  def to_struct(component_id, flat) do
+    module = Registry.module_for(component_id)
+    empty = struct(module)
+
+    {fields, []} =
+      Enum.reduce(module.field_order(), {%{}, flat}, fn key, {acc, remaining} ->
+        {value, rest} = take_field(Map.fetch!(empty, key), remaining)
+        {Map.put(acc, key, value), rest}
+      end)
+
+    struct(module, fields)
+  end
+
+  defp take_field(%{} = default, remaining) when not is_struct(default) do
+    keys = default |> Map.keys() |> Enum.sort_by(&vector_key_order/1)
+    {taken, rest} = Enum.split(remaining, length(keys))
+    {keys |> Enum.zip(Enum.map(taken, &to_number/1)) |> Map.new(), rest}
+  end
+
+  defp take_field(default, remaining) when is_list(default) do
+    {taken, rest} = Enum.split(remaining, length(default))
+    {Enum.map(taken, &to_number/1), rest}
+  end
+
+  defp take_field(default, [head | rest]) when is_boolean(default),
+    do: {String.trim(head) == "1", rest}
+
+  defp take_field(default, [head | rest]) when is_float(default),
+    do: {to_number(head) * 1.0, rest}
+
+  defp take_field(_default, [head | rest]), do: {trunc(to_number(head)), rest}
+
+  # x, y, z, w — the order the generator flattens vectors in.
+  defp vector_key_order(:x), do: 0
+  defp vector_key_order(:y), do: 1
+  defp vector_key_order(:z), do: 2
+  defp vector_key_order(:w), do: 3
+
+  defp to_number(text) do
+    text = String.trim(text)
+
+    case Integer.parse(text) do
+      {value, ""} -> value
+      _ -> text |> Float.parse() |> elem(0)
+    end
+  end
+end
+```
+
+This depends on each generated module exposing `field_order/0`. Add it to the
+server emission in Task 4, right after `byte_size/0`:
+
+```js
+      `  @doc "Field names in declaration order — struct key order is sorted, not declared."`,
+      `  @spec field_order() :: [atom()]`,
+      `  def field_order, do: [${component.fields.map((f) => `:${snake(f.name)}`).join(', ')}]`,
+      '',
+```
+
+Then in `parity_test.exs`:
 
 ```elixir
     test "Cardinal component vectors match byte for byte" do
       rows = CardinalFixtures.rows("cardinal")
       assert rows != []
 
-      for [id, values_json, hex] <- rows do
-        component_id = String.to_integer(id)
+      for row <- rows do
+        [id | rest] = row
+        {hex, flat} = List.pop_at(rest, -1)
+        component_id = String.to_integer(String.trim(id))
+
         module = Registry.module_for(component_id)
         assert module != nil, "no module for component #{component_id}"
 
-        struct = CardinalFixtures.to_struct(module, values_json)
-        assert Base.encode16(module.encode(struct), case: :lower) == String.trim(hex)
+        value = CardinalFixtures.to_struct(component_id, flat)
+        assert Base.encode16(module.encode(value), case: :lower) == String.trim(hex)
       end
     end
 
@@ -1331,8 +1667,6 @@ Prefer the first: reusing the shipped codec is the whole point of the vectors.
       assert Registry.schema_hash() == String.trim(fixture_hash)
     end
 ```
-
-`CardinalFixtures.to_struct/2` converts the JSON object into the module's struct: camelCase keys to snake_case atoms, `vec3` objects from `[x, y, z]` arrays. Write it in `packages/server/test/support/` alongside the existing fixtures helper, and decode the JSON with `Jason` (already a dependency).
 
 - [ ] **Step 3: Run both suites**
 
@@ -1353,43 +1687,40 @@ Expected: PASS both sides — byte-identical output from two independent impleme
  * hand.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, cpSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 
+/** Path of each artifact, relative to whichever root the generator writes to. */
 const artifacts = [
   'packages/client/src/cardinal/components.generated.ts',
   'packages/server/lib/iwsdk_phoenix/cardinal/components.generated.ex',
   'fixtures/cardinal_vectors.tsv',
 ];
 
-const committed = new Map(
-  artifacts.map((relative) => [relative, readFileSync(join(root, relative), 'utf8')]),
-);
-
+// Regenerate into a scratch tree and compare. Never into the working tree:
+// an in-place regeneration would have to be undone afterwards, and undoing it
+// with `git checkout` would destroy any legitimate uncommitted edit the
+// developer happened to be holding.
 const scratch = mkdtempSync(join(tmpdir(), 'cardinal-drift-'));
+
 try {
-  // Regenerate in place, capture, then restore from the copies taken above.
   execFileSync(
     'node',
     ['--experimental-strip-types', 'scripts/generate-cardinal.mjs'],
-    { cwd: root, stdio: 'pipe' },
+    { cwd: root, stdio: 'pipe', env: { ...process.env, CARDINAL_OUT_DIR: scratch } },
   );
 
   const drifted = artifacts.filter(
-    (relative) => readFileSync(join(root, relative), 'utf8') !== committed.get(relative),
+    (relative) =>
+      readFileSync(join(root, relative), 'utf8') !==
+      readFileSync(join(scratch, relative), 'utf8'),
   );
 
   if (drifted.length > 0) {
-    // Put the committed content back so the check leaves no trace.
-    for (const [relative, content] of committed) {
-      execFileSync('git', ['checkout', '--', relative], { cwd: root, stdio: 'pipe' });
-      void content;
-    }
-
     console.error('check-cardinal-drift: FAIL');
     for (const relative of drifted) console.error(`  - out of date: ${relative}`);
     console.error(
@@ -1403,9 +1734,41 @@ try {
   console.log('check-cardinal-drift: OK (generated artifacts match the schema)');
 } finally {
   rmSync(scratch, { recursive: true, force: true });
-  void cpSync;
 }
 ```
+
+This needs the generator to honour an output root. In
+`scripts/generate-cardinal.mjs`, replace the single `root` constant with two:
+
+```js
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+
+/**
+ * Where artifacts are written. The drift check points this at a scratch tree
+ * so it can compare without touching the working copy.
+ */
+const outRoot = process.env.CARDINAL_OUT_DIR ?? root;
+```
+
+and build every output path from `outRoot` instead of `root`. The one path
+that must keep using `root` is the dynamic `import(clientPath)` for the
+vectors — a scratch-tree copy would import a module whose relative
+`../protocol/quaternion-compression.js` does not resolve. Write to `outRoot`,
+import from `root`:
+
+```js
+const clientPath = join(outRoot, 'packages/client/src/cardinal/components.generated.ts');
+// …write it…
+const { CARDINAL_REGISTRY } = await import(
+  join(root, 'packages/client/src/cardinal/components.generated.ts')
+);
+```
+
+When the two roots differ, that means the vectors are encoded with the
+*committed* codec while the code artifacts come from the *current* schema — so
+a schema change that alters a layout shows up as drift in the vector file
+too. That is the behaviour you want: the check reports disagreement, it does
+not paper over it.
 
 - [ ] **Step 5: Verify the tripwire actually trips**
 
@@ -2200,6 +2563,34 @@ end
 
 Add `alias IwsdkPhoenix.Cardinal.Cache` at the top of `state.ex`, and initialise `components: %{}` in whatever constructor the module already uses (`defstruct` default covers it).
 
+**Then wire it in — a `drop_components/2` nobody calls is a leak with a
+tidy name.** Two call sites, both already in this module:
+
+- `despawn_entity/2`: fold the drop into the same update that removes the
+  entity, so the two can never diverge.
+
+  ```elixir
+      {%{state | entities: entities, components: Cache.drop_entity(state.components, network_id)},
+       Protocol.encode_despawn(network_id)}
+  ```
+
+- `leave/2`: a departing player's avatar id goes with them. Drop the
+  components keyed to that id in the same pass that removes the player.
+
+  ```elixir
+      components =
+        case Map.get(state.players, peer_id) do
+          nil -> state.components
+          player -> Cache.drop_entity(state.components, player.network_id)
+        end
+  ```
+
+  and carry `components: components` into the returned struct.
+
+Read both functions before editing: `leave/2` already returns a tuple whose
+shape callers depend on, and `despawn_entity/2` documents that a duplicate
+despawn is harmless — neither invariant may change.
+
 - [ ] **Step 4: Run the server suite**
 
 Run: `cd packages/server && mix test`
@@ -2307,6 +2698,47 @@ Append to `DemoServerWeb.RoomChannelTest`. Read the file's `join_room/3` helper 
                  "mode" => "host_relayed"
                })
     end
+
+    test "an authoritative room rejects a client-published component" do
+      # The mode's whole premise: the client sends inputs, the server decides
+      # what is true. Rejecting rather than ignoring makes a misconfigured
+      # client obvious — the same choice the transform path already makes.
+      {:ok, _reply, alice} =
+        DemoServerWeb.UserSocket
+        |> socket("alice", %{peer_id: "alice"})
+        |> subscribe_and_join(IwsdkPhoenix.RoomChannel, "room:#{unique_room()}", %{
+          "mode" => "server_authoritative"
+        })
+
+      reference =
+        push(
+          alice,
+          "frame",
+          {:binary,
+           Protocol.encode_component_update(
+             [%{network_id: 1, component_id: 1, payload: health(50.0, 100.0)}],
+             0
+           )}
+        )
+
+      assert_reply(reference, :error, %{reason: "client_authority_denied"})
+    end
+
+    test "forgets an entity's components when it despawns" do
+      # Otherwise the cache grows without bound and, worse, replays the state
+      # of a dead entity to every future joiner.
+      state =
+        IwsdkPhoenix.Room.State.new(id: "cache-lifecycle")
+        |> IwsdkPhoenix.Room.State.put_components(
+          [%{network_id: 7, component_id: 1, payload: health(50.0, 100.0)}],
+          :host_relayed
+        )
+
+      assert IwsdkPhoenix.Room.State.component_frames(state) != []
+
+      {state, _frame} = IwsdkPhoenix.Room.State.despawn_entity(state, 7)
+      assert IwsdkPhoenix.Room.State.component_frames(state) == []
+    end
   end
 
   # Drains pushes until one decodes as a COMPONENT_UPDATE naming `network_id`.
@@ -2385,58 +2817,49 @@ In `dispatch/4` for `:host_relayed`, before the catch-all `true ->` clause:
 
 ```elixir
       opcode == Protocol.op_component_update() ->
-        relay_components(state, peer_id, frame)
+        relay_components(state, frame)
 ```
 
-In `dispatch/4` for `:server_authoritative`, alongside the other opcode clauses:
+And one handler, plus a rejection:
 
 ```elixir
+  # Relayed: cache the raw payloads and forward verbatim.
+  #
+  # No ownership check, deliberately — and this is a decision worth stating,
+  # because the obvious instinct is to add one. In this mode transforms are
+  # relayed regardless of ownership too: `track_positions/3` swallows an
+  # ownership failure (`{:error, _reason} -> state`) and the frame is
+  # broadcast anyway. A relayed room trusts its peers by definition; that is
+  # what distinguishes it from the authoritative one. Enforcing components
+  # more strictly than transforms would be an inconsistency, not a hardening.
+  defp relay_components(state, frame) do
+    case Protocol.decode(frame) do
+      {:ok, :component_update, %{records: records}} ->
+        {:broadcast, frame, State.put_components(state, records, :host_relayed)}
+
+      {:error, reason} ->
+        {:error, reason, state}
+    end
+  end
+```
+
+In `dispatch/4` for `:server_authoritative`, put the clause **beside the
+existing transform rejection** and reject the same way:
+
+```elixir
+      # Same reasoning as the transform rejection just above: in this mode the
+      # client sends inputs, and the server decides what is true. A client
+      # asserting component state is the thing this mode exists to prevent.
+      # Server-authored components arrive with layer 1; until then this cache
+      # stays empty here, which is correct rather than merely unimplemented.
       opcode == Protocol.op_component_update() ->
-        apply_components(state, peer_id, frame)
+        {:error, :client_authority_denied, state}
 ```
 
-And the two handlers:
-
-```elixir
-  # Relayed: scan for ownership, cache the raw payloads, forward verbatim. The
-  # frame is never decoded past its record headers — that is the zero-decode
-  # relay path, and caching must not cost it.
-  defp relay_components(state, peer_id, frame) do
-    with {:ok, network_ids} <- Protocol.component_update_network_ids(frame),
-         :ok <- authorize_components(state, peer_id, network_ids),
-         {:ok, :component_update, %{records: records}} <- Protocol.decode(frame) do
-      {:broadcast, frame, State.put_components(state, records, :host_relayed)}
-    else
-      {:error, :client_authority_denied} -> {:error, :client_authority_denied, state}
-      {:error, reason} -> {:error, reason, state}
-    end
-  end
-
-  # Authoritative: same ownership rule, but the cache holds decoded structs
-  # because the room's own logic will read them.
-  defp apply_components(state, peer_id, frame) do
-    with {:ok, :component_update, %{records: records}} <- Protocol.decode(frame),
-         :ok <- authorize_components(state, peer_id, Enum.map(records, & &1.network_id)) do
-      {:broadcast, frame, State.put_components(state, records, :server_authoritative)}
-    else
-      {:error, :client_authority_denied} -> {:error, :client_authority_denied, state}
-      {:error, reason} -> {:error, reason, state}
-      _other -> {:error, :malformed_frame, state}
-    end
-  end
-
-  # A peer may publish components only for entities it owns — the same rule
-  # transforms already follow.
-  defp authorize_components(state, peer_id, network_ids) do
-    if Enum.all?(network_ids, &owns?(state, peer_id, &1)) do
-      :ok
-    else
-      {:error, :client_authority_denied}
-    end
-  end
-```
-
-`owns?/3` may already exist under another name in this module — the transform path performs the same check. Reuse it rather than writing a second one; if it is inlined there, extract it and have both call sites use it.
+This is why `component_update_network_ids/1` from Task 7 has no caller yet.
+Keep it: it is the ownership scan a future per-entity policy would need, it is
+tested, and it costs nothing. Note in its `@doc` that it is currently unused
+so a reader does not go hunting for the call site.
 
 - [ ] **Step 5: Replay the cache on join**
 
@@ -2487,12 +2910,21 @@ import { CardinalPublisher } from '../src/cardinal/publish.js';
 import { Health } from '../src/cardinal/components.generated.js';
 import { World } from './mocks/iwsdk-core.js';
 
-/** A world with the Cardinal components registered and one entity in it. */
+/**
+ * A world with the Cardinal components registered and one entity in it.
+ *
+ * `addComponent` takes the component alone — every value is set afterwards.
+ * Copy the world construction from `test/replication.test.ts`, which already
+ * does `world.registerComponent(...)` then `world.createEntity()`; do not
+ * invent a shape for it here.
+ */
 function entityWith(current: number, max: number) {
   const world = new World();
   world.registerComponent(Health);
   const entity = world.createEntity();
-  entity.addComponent(Health, { current, max });
+  entity.addComponent(Health);
+  entity.setValue(Health, 'current', current);
+  entity.setValue(Health, 'max', max);
   return entity;
 }
 
@@ -2833,5 +3265,7 @@ git status --short   # clean
 
 - **Spec coverage:** Section 1 → Tasks 1–2; Section 2 → Tasks 3–5; Section 3 → Tasks 6–7; Section 4 → Tasks 8–10; Section 5 → Tasks 5, 7, 9, 10, 12. Every design decision with a "why" in the spec has a test that would fail if it were reversed — closed type set (Task 1), permanent ids (Task 2), committed-and-diffable artifacts (Task 5), batching over per-component frames (Tasks 6, 10), zero-decode relay (Tasks 7, 8), join-time hash check (Task 9), memcmp dirty tracking (Task 10).
 - **Type consistency:** `CardinalComponentSpec` fields (`id`, `name`, `bytes`, `component`, `encode`, `decode`, `read`, `write`) are used identically in Tasks 3, 6, 10. `ComponentRecord` is `{ networkId, componentId, data }` on the client and `%{network_id, component_id, payload}` on the server — deliberately different, because the server never holds decoded data on the relay path; both spellings appear consistently in Tasks 6–10.
-- **Known gaps flagged in-place rather than papered over:** the `.ts`-import-from-Node problem in Task 5 Step 1 (with the chosen resolution), the `world.registerComponent` API check in Task 3 Step 4, the `hasComponent` predicate check in Task 10 Step 3, and the `owns?/3` reuse in Task 9 Step 4. Each names what to grep for instead of assuming.
+- **Second review pass, 2026-08-14** — the plan was checked against the code rather than re-read, and ten defects were fixed. Six were wrong API facts (vector accessor, quaternion function names and value shape, `jason` optionality, the non-existent ownership predicate, `addComponent` arity); two were structural bugs in the generator (importing an artifact before writing it, and importing inside a loop); one was a destructive drift check that could clobber uncommitted work; one was a pair of fixture helpers named but never written. The Global Constraints list above now carries each verified fact with a ⚠ where it contradicted the earlier draft.
+- **Design questions the review surfaced, resolved in the spec:** per-entity ownership checks on components were dropped in favour of matching the transform path exactly (relay in `host_relayed`, reject in `server_authoritative`), and the cache gained an explicit lifecycle tied to despawn and player departure. Both are recorded in the design document, not only here.
+- **Deliberately kept without a caller:** `Protocol.component_update_network_ids/1` (Task 7). The authority resolution removed its call site, but it is tested, costs nothing, and is exactly the scan a future per-entity policy would need. Its `@doc` says so.
 - **Deliberately deferred to a later plan:** persisting the component cache through `IwsdkPhoenix.Persistence`, per-field deltas, string/map types, and AoI filtering of component traffic (the frame rides the existing broadcast path; `SpatialGrid` filtering of component records is a natural follow-up once layer 1 needs it).

@@ -148,10 +148,21 @@ Decisions:
   the bytes differ from the last send. Fixed sizes make this a memcmp — no
   per-field tracking, no elics hooks. A quiet component costs zero wire
   bytes.
-- **Same authority rule as transforms.** Only the owner of `networkId`
-  publishes its components; `server_authoritative` rejects a record aimed at
-  someone else's entity through the existing `client_authority_denied` path;
-  `host_relayed` relays.
+- **Same authority rule as transforms — which means per mode, not per
+  entity.** Verified against the code rather than assumed: in `host_relayed`
+  the transform path swallows an ownership failure and broadcasts anyway
+  (`track_positions/3` returns `{:error, _} -> state`, then the frame is
+  relayed), because a relayed room trusts its peers by definition. In
+  `server_authoritative` a client asserting transform state is rejected
+  outright with `client_authority_denied`, because that is precisely what the
+  mode exists to prevent. Components follow both rules exactly: relayed
+  verbatim in the first mode, refused in the second. Enforcing per-entity
+  ownership on components alone would be an inconsistency, not a hardening.
+
+  The consequence is deliberate: in `server_authoritative` no client can
+  publish components, so the cache there stays empty until server-authored
+  components arrive with layer 1. That is correct rather than merely
+  unimplemented.
 - **Late join without breaking the fast path.** The server caches the latest
   payload per `(networkId, componentId)`: raw bytes in `host_relayed` — the
   documented zero-decode relay stays intact; the single validation pass only
@@ -160,6 +171,13 @@ Decisions:
   `server_authoritative`, because server logic (layer 1, later) reads them.
   On join, the newcomer receives spawns, then `COMPONENT_UPDATE` frames
   replaying the cache: current state, not just future changes.
+- **The cache has a lifecycle, and it is the entity's.** An entry is dropped
+  when its entity despawns and when its owning player leaves — folded into
+  the existing `despawn_entity/2` and `leave/2` so the two can never diverge.
+  Without this the cache grows without bound and, worse, replays the state of
+  a dead entity to every future joiner. Ownership transfer needs no handling:
+  the new owner's client has no publish history for that entity, so it
+  republishes once and the cache is corrected.
 
 ## Section 4 — The two runtimes
 
@@ -171,10 +189,9 @@ components: %{network_id => %{component_id => payload}}
 ```
 
 where `payload` is a raw binary in `host_relayed` and a generated struct in
-`server_authoritative` (decoded via `Cardinal.Registry`). The handler gains
-an op-12 clause with the same ownership verdicts as transforms. On peer
-arrival, `after_join` replays the cache as `COMPONENT_UPDATE` frames after
-the spawns.
+`server_authoritative` (decoded via `Cardinal.Registry`). The handler gains an
+op-12 clause per mode, matching the transform verdicts above. On peer arrival,
+`after_join` replays the cache as `COMPONENT_UPDATE` frames after the spawns.
 
 **Client — Cardinal joins the single ingestion point.**
 `PhoenixNetworkSystem`'s moduledoc rules that a frame is decoded exactly
@@ -230,3 +247,19 @@ above tests the committed schema.
 - Persisting component caches through `IwsdkPhoenix.Persistence` (natural
   later extension; the cache shape is already persistence-friendly).
 - Any change to existing hand-written frames or their vectors.
+
+## A note on JSON Patch
+
+`fast-json-patch` (RFC 6902) was evaluated for this layer and rejected, for
+reasons worth recording so it is not re-proposed. Cardinal's guarantee is that
+both sides produce identical bytes; JSON Patch is text, and two JSON
+serializers in two languages do not agree on float formatting, so the parity
+vectors this design rests on could not exist. It is also an order of magnitude
+larger on the wire — a `Health{current}` change is 4 bytes here and roughly 45
+as a patch operation.
+
+It remains a good candidate for a *different* channel: structured,
+variable-shaped, low-frequency state — inventories, quest state, world
+configuration, collaborative editing — which is exactly what the v1 type
+system excludes. If that need arrives it should be its own transport
+alongside the hot path, never inside it.
