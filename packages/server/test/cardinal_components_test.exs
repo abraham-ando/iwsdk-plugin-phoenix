@@ -5,9 +5,10 @@ defmodule IwsdkPhoenix.CardinalComponentsTest do
 
   describe "registry" do
     test "knows every schema component by id" do
-      assert Enum.sort(Registry.ids()) == [1, 2]
+      assert Enum.sort(Registry.ids()) == [1, 2, 3]
       assert Registry.module_for(1) == Health
       assert Registry.module_for(2) == Grabbable
+      assert Registry.module_for(3) == IwsdkPhoenix.Cardinal.Weather
     end
 
     test "returns nil for an unknown id rather than raising" do

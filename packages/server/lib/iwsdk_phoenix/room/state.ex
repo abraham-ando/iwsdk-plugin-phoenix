@@ -35,7 +35,8 @@ defmodule IwsdkPhoenix.Room.State do
             steal_policy: :deny,
             components: %{},
             world_time_ms: 0,
-            weather: nil
+            weather: nil,
+            world_entity_id: nil
 
   @type mode :: :host_relayed | :server_authoritative
 
@@ -383,6 +384,28 @@ defmodule IwsdkPhoenix.Room.State do
       | world_time_ms: state.world_time_ms + elapsed_ms,
         weather: Weather.advance(state.weather, elapsed_ms, state.id, state.world_time_ms)
     }
+  end
+
+  @doc """
+  The entity that carries sector-scoped components, spawning it on first use.
+
+  Sector state needs a real entity because a client resolves every component
+  record through its network id — `PhoenixNetworkSystem` drops a record whose
+  id matches nothing it has spawned. A synthetic id such as `0` would be
+  silently discarded on arrival; an ordinary entity needs no special case
+  anywhere downstream.
+
+  Returns `{state, network_id, spawn_frame}`, with `spawn_frame` `nil` when the
+  entity already existed.
+  """
+  @spec ensure_world_entity(t()) :: {t(), pos_integer(), binary() | nil}
+  def ensure_world_entity(%__MODULE__{world_entity_id: nil} = state) do
+    {state, entity, frame} = spawn_entity(state, prefab_id: 0, owner_id: 0)
+    {%{state | world_entity_id: entity.network_id}, entity.network_id, frame}
+  end
+
+  def ensure_world_entity(%__MODULE__{world_entity_id: id} = state) do
+    {state, id, nil}
   end
 
   @doc "The part of a sector worth carrying between visits."

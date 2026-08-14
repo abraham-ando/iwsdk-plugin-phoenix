@@ -79,6 +79,47 @@ defmodule IwsdkPhoenix.Cardinal.Grabbable do
   def decode(_other), do: :error
 end
 
+defmodule IwsdkPhoenix.Cardinal.Weather do
+  @moduledoc "Cardinal component 3. 17 bytes on the wire."
+
+  defstruct kind: 0, intensity: 0.0, wind: %{x: 0.0, y: 0.0, z: 0.0}
+
+  @type t :: %__MODULE__{
+          kind: non_neg_integer(),
+          intensity: float(),
+          wind: IwsdkPhoenix.Protocol.vec3(),
+        }
+
+  @doc "Wire size in bytes. Constant."
+  @spec byte_size() :: pos_integer()
+  def byte_size, do: 17
+
+  @doc "Field names in declaration order — struct key order is sorted, not declared."
+  @spec field_order() :: [atom()]
+  def field_order, do: [:kind, :intensity, :wind]
+
+  @spec encode(t()) :: binary()
+  def encode(%__MODULE__{} = struct) do
+    IO.iodata_to_binary([
+      <<struct.kind::unsigned-integer-size(8)>>,
+      <<struct.intensity::float-little-size(32)>>,
+      <<struct.wind.x::float-little-size(32), struct.wind.y::float-little-size(32), struct.wind.z::float-little-size(32)>>
+    ])
+  end
+
+  @spec decode(binary()) :: {:ok, t()} | :error
+  def decode(<<kind::unsigned-integer-size(8), intensity::float-little-size(32), wind_x::float-little-size(32), wind_y::float-little-size(32), wind_z::float-little-size(32)>>) do
+    {:ok,
+     %__MODULE__{
+       kind: kind,
+       intensity: intensity,
+       wind: %{x: wind_x, y: wind_y, z: wind_z},
+     }}
+  end
+
+  def decode(_other), do: :error
+end
+
 defmodule IwsdkPhoenix.Cardinal.Registry do
   @moduledoc """
   Lookup from wire id to generated component module.
@@ -88,21 +129,23 @@ defmodule IwsdkPhoenix.Cardinal.Registry do
   not take the room down with it.
   """
 
-  @schema_hash "4aa9aec1"
+  @schema_hash "47215e8a"
 
   @spec schema_hash() :: String.t()
   def schema_hash, do: @schema_hash
 
   @spec ids() :: [pos_integer()]
-  def ids, do: [1, 2]
+  def ids, do: [1, 2, 3]
 
   @spec module_for(integer()) :: module() | nil
   def module_for(1), do: IwsdkPhoenix.Cardinal.Health
   def module_for(2), do: IwsdkPhoenix.Cardinal.Grabbable
+  def module_for(3), do: IwsdkPhoenix.Cardinal.Weather
   def module_for(_other), do: nil
 
   @spec byte_size_for(integer()) :: pos_integer() | nil
   def byte_size_for(1), do: 8
   def byte_size_for(2), do: 16
+  def byte_size_for(3), do: 17
   def byte_size_for(_other), do: nil
 end

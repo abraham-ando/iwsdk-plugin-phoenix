@@ -20,9 +20,10 @@ describe('generated client components', () => {
   });
 
   it('registers every schema component by id', () => {
-    expect([...CARDINAL_REGISTRY.keys()].sort((a, b) => a - b)).toEqual([1, 2]);
+    expect([...CARDINAL_REGISTRY.keys()].sort((a, b) => a - b)).toEqual([1, 2, 3]);
     expect(CARDINAL_REGISTRY.get(1)!.name).toBe('Health');
     expect(CARDINAL_REGISTRY.get(2)!.name).toBe('Grabbable');
+    expect(CARDINAL_REGISTRY.get(3)!.name).toBe('Weather');
   });
 
   it('reports constant byte sizes', () => {

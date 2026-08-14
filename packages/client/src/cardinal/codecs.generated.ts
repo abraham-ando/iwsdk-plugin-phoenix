@@ -24,7 +24,7 @@ export interface CardinalCodec {
 }
 
 /** Fingerprint of the schema these codecs came from. */
-export const SCHEMA_HASH = '4aa9aec1';
+export const SCHEMA_HASH = '47215e8a';
 
 /** Component 1, 8 bytes. */
 export interface HealthData {
@@ -62,6 +62,27 @@ function decodeGrabbable(view: DataView, offset: number): Record<string, unknown
   };
 }
 
+/** Component 3, 17 bytes. */
+export interface WeatherData {
+  kind: number;
+  intensity: number;
+  wind: number[];
+}
+
+function encodeWeather(view: DataView, offset: number, data: Record<string, unknown>): void {
+  view.setUint8(offset + 0, (data.kind as number));
+  view.setFloat32(offset + 1, (data.intensity as number), true);
+  view.setFloat32(offset + 5, (data.wind as number[])[0] ?? 0, true); view.setFloat32(offset + 5 + 4, (data.wind as number[])[1] ?? 0, true); view.setFloat32(offset + 5 + 8, (data.wind as number[])[2] ?? 0, true);
+}
+
+function decodeWeather(view: DataView, offset: number): Record<string, unknown> {
+  return {
+    kind: view.getUint8(offset + 0),
+    intensity: view.getFloat32(offset + 1, true),
+    wind: [view.getFloat32(offset + 5, true), view.getFloat32(offset + 5 + 4, true), view.getFloat32(offset + 5 + 8, true)],
+  };
+}
+
 /** Every schema component's codec, keyed by its permanent wire id. */
 export const CARDINAL_CODECS: ReadonlyMap<number, CardinalCodec> = new Map([
   [1, {
@@ -85,5 +106,17 @@ export const CARDINAL_CODECS: ReadonlyMap<number, CardinalCodec> = new Map([
     ],
     encode: encodeGrabbable,
     decode: decodeGrabbable,
+  }],
+  [3, {
+    id: 3,
+    name: 'Weather',
+    bytes: 17,
+    fields: [
+      { name: 'kind', slots: 1 },
+      { name: 'intensity', slots: 1 },
+      { name: 'wind', slots: 3 },
+    ],
+    encode: encodeWeather,
+    decode: decodeWeather,
   }],
 ]);

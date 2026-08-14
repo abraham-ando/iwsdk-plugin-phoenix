@@ -38,4 +38,14 @@ export const components = [
       { name: 'grabPoint', type: 'vec3' },
     ],
   },
+  {
+    id: 3,
+    name: 'Weather',
+    fields: [
+      /** 0 clear, 1 rain, 2 storm, 3 fog — see IwsdkPhoenix.World.Weather. */
+      { name: 'kind', type: 'u8' },
+      { name: 'intensity', type: 'f32' },
+      { name: 'wind', type: 'vec3' },
+    ],
+  },
 ];

@@ -188,6 +188,8 @@ defmodule IwsdkPhoenix.Room.Server do
   @impl true
   def handle_info(:tick, state) do
     room = State.tick(state.room)
+    state = publish_weather(%{state | room: room})
+    room = state.room
     broadcast_snapshots(room, state.broadcast)
 
     now = System.monotonic_time(:millisecond)
@@ -261,6 +263,53 @@ defmodule IwsdkPhoenix.Room.Server do
     else
       deadline
     end
+  end
+
+  # Sector-scoped components ride the same COMPONENT_UPDATE path as anything
+  # else; only the entity they hang on is unusual. Published only on change,
+  # against the cache the room already keeps, so a settled world costs nothing.
+  #
+  # Only a persistent sector is a world. An ephemeral room — a lobby, a match —
+  # has no business spawning a sector entity or paying for weather traffic, so
+  # the feature is opt-in through the same flag that keeps the world alive.
+  defp publish_weather(%{persistent: false} = state), do: state
+
+  # Nothing to tell an empty sector, and it does not tick anyway.
+  defp publish_weather(%{room: %{players: players}} = state) when map_size(players) == 0 do
+    state
+  end
+
+  defp publish_weather(state) do
+    {room, network_id, spawn_frame} = State.ensure_world_entity(state.room)
+    state = %{state | room: room}
+    if spawn_frame, do: broadcast_to_peers(state, spawn_frame)
+
+    payload =
+      IwsdkPhoenix.Cardinal.Weather.encode(%IwsdkPhoenix.Cardinal.Weather{
+        kind: IwsdkPhoenix.World.Weather.kind_code(room.weather.kind),
+        intensity: room.weather.intensity,
+        wind: room.weather.wind
+      })
+
+    if IwsdkPhoenix.Cardinal.Cache.get(room.components, network_id, 3) == payload do
+      state
+    else
+      record = %{network_id: network_id, component_id: 3, payload: payload}
+
+      broadcast_to_peers(
+        state,
+        Protocol.encode_component_update([record], room.tick)
+      )
+
+      %{state | room: State.put_components(room, [record], room.mode)}
+    end
+  end
+
+  defp broadcast_to_peers(%{broadcast: nil}, _frame), do: :ok
+
+  defp broadcast_to_peers(%{broadcast: broadcast, room: room}, frame)
+       when is_function(broadcast, 1) do
+    Enum.each(room.players, fn {peer_id, _player} -> broadcast.({peer_id, frame}) end)
   end
 
   defp broadcast_snapshots(_room, nil), do: :ok

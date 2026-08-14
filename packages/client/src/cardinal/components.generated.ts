@@ -36,6 +36,17 @@ export const Grabbable = createComponent(
   'Cardinal component 2',
 );
 
+/** Component 3. */
+export const Weather = createComponent(
+  'Weather',
+  {
+    kind: { type: Types.Int32, default: 0 },
+    intensity: { type: Types.Float32, default: 0 },
+    wind: { type: Types.Vec3, default: [0, 0, 0] },
+  },
+  'Cardinal component 3',
+);
+
 /** Every schema component, keyed by its permanent wire id. */
 export const CARDINAL_REGISTRY: ReadonlyMap<number, CardinalComponentSpec> = new Map([
   [1, {
@@ -66,6 +77,24 @@ export const CARDINAL_REGISTRY: ReadonlyMap<number, CardinalComponentSpec> = new
       }
     },
   }],
+  [3, {
+    ...(CARDINAL_CODECS.get(3) as CardinalCodec),
+    component: Weather as unknown as AnyComponent,
+    read: (entity: Entity) => ({
+      kind: entity.getValue(Weather, 'kind'),
+      intensity: entity.getValue(Weather, 'intensity'),
+      wind: Array.from(entity.getVectorView(Weather, 'wind')),
+    }),
+    write: (entity: Entity, data: Record<string, unknown>) => {
+      entity.setValue(Weather, 'kind', data.kind as never);
+      entity.setValue(Weather, 'intensity', data.intensity as never);
+      {
+        const view = entity.getVectorView(Weather, 'wind');
+        const source = data.wind as number[];
+        for (let i = 0; i < 3; i++) view[i] = source[i] ?? 0;
+      }
+    },
+  }],
 ]);
 
 /**
@@ -77,4 +106,5 @@ export const CARDINAL_REGISTRY: ReadonlyMap<number, CardinalComponentSpec> = new
 export function registerCardinalComponents(world: World): void {
   world.registerComponent(Health);
   world.registerComponent(Grabbable);
+  world.registerComponent(Weather);
 }
