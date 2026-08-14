@@ -79,6 +79,15 @@ export interface PhoenixNetworkingOptions {
   /** Connect immediately. Set false to call `adapter.connect()` yourself. @defaultValue true */
   autoConnect?: boolean;
 
+  /**
+   * Extra join params, merged into the channel's join payload.
+   *
+   * How an application reaches server-side room options the plugin does not
+   * model itself — `persistent: true` for a sector that keeps its world,
+   * `interest_radius` for area-of-interest tuning.
+   */
+  params?: Record<string, unknown>;
+
   /** Publish rate ceiling in hertz. @defaultValue 30 */
   sendRateHz?: number;
 
@@ -264,7 +273,7 @@ export function installPhoenixNetworking(
 
   const ready =
     autoConnect && !isOffline && endpoint
-      ? adapter.connect(endpoint, { roomId, token, mode })
+      ? adapter.connect(endpoint, { roomId, token, mode, params: options.params })
       : Promise.resolve();
 
   return {

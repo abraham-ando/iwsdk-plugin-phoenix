@@ -311,7 +311,8 @@ if Code.ensure_loaded?(Phoenix.Channel) do
         # it on demand is a follow-up the same machinery already supports.
         stop_when_empty: not persistent,
         persistent: persistent,
-        broadcast: broadcaster(mode, socket.endpoint)
+        broadcast: broadcaster(mode, socket.endpoint),
+        notify: notifier(socket.endpoint)
       )
     end
 
@@ -327,6 +328,15 @@ if Code.ensure_loaded?(Phoenix.Channel) do
     end
 
     defp broadcaster(_mode, _endpoint), do: nil
+
+    # Server-originated frames — a sector's weather, an entity the server
+    # spawned — reach peers in both modes. The suppression above is specific
+    # to snapshots, which duplicate what a relayed room already forwards.
+    defp notifier(endpoint) do
+      fn {peer_id, payload} ->
+        endpoint.broadcast(peer_topic(peer_id), @frame_event, {:binary, payload})
+      end
+    end
 
     defp avatar_spawn(network_id, position \\ %{x: 0.0, y: 0.0, z: 0.0}) do
       Protocol.encode_spawn(%{

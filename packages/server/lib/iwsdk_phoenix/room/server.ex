@@ -39,7 +39,12 @@ defmodule IwsdkPhoenix.Room.Server do
     * `:tick_hz` — simulation and broadcast rate, default 30
     * `:broadcast` — 1-arity fun receiving `{peer_id, binary}` snapshots.
       Injected rather than calling `Phoenix.PubSub` directly so the loop is
-      testable without a running endpoint.
+      testable without a running endpoint. A host-relayed room leaves this
+      unset: its peers' own transforms are already relayed, and a server
+      snapshot would fight them.
+    * `:notify` — 1-arity fun of the same shape, for frames the *server*
+      originates: a sector's weather, an entity it spawned. Set in both modes,
+      because none of those conflict with relayed transforms.
     * `:stop_when_empty` — stop the room once its last peer leaves, default
       `false`. Rooms started on demand per socket want this; a persistent room
       that outlives its occupants does not.
@@ -94,6 +99,7 @@ defmodule IwsdkPhoenix.Room.Server do
       room: load_room(Keyword.fetch!(opts, :id), opts, persistent),
       interval: interval,
       broadcast: Keyword.get(opts, :broadcast),
+      notify: Keyword.get(opts, :notify),
       stop_when_empty: Keyword.get(opts, :stop_when_empty, false),
       persistent: persistent,
       deadline: System.monotonic_time(:millisecond) + interval
@@ -305,11 +311,17 @@ defmodule IwsdkPhoenix.Room.Server do
     end
   end
 
-  defp broadcast_to_peers(%{broadcast: nil}, _frame), do: :ok
+  # Server-originated frames go through `notify`, not `broadcast`.
+  #
+  # The two are separate because their rules differ. `broadcast` carries
+  # snapshots, which a host-relayed room must not send — the peers' own
+  # transforms are already being forwarded and a server snapshot would fight
+  # them. A weather component fights nothing, so it is delivered in both modes.
+  defp broadcast_to_peers(%{notify: nil}, _frame), do: :ok
 
-  defp broadcast_to_peers(%{broadcast: broadcast, room: room}, frame)
-       when is_function(broadcast, 1) do
-    Enum.each(room.players, fn {peer_id, _player} -> broadcast.({peer_id, frame}) end)
+  defp broadcast_to_peers(%{notify: notify, room: room}, frame)
+       when is_function(notify, 1) do
+    Enum.each(room.players, fn {peer_id, _player} -> notify.({peer_id, frame}) end)
   end
 
   defp broadcast_snapshots(_room, nil), do: :ok

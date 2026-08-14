@@ -248,3 +248,59 @@ describe('LoopbackNetwork identity', () => {
     expect(network.createPeer('alice', 100).networkId).toBe(100);
   });
 });
+
+describe('join params', () => {
+  it('forwards application params into the channel join', async () => {
+    // Without this the server-side room options a client can reach are only
+    // the ones the plugin happens to model — `persistent: true` for a sector
+    // that keeps its world would be unreachable from the public API.
+    let seen: Record<string, unknown> | null = null;
+
+    const push: PushLike = {
+      receive(status, callback) {
+        if (status === 'ok') callback({ peer_id: 'alice', network_id: 1 });
+        return push;
+      },
+    };
+
+    const channel: ChannelLike = {
+      join: () => push,
+      leave: () => push,
+      on: () => 0,
+      push: () => push,
+      onError: () => {},
+      onClose: () => {},
+    };
+
+    const connection = new PhoenixConnection(
+      {
+        onFrame: () => {},
+        onPeerJoin: () => {},
+        onPeerLeave: () => {},
+        onState: () => {},
+        onError: () => {},
+      },
+      () => ({
+        connect: () => {},
+        disconnect: () => {},
+        channel: (_topic, params) => {
+          seen = params as Record<string, unknown>;
+          return channel;
+        },
+        onError: () => {},
+        onClose: () => {},
+        onOpen: () => {},
+      }),
+    );
+
+    await connection.connect('ws://localhost/socket', {
+      roomId: 'northmarch',
+      params: { persistent: true },
+    });
+
+    expect(seen).not.toBeNull();
+    expect(seen!.persistent).toBe(true);
+    // And the params the plugin models itself are still there.
+    expect(seen!.mode).toBe('host_relayed');
+  });
+});
