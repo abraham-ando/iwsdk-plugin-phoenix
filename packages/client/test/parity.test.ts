@@ -220,6 +220,31 @@ describe('golden vectors', () => {
     }
   });
 
+  it('COMPONENT_UPDATE frames match', () => {
+    // The per-component rows above pin the payloads; these pin the batching
+    // around them — header, record headers, and the order of both.
+    const cases = cardinalOf('component_update');
+    expect(cases.length).toBeGreaterThan(0);
+
+    for (const [tick, spec, expected] of cases) {
+      const records =
+        spec === '-'
+          ? []
+          : spec!.split(',').map((entry) => {
+              const [componentId, networkId] = entry.split(':').map(Number);
+              const values = valuesFor(
+                componentId!,
+                cardinalOf('cardinal')
+                  .find((row) => Number(row[0]) === componentId)!
+                  .slice(1, -1),
+              );
+              return { networkId: networkId!, componentId: componentId!, data: values };
+            });
+
+      expect(hex(BinaryProtocol.encodeComponentUpdate(records, Number(tick)))).toBe(expected);
+    }
+  });
+
   it('Cardinal schema hash matches the fixture', () => {
     // If the two languages ever computed the hash differently, this row is
     // what arbitrates between them.

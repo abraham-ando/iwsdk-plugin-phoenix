@@ -305,5 +305,19 @@ defmodule IwsdkPhoenix.ParityTest do
       [[fixture_hash]] = CardinalFixtures.rows("cardinal_schema_hash")
       assert Registry.schema_hash() == String.trim(fixture_hash)
     end
+
+    test "COMPONENT_UPDATE frames match byte for byte" do
+      # The per-component rows pin the payloads; these pin the batching around
+      # them. This is the assertion that proves the two languages frame a batch
+      # identically — everything else only proves each is self-consistent.
+      rows = CardinalFixtures.rows("component_update")
+      assert rows != []
+
+      for [tick, spec, hex] <- rows do
+        records = CardinalFixtures.records_for(spec)
+        encoded = Protocol.encode_component_update(records, String.to_integer(tick))
+        assert Base.encode16(encoded, case: :lower) == String.trim(hex)
+      end
+    end
   end
 end

@@ -133,6 +133,75 @@ defmodule IwsdkPhoenix.ProtocolTest do
     end
   end
 
+  describe "component_update" do
+    test "round-trips a heterogeneous batch, payloads untouched" do
+      health = %{network_id: 7, component_id: 1, payload: <<1, 2, 3, 4, 5, 6, 7, 8>>}
+      grab = %{network_id: 9, component_id: 2, payload: :binary.copy(<<9>>, 16)}
+
+      frame = Protocol.encode_component_update([health, grab], 4242)
+      assert byte_size(frame) == 7 + 14 + 22
+
+      assert {:ok, :component_update, decoded} = Protocol.decode(frame)
+      assert decoded.server_tick == 4242
+      assert decoded.records == [health, grab]
+    end
+
+    test "encodes an empty batch as a header alone" do
+      frame = Protocol.encode_component_update([], 1)
+      assert byte_size(frame) == 7
+      assert {:ok, :component_update, %{records: []}} = Protocol.decode(frame)
+    end
+
+    test "component_update_network_ids scans without decoding payloads" do
+      # The relay path's whole point: learn who owns what, forward verbatim.
+      frame =
+        Protocol.encode_component_update(
+          [
+            %{network_id: 7, component_id: 1, payload: <<0::size(64)>>},
+            %{network_id: 11, component_id: 1, payload: <<0::size(64)>>}
+          ],
+          0
+        )
+
+      assert Protocol.component_update_network_ids(frame) == {:ok, [7, 11]}
+    end
+
+    test "rejects an unknown component id" do
+      frame =
+        Protocol.encode_component_update(
+          [%{network_id: 7, component_id: 1, payload: <<0::size(64)>>}],
+          0
+        )
+
+      <<head::binary-size(11), _id::binary-size(2), rest::binary>> = frame
+      broken = head <> <<999::unsigned-little-integer-size(16)>> <> rest
+
+      assert Protocol.decode(broken) == {:error, :unknown_component}
+      assert Protocol.component_update_network_ids(broken) == {:error, :unknown_component}
+    end
+
+    test "rejects a truncated frame" do
+      frame =
+        Protocol.encode_component_update(
+          [%{network_id: 7, component_id: 1, payload: <<0::size(64)>>}],
+          0
+        )
+
+      assert Protocol.decode(binary_part(frame, 0, 10)) == {:error, :malformed_frame}
+    end
+
+    test "rejects a payload whose size does not match the schema" do
+      # There is no length field to resynchronise on, so a wrong-sized payload
+      # would silently corrupt every record after it.
+      assert_raise ArgumentError, fn ->
+        Protocol.encode_component_update(
+          [%{network_id: 7, component_id: 1, payload: <<0, 0>>}],
+          0
+        )
+      end
+    end
+  end
+
   describe "extended pong" do
     test "encode_pong is 29 bytes and round-trips" do
       frame = Protocol.encode_pong(1234.5, 10_001.25, 10_001.5, 305_419_896)

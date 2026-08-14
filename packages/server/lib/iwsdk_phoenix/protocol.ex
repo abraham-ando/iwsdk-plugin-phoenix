@@ -22,7 +22,16 @@ defmodule IwsdkPhoenix.Protocol do
   | 4      | DESPAWN_ENTITY   | 5                     |
   | 5      | SNAPSHOT         | 8 + n * (32 or 20)    |
   | 6      | RECONCILE        | 21                    |
-  | 7/8    | PING / PONG      | 9                     |
+  | 7      | PING             | 9                     |
+  | 8      | PONG             | 9 (legacy) or 29      |
+  | 9      | OWNERSHIP_REQUEST| 9                     |
+  | 10     | OWNERSHIP_GRANT  | 14                    |
+  | 11     | SIGNAL           | 11 + payload          |
+  | 12     | COMPONENT_UPDATE | 7 + n * (6 + payload) |
+
+  A `COMPONENT_UPDATE` record carries no length field: the payload size is a
+  property of the component id, looked up in `IwsdkPhoenix.Cardinal.Registry`.
+  Layouts are generated from `cardinal/components.mjs`.
   """
 
   import Bitwise
@@ -40,6 +49,7 @@ defmodule IwsdkPhoenix.Protocol do
   @op_ownership_request 9
   @op_ownership_grant 10
   @op_signal 11
+  @op_component_update 12
 
   @signal_max_payload 16 * 1024
 
@@ -61,6 +71,7 @@ defmodule IwsdkPhoenix.Protocol do
   def op_ownership_request, do: @op_ownership_request
   def op_ownership_grant, do: @op_ownership_grant
   def op_signal, do: @op_signal
+  def op_component_update, do: @op_component_update
 
   @doc "Largest signalling payload accepted, in bytes."
   def signal_max_payload, do: @signal_max_payload
@@ -199,6 +210,16 @@ defmodule IwsdkPhoenix.Protocol do
 
   def decode(<<@op_pong, timestamp::float-little-size(64)>>) do
     {:ok, :pong, %{timestamp: timestamp}}
+  end
+
+  def decode(
+        <<@op_component_update, count::unsigned-little-integer-size(16),
+          server_tick::unsigned-little-integer-size(32), rest::binary>>
+      ) do
+    case decode_component_records(rest, count, []) do
+      {:ok, records} -> {:ok, :component_update, %{server_tick: server_tick, records: records}}
+      {:error, reason} -> {:error, reason}
+    end
   end
 
   def decode(
@@ -464,4 +485,113 @@ defmodule IwsdkPhoenix.Protocol do
     <<@op_pong, t0::float-little-size(64), t1::float-little-size(64),
       t2::float-little-size(64), epoch::unsigned-little-integer-size(32)>>
   end
+
+  # ---------------------------------------------------------------------------
+  # Cardinal components
+  # ---------------------------------------------------------------------------
+
+  @doc """
+  Batch component payloads into one frame.
+
+  Payloads are raw binaries and stay that way: in a relayed room the server
+  never decodes them, and even in an authoritative one this function is only
+  responsible for framing. Each payload's size is checked against the schema,
+  because a wrong-sized one would silently corrupt every record after it —
+  there is no length field to resynchronise on.
+  """
+  @spec encode_component_update([map()], non_neg_integer()) :: binary()
+  def encode_component_update(records, server_tick) do
+    body =
+      for %{network_id: network_id, component_id: component_id, payload: payload} <- records do
+        expected = IwsdkPhoenix.Cardinal.Registry.byte_size_for(component_id)
+
+        cond do
+          expected == nil ->
+            raise ArgumentError, "unknown component id #{component_id}"
+
+          byte_size(payload) != expected ->
+            raise ArgumentError,
+                  "component #{component_id} expects #{expected} bytes, got #{byte_size(payload)}"
+
+          true ->
+            <<network_id::unsigned-little-integer-size(32),
+              component_id::unsigned-little-integer-size(16), payload::binary>>
+        end
+      end
+
+    IO.iodata_to_binary([
+      <<@op_component_update, length(records)::unsigned-little-integer-size(16),
+        server_tick::unsigned-little-integer-size(32)>>
+      | body
+    ])
+  end
+
+  @doc """
+  Network ids carried by a `COMPONENT_UPDATE` frame, without decoding payloads.
+
+  Currently unused: components follow the transform path's per-mode authority
+  rule, which needs no per-entity check. Kept because it is the scan a future
+  per-entity policy would need, it is tested, and walking the record headers
+  costs a registry lookup each — decoding them would cost the zero-decode
+  relay path.
+  """
+  @spec component_update_network_ids(binary()) :: {:ok, [non_neg_integer()]} | {:error, atom()}
+  def component_update_network_ids(
+        <<@op_component_update, count::unsigned-little-integer-size(16),
+          _tick::unsigned-little-integer-size(32), rest::binary>>
+      ) do
+    scan_component_ids(rest, count, [])
+  end
+
+  def component_update_network_ids(_other), do: {:error, :malformed_frame}
+
+  defp scan_component_ids(_rest, 0, acc), do: {:ok, Enum.reverse(acc)}
+
+  defp scan_component_ids(
+         <<network_id::unsigned-little-integer-size(32),
+           component_id::unsigned-little-integer-size(16), rest::binary>>,
+         count,
+         acc
+       ) do
+    case IwsdkPhoenix.Cardinal.Registry.byte_size_for(component_id) do
+      nil ->
+        {:error, :unknown_component}
+
+      size when byte_size(rest) >= size ->
+        <<_payload::binary-size(^size), tail::binary>> = rest
+        scan_component_ids(tail, count - 1, [network_id | acc])
+
+      _short ->
+        {:error, :malformed_frame}
+    end
+  end
+
+  defp scan_component_ids(_rest, _count, _acc), do: {:error, :malformed_frame}
+
+  defp decode_component_records(<<>>, 0, acc), do: {:ok, Enum.reverse(acc)}
+  defp decode_component_records(_rest, 0, _acc), do: {:error, :malformed_frame}
+
+  defp decode_component_records(
+         <<network_id::unsigned-little-integer-size(32),
+           component_id::unsigned-little-integer-size(16), rest::binary>>,
+         count,
+         acc
+       ) do
+    case IwsdkPhoenix.Cardinal.Registry.byte_size_for(component_id) do
+      nil ->
+        {:error, :unknown_component}
+
+      size when byte_size(rest) >= size ->
+        <<payload::binary-size(^size), tail::binary>> = rest
+
+        decode_component_records(tail, count - 1, [
+          %{network_id: network_id, component_id: component_id, payload: payload} | acc
+        ])
+
+      _short ->
+        {:error, :malformed_frame}
+    end
+  end
+
+  defp decode_component_records(_rest, _count, _acc), do: {:error, :malformed_frame}
 end

@@ -53,6 +53,41 @@ defmodule IwsdkPhoenix.CardinalFixtures do
     struct(module, fields)
   end
 
+  @doc """
+  Build the record list a `component_update` fixture row describes.
+
+  The row names records as `componentId:networkId` pairs; the values come from
+  that component's first `cardinal` row, which is what the generator used.
+  `-` means an empty batch.
+  """
+  def records_for("-"), do: []
+
+  def records_for(spec) do
+    spec
+    |> String.trim()
+    |> String.split(",")
+    |> Enum.map(fn pair ->
+      [component_id, network_id] = pair |> String.split(":") |> Enum.map(&String.to_integer/1)
+
+      module =
+        Registry.module_for(component_id) ||
+          raise ArgumentError, "no component module for id #{component_id}"
+
+      [first_row | _] =
+        "cardinal"
+        |> rows()
+        |> Enum.filter(fn [id | _] -> String.to_integer(String.trim(id)) == component_id end)
+
+      {_hex, flat} = first_row |> tl() |> List.pop_at(-1)
+
+      %{
+        network_id: network_id,
+        component_id: component_id,
+        payload: module.encode(to_struct(component_id, flat))
+      }
+    end)
+  end
+
   defp take_field(default, remaining) when is_map(default) and not is_struct(default) do
     keys = default |> Map.keys() |> Enum.sort_by(&vector_key_order/1)
     {taken, rest} = Enum.split(remaining, length(keys))
