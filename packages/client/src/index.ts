@@ -97,6 +97,19 @@ export type { MutableVector } from './math/interpolation.js';
 export { clampToUnitDisc, integrateMovement } from './math/movement.js';
 export type { MovementStep } from './math/movement.js';
 
+// Cardinal — generated component runtime
+export {
+  CARDINAL_REGISTRY,
+  SCHEMA_HASH,
+  registerCardinalComponents,
+} from './cardinal/components.generated.js';
+export type { CardinalComponentSpec } from './cardinal/components.generated.js';
+export { CardinalPublisher } from './cardinal/publish.js';
+export type {
+  ComponentRecord,
+  ComponentUpdateFrame,
+} from './protocol/BinaryProtocol.js';
+
 // Clock synchronization
 export {
   ClockSyncEstimator,

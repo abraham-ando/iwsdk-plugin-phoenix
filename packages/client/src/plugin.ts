@@ -16,6 +16,7 @@ import {
   NetworkedTransform,
 } from './components/index.js';
 import type { INetworkAdapter } from './interfaces/INetworkAdapter.js';
+import { registerCardinalComponents } from './cardinal/components.generated.js';
 import { SlewedOffset } from './math/clock-sync.js';
 import type { ClockReading } from './transport/clock-loop.js';
 import { ClientPredictionSystem } from './systems/ClientPredictionSystem.js';
@@ -217,6 +218,10 @@ export function installPhoenixNetworking(
     .registerComponent(NetworkedTransform)
     .registerComponent(NetworkInput)
     .registerComponent(NetworkStats);
+
+  // Generated from cardinal/components.mjs; registered here so an application
+  // never has to know the schema exists.
+  registerCardinalComponents(world);
 
   if (networkLod) {
     world.registerSystem(NetworkLODSystem, { priority: SystemPriority.LOD });

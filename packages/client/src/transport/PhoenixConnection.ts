@@ -9,6 +9,7 @@
  */
 import { Presence, Socket } from 'phoenix';
 import type { ConnectOptions, ConnectionState } from '../interfaces/INetworkAdapter.js';
+import { SCHEMA_HASH } from '../cardinal/components.generated.js';
 import { BinaryProtocol } from '../protocol/BinaryProtocol.js';
 
 /** Channel event carrying binary frames in both directions. */
@@ -112,6 +113,10 @@ export class PhoenixConnection {
 
     const channel = socket.channel(`room:${roomId}`, {
       mode: options.mode ?? 'host_relayed',
+      // A server whose generated components disagree with ours refuses the
+      // join outright. Silence here would mean avatars quietly holding wrong
+      // values, which is far harder to diagnose than a refused connection.
+      schema_hash: SCHEMA_HASH,
       ...options.params,
     });
     this.channel = channel;

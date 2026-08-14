@@ -18,6 +18,9 @@ import {
 } from '../protocol/BinaryProtocol.js';
 import { OpCode } from '../protocol/opcodes.js';
 import type { MutableVector } from '../math/interpolation.js';
+import { CARDINAL_REGISTRY } from '../cardinal/components.generated.js';
+import { CardinalPublisher } from '../cardinal/publish.js';
+import type { ComponentRecord } from '../protocol/BinaryProtocol.js';
 import { EntityIndex } from './EntityIndex.js';
 
 /** Adapters that can hand us frames in bulk once per tick. */
@@ -83,6 +86,7 @@ export class PhoenixNetworkSystem extends createSystem(
   },
 ) {
   private readonly index = new EntityIndex();
+  private readonly cardinal = new CardinalPublisher();
   private readonly unsubscribes: (() => void)[] = [];
 
   /** Scratch list reused every tick so batching allocates nothing steady-state. */
@@ -282,6 +286,41 @@ export class PhoenixNetworkSystem extends createSystem(
         ),
       );
     }
+
+    this.publishComponents(adapter);
+  }
+
+  /**
+   * Publish every owned entity's changed Cardinal components, in one frame.
+   *
+   * One frame for all of them, never one per component: a lone record falls
+   * under the BEAM's 64-byte threshold and would be copied to every recipient
+   * instead of shared by reference.
+   *
+   * Not rate-limited the way transforms are. A transform changes every frame,
+   * so it needs a cadence; a component changes when something happens to it,
+   * and delaying that by up to a tick would add latency to a rare event for no
+   * bandwidth saving — the dirty check already means an unchanged component
+   * costs nothing.
+   */
+  private publishComponents(adapter: INetworkAdapter): void {
+    const records: ComponentRecord[] = [];
+
+    for (const entity of this.queries.replicated.entities) {
+      if (!entity.getValue(Networked, 'isLocalOwner')) continue;
+
+      const networkId = entity.getValue(Networked, 'networkId') ?? 0;
+      if (networkId === 0) continue;
+
+      records.push(...this.cardinal.collect(entity, networkId));
+    }
+
+    if (records.length > 0) {
+      this.dispatch(
+        adapter,
+        BinaryProtocol.encodeComponentUpdate(records, this.frameCounter),
+      );
+    }
   }
 
   /**
@@ -466,7 +505,27 @@ export class PhoenixNetworkSystem extends createSystem(
         case OpCode.DESPAWN_ENTITY: {
           const decoded = BinaryProtocol.decode(message.payload);
           if (decoded.opCode === OpCode.DESPAWN_ENTITY) {
+            // Forget its publish history too, so a reused id starts clean
+            // rather than being suppressed by a dead entity's last bytes.
+            this.cardinal.forget(decoded.networkId);
             this.onDespawn?.(decoded.networkId);
+          }
+          break;
+        }
+
+        case OpCode.COMPONENT_UPDATE: {
+          const { records } = BinaryProtocol.decodeComponentUpdate(message.payload);
+          for (const record of records) {
+            const entity = this.index.get(
+              record.networkId,
+              this.queries.replicated.entities,
+              this.frameCounter,
+            );
+            // A record for an entity we have not spawned yet is dropped, not
+            // queued: the server replays its cache after the spawns, so the
+            // only way to be early is a frame racing its own spawn.
+            if (!entity) continue;
+            CARDINAL_REGISTRY.get(record.componentId)?.write(entity, record.data);
           }
           break;
         }
