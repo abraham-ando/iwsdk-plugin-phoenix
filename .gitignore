@@ -155,3 +155,6 @@ packages/server/*.ez
 # Elixir: the dependency-free CI run gets its own build root so it cannot
 # poison the one the full suite uses.
 packages/server/_build_core/
+
+# Visual brainstorming companion sessions
+.superpowers/
