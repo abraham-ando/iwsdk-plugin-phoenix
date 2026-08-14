@@ -70,12 +70,13 @@ export class ClockSyncEstimator {
 
   /** The best current estimate, or `null` before any usable sample. */
   estimate(): ClockEstimate | null {
-    if (this.samples.length === 0 || this.currentEpoch === null) return null;
+    if (this.currentEpoch === null) return null;
 
-    let best = this.samples[0];
+    let best: { offsetMs: number; rttMs: number } | null = null;
     for (const candidate of this.samples) {
-      if (candidate.rttMs < best.rttMs) best = candidate;
+      if (best === null || candidate.rttMs < best.rttMs) best = candidate;
     }
+    if (best === null) return null;
 
     return { offsetMs: best.offsetMs, rttMs: best.rttMs, epoch: this.currentEpoch };
   }

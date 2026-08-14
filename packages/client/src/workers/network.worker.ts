@@ -10,6 +10,7 @@
  * Inbound frames prefer the shared ring buffer; `postMessage` with a
  * transferable is the fallback when the page is not cross-origin isolated.
  */
+import { ClockLoop } from '../transport/clock-loop.js';
 import { PhoenixConnection } from '../transport/PhoenixConnection.js';
 import { RingBuffer } from '../transport/RingBuffer.js';
 import type {
@@ -45,6 +46,12 @@ const connection = new PhoenixConnection({
     post({ type: 'PEER_LEAVE', peerId });
   },
   onState(state) {
+    // Clock sync lives and dies with the connection: pinging a socket that is
+    // not up produces nothing, and samples taken across a reconnect would
+    // straddle a server that may have restarted under us.
+    if (state === 'connected') clockLoop.start();
+    else clockLoop.stop();
+
     post({
       type: 'STATE',
       state,
@@ -55,6 +62,14 @@ const connection = new PhoenixConnection({
   onError(message) {
     post({ type: 'ERROR', message });
   },
+});
+
+// Declared after `connection` because it drives it, and started only once the
+// socket reports `connected` — see `onState` above.
+const clockLoop = new ClockLoop({
+  sendPing: (onPong) => connection.sendPing(onPong),
+  onReading: (reading) =>
+    post({ type: 'CLOCK', ...reading, workerTimeOrigin: performance.timeOrigin }),
 });
 
 scope.onmessage = (event: MessageEvent<MainToWorkerMessage>) => {
@@ -80,6 +95,7 @@ scope.onmessage = (event: MessageEvent<MainToWorkerMessage>) => {
       break;
 
     case 'DISCONNECT':
+      clockLoop.stop();
       connection.disconnect();
       inboundRing = null;
       break;

@@ -5,6 +5,7 @@
  * mismatch becomes a compile error rather than a runtime surprise.
  */
 import type { ConnectOptions, ConnectionState } from '../interfaces/INetworkAdapter.js';
+import type { ClockReading } from './clock-loop.js';
 
 /** Render thread -> worker. */
 export type MainToWorkerMessage =
@@ -34,4 +35,14 @@ export type WorkerToMainMessage =
   | { type: 'FRAME'; payload: ArrayBuffer; senderId: string }
   | { type: 'PEER_JOIN'; peerId: string }
   | { type: 'PEER_LEAVE'; peerId: string }
+  | ({
+      type: 'CLOCK';
+      /**
+       * The worker's own `performance.timeOrigin`. A worker's clock starts
+       * when the worker does, not when the page did, so the offset measured
+       * here is wrong by that difference anywhere else — the main thread needs
+       * this value to correct for it.
+       */
+      workerTimeOrigin: number;
+    } & ClockReading)
   | { type: 'ERROR'; message: string };

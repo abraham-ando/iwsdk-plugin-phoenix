@@ -5,7 +5,9 @@
  * anywhere else is the failure this covers: a stamp read after a busy caller
  * finally gets around to it measures that caller, not the network.
  */
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ClockLoop } from '../src/transport/clock-loop.js';
+import type { ClockReading } from '../src/transport/clock-loop.js';
 import { PhoenixConnection } from '../src/transport/PhoenixConnection.js';
 import type {
   ChannelLike,
@@ -131,5 +133,124 @@ describe('sendPing', () => {
     });
 
     expect(pushes.length).toBe(before);
+  });
+});
+
+describe('ClockLoop', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  /** A `sendPing` stub that answers every ping synchronously. */
+  function answering(t1 = 5, t2 = 6, epoch = 42) {
+    let count = 0;
+    const sendPing = (
+      onPong: (frame: ArrayBuffer | null, t0: number, t3: number) => void,
+    ): void => {
+      count += 1;
+      const t0 = count * 1000;
+      onPong(BinaryProtocol.encodePong(t0, t1, t2, epoch), t0, t0 + 40);
+    };
+    return { sendPing, sent: () => count };
+  }
+
+  it('bursts four pings 250 ms apart, then cruises every 2 s', () => {
+    const { sendPing, sent } = answering();
+    const loop = new ClockLoop({ sendPing, onReading: () => {} });
+
+    loop.start();
+    expect(sent()).toBe(1); // the first goes out immediately
+
+    vi.advanceTimersByTime(750);
+    expect(sent()).toBe(4); // burst complete: a usable offset within a second
+
+    vi.advanceTimersByTime(2000);
+    expect(sent()).toBe(5); // cruising
+
+    loop.stop();
+    vi.advanceTimersByTime(10_000);
+    expect(sent()).toBe(5); // stopped means stopped
+  });
+
+  it('publishes a reading with offset, rtt and epoch from a full pong', () => {
+    const readings: ClockReading[] = [];
+    // t0 = 1000, uplink 20 ms, true offset 500.
+    const { sendPing } = answering(500 + 1020, 500 + 1020.1, 7);
+    const loop = new ClockLoop({ sendPing, onReading: (r) => readings.push(r) });
+
+    loop.start();
+    loop.stop();
+
+    expect(readings.length).toBe(1);
+    const reading = readings[0]!;
+    expect(reading.epoch).toBe(7);
+    expect(reading.offsetMs).toBeCloseTo(500, 0);
+    expect(reading.rttMs).toBeGreaterThan(0);
+  });
+
+  it('a 9-byte pong from an old server yields an RTT-only reading', () => {
+    const readings: ClockReading[] = [];
+    const loop = new ClockLoop({
+      sendPing: (onPong) => onPong(BinaryProtocol.encodePing(1000, true), 1000, 1040),
+      onReading: (r) => readings.push(r),
+    });
+
+    loop.start();
+    loop.stop();
+
+    expect(readings).toEqual([{ offsetMs: null, rttMs: 40, epoch: null }]);
+  });
+
+  it('drops a pong whose echoed t0 does not match the ping', () => {
+    const readings: ClockReading[] = [];
+    const loop = new ClockLoop({
+      sendPing: (onPong) => onPong(BinaryProtocol.encodePong(999, 5, 6, 1), 1000, 1040),
+      onReading: (r) => readings.push(r),
+    });
+
+    loop.start();
+    loop.stop();
+
+    expect(readings).toEqual([]);
+  });
+
+  it('drops a null frame', () => {
+    const readings: ClockReading[] = [];
+    const loop = new ClockLoop({
+      sendPing: (onPong) => onPong(null, 1000, 1040),
+      onReading: (r) => readings.push(r),
+    });
+
+    loop.start();
+    loop.stop();
+
+    expect(readings).toEqual([]);
+  });
+
+  it('survives a malformed reply without stopping', () => {
+    const readings: ClockReading[] = [];
+    const garbage = new ArrayBuffer(3);
+    new DataView(garbage).setUint8(0, 200); // unknown opcode
+    const loop = new ClockLoop({
+      sendPing: (onPong) => onPong(garbage, 1000, 1040),
+      onReading: (r) => readings.push(r),
+    });
+
+    expect(() => loop.start()).not.toThrow();
+    loop.stop();
+    expect(readings).toEqual([]);
+  });
+
+  it('start is idempotent: a second call does not double the cadence', () => {
+    const { sendPing, sent } = answering();
+    const loop = new ClockLoop({ sendPing, onReading: () => {} });
+
+    loop.start();
+    loop.start();
+    expect(sent()).toBe(1);
+
+    vi.advanceTimersByTime(250);
+    expect(sent()).toBe(2);
+
+    loop.stop();
   });
 });
