@@ -228,6 +228,26 @@ for (const [timestamp, pong] of [
 }
 comment('');
 
+comment('pong <t0> <t1> <t2> <epoch> <hex>');
+for (const [t0, t1, t2, epoch] of [
+  [0, 0, 0, 0],
+  [1234.5, 10001.25, 10001.5, 1],
+  [98765.4321, 5.5, 6.25, 4294967295],
+  // Past 2^40 ms an f64 still holds these exactly; the point is to catch a
+  // 32-bit truncation anywhere in either encoder.
+  [2 ** 40 + 0.5, 2 ** 41 + 0.25, 2 ** 41 + 0.75, 305419896],
+]) {
+  row(
+    'pong',
+    f(t0),
+    f(t1),
+    f(t2),
+    String(epoch),
+    hex(BinaryProtocol.encodePong(t0, t1, t2, epoch)),
+  );
+}
+comment('');
+
 // ---------------------------------------------------------------------------
 // Movement integration parity
 // ---------------------------------------------------------------------------

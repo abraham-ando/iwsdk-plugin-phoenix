@@ -150,6 +150,17 @@ describe('golden vectors', () => {
     }
   });
 
+  it('extended PONG matches', () => {
+    const cases = of('pong');
+    expect(cases.length).toBeGreaterThan(0);
+
+    for (const [t0, t1, t2, epoch, expected] of cases) {
+      expect(hex(BinaryProtocol.encodePong(num(t0), num(t1), num(t2), num(epoch)))).toBe(
+        expected,
+      );
+    }
+  });
+
   it('SIGNAL matches', () => {
     const cases = of('signal');
     expect(cases.length).toBeGreaterThan(0);

@@ -191,6 +191,21 @@ defmodule IwsdkPhoenix.ParityTest do
         assert byte_size(encoded) == 9
       end
     end
+
+    test "extended PONG matches byte for byte" do
+      for [t0, t1, t2, epoch, hex] <- Fixtures.rows("pong") do
+        encoded =
+          Protocol.encode_pong(
+            Fixtures.to_float(t0),
+            Fixtures.to_float(t1),
+            Fixtures.to_float(t2),
+            String.to_integer(String.trim(epoch))
+          )
+
+        assert Fixtures.to_hex(encoded) == String.trim(hex)
+        assert byte_size(encoded) == 29
+      end
+    end
   end
 
   describe "ownership transfer" do
