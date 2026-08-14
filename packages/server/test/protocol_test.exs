@@ -133,6 +133,22 @@ defmodule IwsdkPhoenix.ProtocolTest do
     end
   end
 
+  describe "extended pong" do
+    test "encode_pong is 29 bytes and round-trips" do
+      frame = Protocol.encode_pong(1234.5, 10_001.25, 10_001.5, 305_419_896)
+      assert byte_size(frame) == 29
+      assert {:ok, :pong, decoded} = Protocol.decode(frame)
+      assert decoded.timestamp == 1234.5
+      assert decoded.t1 == 10_001.25
+      assert decoded.t2 == 10_001.5
+      assert decoded.epoch == 305_419_896
+    end
+
+    test "legacy 9-byte pong still decodes" do
+      assert {:ok, :pong, %{timestamp: 42.0}} = Protocol.decode(Protocol.encode_ping(42.0, true))
+    end
+  end
+
   # Shoemake's uniform random rotation.
   defp random_quaternion do
     u1 = :rand.uniform()

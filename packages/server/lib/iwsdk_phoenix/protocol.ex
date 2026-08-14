@@ -201,6 +201,13 @@ defmodule IwsdkPhoenix.Protocol do
     {:ok, :pong, %{timestamp: timestamp}}
   end
 
+  def decode(
+        <<@op_pong, t0::float-little-size(64), t1::float-little-size(64),
+          t2::float-little-size(64), epoch::unsigned-little-integer-size(32)>>
+      ) do
+    {:ok, :pong, %{timestamp: t0, t1: t1, t2: t2, epoch: epoch}}
+  end
+
   def decode(<<op::unsigned-integer-size(8), _rest::binary>>)
       when op in 1..11 do
     # Known opcode but the body did not match: a length mismatch, not an
@@ -438,5 +445,23 @@ defmodule IwsdkPhoenix.Protocol do
   def encode_ping(timestamp, pong? \\ false) do
     op = if pong?, do: @op_pong, else: @op_ping
     <<op, timestamp::float-little-size(64)>>
+  end
+
+  @doc """
+  Extended `PONG`: NTP's four-timestamp exchange plus this node's boot epoch.
+
+  `t0` is the client's send time echoed back, `t1` and `t2` are the server's
+  receive and send times. `t3` — the client's receive time — is stamped
+  locally by the client and never travels, which is why only three appear
+  here.
+
+  The legacy 9-byte form (`encode_ping(t, true)`) stays valid: the two forms
+  differ in total size, so their decode clauses cannot shadow each other and
+  a client that only understands the short one reads its prefix.
+  """
+  @spec encode_pong(float(), float(), float(), non_neg_integer()) :: binary()
+  def encode_pong(t0, t1, t2, epoch) do
+    <<@op_pong, t0::float-little-size(64), t1::float-little-size(64),
+      t2::float-little-size(64), epoch::unsigned-little-integer-size(32)>>
   end
 end
