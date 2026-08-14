@@ -40,7 +40,8 @@ defmodule IwsdkPhoenix.Persistence do
   """
 
   @type record_id :: term()
-  @type record :: term()
+  # Not `record/0`: that name shadows a built-in type, which Elixir warns about.
+  @type record_value :: term()
 
   @doc """
   Write a batch of records.
@@ -53,14 +54,14 @@ defmodule IwsdkPhoenix.Persistence do
   harmless; losing an inventory change is not, and the caller cannot tell which
   this is — so the writer errs toward retrying.
   """
-  @callback persist([{record_id(), record()}]) :: :ok | {:error, term()}
+  @callback persist([{record_id(), record_value()}]) :: :ok | {:error, term()}
 
   @doc """
   Load previously stored state for a record, if any.
 
   Optional: a store that only accumulates history need not implement it.
   """
-  @callback load(record_id()) :: {:ok, record()} | :error
+  @callback load(record_id()) :: {:ok, record_value()} | :error
 
   @optional_callbacks load: 1
 end
