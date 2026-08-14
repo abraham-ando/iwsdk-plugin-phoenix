@@ -68,6 +68,16 @@ export const INPUT_UPDATE_BYTES = 22;
 /** Byte size of a {@link OpCode.RECONCILE} frame. */
 export const RECONCILE_BYTES = 21;
 
+/**
+ * Byte size of an extended {@link OpCode.PONG} frame.
+ *
+ * `op` + `t0` + `t1` + `t2` (an `f64` each) + a `u32` epoch. The 9-byte form
+ * — opcode plus the echoed timestamp alone — remains valid: that is what a
+ * server predating clock synchronization sends, and the two are told apart by
+ * length rather than by any version number.
+ */
+export const PONG_EXTENDED_BYTES = 29;
+
 /** Byte size of an {@link OpCode.OWNERSHIP_REQUEST} frame. */
 export const OWNERSHIP_REQUEST_BYTES = 9;
 

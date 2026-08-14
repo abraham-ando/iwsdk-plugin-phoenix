@@ -13,6 +13,7 @@ import {
   OWNERSHIP_GRANT_BYTES,
   OWNERSHIP_REQUEST_BYTES,
   OpCode,
+  PONG_EXTENDED_BYTES,
   SIGNAL_HEADER_BYTES,
   SIGNAL_MAX_PAYLOAD_BYTES,
   RECONCILE_BYTES,
@@ -100,6 +101,22 @@ export interface SignalFrame {
   payload: Uint8Array;
 }
 
+/**
+ * Server timestamps carried by an extended {@link OpCode.PONG}.
+ *
+ * Absent when the peer answered with the legacy 9-byte form, which is how a
+ * client tells "this server cannot be clock-synced" from "this reply was
+ * lost" — the first degrades to RTT alone, the second is simply dropped.
+ */
+export interface PongTimes {
+  /** Server receive time, in its own monotonic milliseconds. */
+  t1: number;
+  /** Server send time, same base. */
+  t2: number;
+  /** Server node's boot identifier; a change invalidates every past sample. */
+  epoch: number;
+}
+
 /** Union of everything {@link BinaryProtocol.decode} can return. */
 export type DecodedFrame =
   | { opCode: OpCode.TRANSFORM_UPDATE; transform: TransformRecord }
@@ -108,7 +125,7 @@ export type DecodedFrame =
   | { opCode: OpCode.RECONCILE; reconcile: ReconcileFrame }
   | { opCode: OpCode.SPAWN_ENTITY; spawn: SpawnFrame }
   | { opCode: OpCode.DESPAWN_ENTITY; networkId: number }
-  | { opCode: OpCode.PING | OpCode.PONG; timestamp: number }
+  | { opCode: OpCode.PING | OpCode.PONG; timestamp: number; pong?: PongTimes }
   | { opCode: OpCode.OWNERSHIP_REQUEST; ownershipRequest: OwnershipRequestFrame }
   | { opCode: OpCode.OWNERSHIP_GRANT; ownershipGrant: OwnershipGrantFrame }
   | { opCode: OpCode.SIGNAL; signal: SignalFrame };
@@ -485,6 +502,24 @@ export class BinaryProtocol {
     return buffer;
   }
 
+  /**
+   * Extended PONG — the server's half of a clock-sync exchange.
+   *
+   * Only three timestamps travel: `t3`, the moment the reply lands, is
+   * stamped by whoever receives this frame. Sending it would be meaningless
+   * anyway, since it belongs to the receiver's clock.
+   */
+  static encodePong(t0: number, t1: number, t2: number, epoch: number): ArrayBuffer {
+    const buffer = new ArrayBuffer(PONG_EXTENDED_BYTES);
+    const view = new DataView(buffer);
+    view.setUint8(0, OpCode.PONG);
+    view.setFloat64(1, t0, LITTLE_ENDIAN);
+    view.setFloat64(9, t1, LITTLE_ENDIAN);
+    view.setFloat64(17, t2, LITTLE_ENDIAN);
+    view.setUint32(25, epoch, LITTLE_ENDIAN);
+    return buffer;
+  }
+
   // ---------------------------------------------------------------------------
   // Ownership transfer
   // ---------------------------------------------------------------------------
@@ -726,7 +761,24 @@ export class BinaryProtocol {
       case OpCode.PONG: {
         const view = new DataView(buffer as ArrayBuffer, byteOffset);
         if (view.byteLength < 9) throw new ProtocolError('PING/PONG needs 9 bytes');
-        return { opCode, timestamp: view.getFloat64(1, LITTLE_ENDIAN) };
+        const timestamp = view.getFloat64(1, LITTLE_ENDIAN);
+
+        // Discriminated by length, not by a version number: a server that
+        // predates clock sync answers with 9 bytes and the caller simply sees
+        // no `pong` — RTT still works, the offset just never appears.
+        if (opCode === OpCode.PONG && view.byteLength >= PONG_EXTENDED_BYTES) {
+          return {
+            opCode,
+            timestamp,
+            pong: {
+              t1: view.getFloat64(9, LITTLE_ENDIAN),
+              t2: view.getFloat64(17, LITTLE_ENDIAN),
+              epoch: view.getUint32(25, LITTLE_ENDIAN),
+            },
+          };
+        }
+
+        return { opCode, timestamp };
       }
       default:
         throw new ProtocolError(`Unknown opcode ${opCode}`);

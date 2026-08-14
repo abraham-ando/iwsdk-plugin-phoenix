@@ -7,6 +7,7 @@ import {
 import {
   INPUT_UPDATE_BYTES,
   OpCode,
+  PONG_EXTENDED_BYTES,
   RECONCILE_BYTES,
   SNAPSHOT_HEADER_BYTES,
   SNAPSHOT_RECORD_BYTES,
@@ -342,5 +343,23 @@ describe('generic decode dispatch', () => {
 
   it('throws on an empty frame', () => {
     expect(() => BinaryProtocol.decode(new ArrayBuffer(0))).toThrow(ProtocolError);
+  });
+});
+
+describe('extended pong', () => {
+  it('encodes 29 bytes and round-trips all four fields', () => {
+    const frame = BinaryProtocol.encodePong(1234.5, 10001.25, 10001.5, 0x12345678);
+    expect(frame.byteLength).toBe(PONG_EXTENDED_BYTES);
+    const decoded = BinaryProtocol.decode(frame);
+    if (decoded.opCode !== OpCode.PONG) throw new Error('wrong opcode');
+    expect(decoded.timestamp).toBe(1234.5);
+    expect(decoded.pong).toEqual({ t1: 10001.25, t2: 10001.5, epoch: 0x12345678 });
+  });
+
+  it('decodes a legacy 9-byte pong with no pong extension', () => {
+    const decoded = BinaryProtocol.decode(BinaryProtocol.encodePing(42, true));
+    if (decoded.opCode !== OpCode.PONG) throw new Error('wrong opcode');
+    expect(decoded.timestamp).toBe(42);
+    expect(decoded.pong).toBeUndefined();
   });
 });
