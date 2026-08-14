@@ -100,10 +100,11 @@ export type { MovementStep } from './math/movement.js';
 // Cardinal — generated component runtime
 export {
   CARDINAL_REGISTRY,
-  SCHEMA_HASH,
   registerCardinalComponents,
 } from './cardinal/components.generated.js';
 export type { CardinalComponentSpec } from './cardinal/components.generated.js';
+export { CARDINAL_CODECS, SCHEMA_HASH } from './cardinal/codecs.generated.js';
+export type { CardinalCodec } from './cardinal/codecs.generated.js';
 export { CardinalPublisher } from './cardinal/publish.js';
 export type {
   ComponentRecord,

@@ -9,7 +9,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { CARDINAL_REGISTRY } from '../src/cardinal/components.generated.js';
+import { CARDINAL_CODECS } from '../src/cardinal/codecs.generated.js';
 
 const path = fileURLToPath(
   new URL('../../../fixtures/cardinal_vectors.tsv', import.meta.url),
@@ -29,7 +29,7 @@ export function valuesFor(
   componentId: number,
   flat: string[],
 ): Record<string, unknown> {
-  const spec = CARDINAL_REGISTRY.get(componentId);
+  const spec = CARDINAL_CODECS.get(componentId);
   if (!spec) throw new Error(`no component with id ${componentId}`);
 
   const values: Record<string, unknown> = {};

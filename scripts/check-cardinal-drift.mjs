@@ -16,6 +16,7 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 
 /** Path of each artifact, relative to whichever root the generator writes to. */
 const artifacts = [
+  'packages/client/src/cardinal/codecs.generated.ts',
   'packages/client/src/cardinal/components.generated.ts',
   'packages/server/lib/iwsdk_phoenix/cardinal/components.generated.ex',
   'fixtures/cardinal_vectors.tsv',

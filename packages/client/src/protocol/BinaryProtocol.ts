@@ -7,7 +7,9 @@
  * body. All multi-byte fields are little-endian, matching the native byte order
  * of every platform IWSDK targets.
  */
-import { CARDINAL_REGISTRY } from '../cardinal/components.generated.js';
+// Codecs, not components: this module runs inside the network worker, and
+// the component definitions would drag @iwsdk/core (and Three.js) in with them.
+import { CARDINAL_CODECS } from '../cardinal/codecs.generated.js';
 import {
   COMPONENT_UPDATE_HEADER_BYTES,
   COMPONENT_UPDATE_RECORD_HEADER_BYTES,
@@ -537,7 +539,7 @@ export class BinaryProtocol {
   ): ArrayBuffer {
     let total = COMPONENT_UPDATE_HEADER_BYTES;
     for (const record of records) {
-      const spec = CARDINAL_REGISTRY.get(record.componentId);
+      const spec = CARDINAL_CODECS.get(record.componentId);
       if (!spec) {
         throw new ProtocolError(`unknown component id ${record.componentId}`);
       }
@@ -552,7 +554,7 @@ export class BinaryProtocol {
 
     let offset = COMPONENT_UPDATE_HEADER_BYTES;
     for (const record of records) {
-      const spec = CARDINAL_REGISTRY.get(record.componentId)!;
+      const spec = CARDINAL_CODECS.get(record.componentId)!;
       view.setUint32(offset, record.networkId, LITTLE_ENDIAN);
       view.setUint16(offset + 4, record.componentId, LITTLE_ENDIAN);
       spec.encode(view, offset + COMPONENT_UPDATE_RECORD_HEADER_BYTES, record.data);
@@ -584,7 +586,7 @@ export class BinaryProtocol {
 
       const networkId = view.getUint32(offset, LITTLE_ENDIAN);
       const componentId = view.getUint16(offset + 4, LITTLE_ENDIAN);
-      const spec = CARDINAL_REGISTRY.get(componentId);
+      const spec = CARDINAL_CODECS.get(componentId);
       // Fatal, not skippable: without a length field there is no way to know
       // how far past an unknown record to advance. The join-time schema hash
       // check is what makes this acceptable.

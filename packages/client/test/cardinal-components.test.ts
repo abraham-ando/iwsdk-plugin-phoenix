@@ -11,8 +11,8 @@ import {
   CARDINAL_REGISTRY,
   Grabbable,
   Health,
-  SCHEMA_HASH,
 } from '../src/cardinal/components.generated.js';
+import { SCHEMA_HASH } from '../src/cardinal/codecs.generated.js';
 
 describe('generated client components', () => {
   it('exposes an eight-hex-character schema hash', () => {

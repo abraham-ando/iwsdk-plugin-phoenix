@@ -9,7 +9,7 @@
  */
 import { Presence, Socket } from 'phoenix';
 import type { ConnectOptions, ConnectionState } from '../interfaces/INetworkAdapter.js';
-import { SCHEMA_HASH } from '../cardinal/components.generated.js';
+import { SCHEMA_HASH } from '../cardinal/codecs.generated.js';
 import { BinaryProtocol } from '../protocol/BinaryProtocol.js';
 
 /** Channel event carrying binary frames in both directions. */

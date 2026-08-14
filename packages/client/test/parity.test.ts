@@ -15,10 +15,7 @@ import { describe, expect, it } from 'vitest';
 import { BinaryProtocol } from '../src/protocol/BinaryProtocol.js';
 import { compressQuaternion } from '../src/protocol/quaternion-compression.js';
 import { integrateMovement } from '../src/math/movement.js';
-import {
-  CARDINAL_REGISTRY,
-  SCHEMA_HASH,
-} from '../src/cardinal/components.generated.js';
+import { CARDINAL_CODECS, SCHEMA_HASH } from '../src/cardinal/codecs.generated.js';
 import { cardinalOf, valuesFor } from './cardinal-fixtures.js';
 
 const fixturePath = fileURLToPath(
@@ -213,7 +210,7 @@ describe('golden vectors', () => {
       const expected = row.at(-1)!;
       const values = valuesFor(componentId, row.slice(1, -1));
 
-      const spec = CARDINAL_REGISTRY.get(componentId)!;
+      const spec = CARDINAL_CODECS.get(componentId)!;
       const view = new DataView(new ArrayBuffer(spec.bytes));
       spec.encode(view, 0, values);
       expect(hex(view.buffer)).toBe(expected);

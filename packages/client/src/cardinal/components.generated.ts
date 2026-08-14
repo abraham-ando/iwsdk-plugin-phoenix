@@ -7,37 +7,16 @@
 
 import { Types, createComponent } from '@iwsdk/core';
 import type { AnyComponent, Entity, World } from '@iwsdk/core';
+import { CARDINAL_CODECS, type CardinalCodec } from './codecs.generated.js';
 
-/** Everything the runtime needs to move one component across the wire. */
-export interface CardinalComponentSpec {
-  id: number;
-  name: string;
-  /** Constant — the wire format relies on it to skip records. */
-  bytes: number;
-  /**
-   * Field names and slot counts, in declaration order.
-   *
-   * Exposed because a consumer that only has an id needs the structure to
-   * make sense of a flat value list — the golden-vector reader is exactly
-   * that case.
-   */
-  fields: readonly { name: string; slots: number }[];
+/** A codec plus the ECS binding for the same component. */
+export interface CardinalComponentSpec extends CardinalCodec {
   component: AnyComponent;
-  encode(view: DataView, offset: number, data: Record<string, unknown>): void;
-  decode(view: DataView, offset: number): Record<string, unknown>;
   read(entity: Entity): Record<string, unknown>;
   write(entity: Entity, data: Record<string, unknown>): void;
 }
 
-/** Fingerprint of the schema these definitions came from. */
-export const SCHEMA_HASH = '4aa9aec1';
-
-/** Component 1, 8 bytes. */
-export interface HealthData {
-  current: number;
-  max: number;
-}
-
+/** Component 1. */
 export const Health = createComponent(
   'Health',
   {
@@ -47,24 +26,7 @@ export const Health = createComponent(
   'Cardinal component 1',
 );
 
-function encodeHealth(view: DataView, offset: number, data: Record<string, unknown>): void {
-  view.setFloat32(offset + 0, (data.current as number), true);
-  view.setFloat32(offset + 4, (data.max as number), true);
-}
-
-function decodeHealth(view: DataView, offset: number): Record<string, unknown> {
-  return {
-    current: view.getFloat32(offset + 0, true),
-    max: view.getFloat32(offset + 4, true),
-  };
-}
-
-/** Component 2, 16 bytes. */
-export interface GrabbableData {
-  holderId: number;
-  grabPoint: number[];
-}
-
+/** Component 2. */
 export const Grabbable = createComponent(
   'Grabbable',
   {
@@ -74,31 +36,11 @@ export const Grabbable = createComponent(
   'Cardinal component 2',
 );
 
-function encodeGrabbable(view: DataView, offset: number, data: Record<string, unknown>): void {
-  view.setUint32(offset + 0, (data.holderId as number), true);
-  view.setFloat32(offset + 4, (data.grabPoint as number[])[0] ?? 0, true); view.setFloat32(offset + 4 + 4, (data.grabPoint as number[])[1] ?? 0, true); view.setFloat32(offset + 4 + 8, (data.grabPoint as number[])[2] ?? 0, true);
-}
-
-function decodeGrabbable(view: DataView, offset: number): Record<string, unknown> {
-  return {
-    holderId: view.getUint32(offset + 0, true),
-    grabPoint: [view.getFloat32(offset + 4, true), view.getFloat32(offset + 4 + 4, true), view.getFloat32(offset + 4 + 8, true)],
-  };
-}
-
 /** Every schema component, keyed by its permanent wire id. */
 export const CARDINAL_REGISTRY: ReadonlyMap<number, CardinalComponentSpec> = new Map([
   [1, {
-    id: 1,
-    name: 'Health',
-    bytes: 8,
-    fields: [
-      { name: 'current', slots: 1 },
-      { name: 'max', slots: 1 },
-    ],
+    ...(CARDINAL_CODECS.get(1) as CardinalCodec),
     component: Health as unknown as AnyComponent,
-    encode: encodeHealth,
-    decode: decodeHealth,
     read: (entity: Entity) => ({
       current: entity.getValue(Health, 'current'),
       max: entity.getValue(Health, 'max'),
@@ -109,16 +51,8 @@ export const CARDINAL_REGISTRY: ReadonlyMap<number, CardinalComponentSpec> = new
     },
   }],
   [2, {
-    id: 2,
-    name: 'Grabbable',
-    bytes: 16,
-    fields: [
-      { name: 'holderId', slots: 1 },
-      { name: 'grabPoint', slots: 3 },
-    ],
+    ...(CARDINAL_CODECS.get(2) as CardinalCodec),
     component: Grabbable as unknown as AnyComponent,
-    encode: encodeGrabbable,
-    decode: decodeGrabbable,
     read: (entity: Entity) => ({
       holderId: entity.getValue(Grabbable, 'holderId'),
       grabPoint: Array.from(entity.getVectorView(Grabbable, 'grabPoint')),

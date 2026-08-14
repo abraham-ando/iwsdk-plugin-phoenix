@@ -1,9 +1,9 @@
 /**
  * Cardinal code generation.
  *
- * One schema in, three artifacts out: the client's ECS definitions and
- * codecs, the server's structs and codecs, and the golden vectors that prove
- * the two produce identical bytes. All three are committed, so a diff shows a
+ * One schema in, four artifacts out: the client's pure codecs, its ECS
+ * definitions, the server's structs and codecs, and the golden vectors that
+ * prove the two produce identical bytes. All are committed, so a diff shows a
  * reviewer exactly what changed on the wire — the same philosophy
  * `docs/PROTOCOL.md` already states for the hand-written frames.
  *
@@ -116,15 +116,24 @@ function tsDecodeField(field, offset) {
   ].join('\n');
 }
 
-function clientArtifact() {
+/**
+ * Pure codecs: sizes, field lists, encode/decode. No ECS import.
+ *
+ * Split from the ECS layer because `BinaryProtocol` needs the codecs and runs
+ * inside the network worker — importing the component definitions there would
+ * drag `@iwsdk/core`, and with it Three.js, into the worker bundle.
+ */
+/**
+ * Pure codecs: sizes, field lists, encode/decode. No ECS import.
+ *
+ * Split from the ECS layer because `BinaryProtocol` needs the codecs and runs
+ * inside the network worker — importing the component definitions there would
+ * drag `@iwsdk/core`, and with it Three.js, into the worker bundle.
+ */
+function codecArtifact() {
   const usesQuat = sorted.some((c) => c.fields.some((f) => fieldTypeName(f) === 'quat'));
 
-  const lines = [
-    BANNER('cardinal/components.mjs'),
-    '',
-    "import { Types, createComponent } from '@iwsdk/core';",
-    "import type { AnyComponent, Entity, World } from '@iwsdk/core';",
-  ];
+  const lines = [BANNER('cardinal/components.mjs'), ''];
 
   if (usesQuat) {
     lines.push(
@@ -141,13 +150,13 @@ function clientArtifact() {
       'function slotsToQuat(slots: number[]): { x: number; y: number; z: number; w: number } {',
       '  return { x: slots[0] ?? 0, y: slots[1] ?? 0, z: slots[2] ?? 0, w: slots[3] ?? 1 };',
       '}',
+      '',
     );
   }
 
   lines.push(
-    '',
-    '/** Everything the runtime needs to move one component across the wire. */',
-    'export interface CardinalComponentSpec {',
+    '/** Wire-level description of one component: no ECS, no Three.js. */',
+    'export interface CardinalCodec {',
     '  id: number;',
     '  name: string;',
     '  /** Constant — the wire format relies on it to skip records. */',
@@ -160,14 +169,11 @@ function clientArtifact() {
     '   * that case.',
     '   */',
     '  fields: readonly { name: string; slots: number }[];',
-    '  component: AnyComponent;',
     '  encode(view: DataView, offset: number, data: Record<string, unknown>): void;',
     '  decode(view: DataView, offset: number): Record<string, unknown>;',
-    '  read(entity: Entity): Record<string, unknown>;',
-    '  write(entity: Entity, data: Record<string, unknown>): void;',
     '}',
     '',
-    '/** Fingerprint of the schema these definitions came from. */',
+    '/** Fingerprint of the schema these codecs came from. */',
     `export const SCHEMA_HASH = '${hash}';`,
     '',
   );
@@ -182,17 +188,6 @@ function clientArtifact() {
       ...component.fields.map((f) => `  ${f.name}: ${tsType(f)};`),
       '}',
       '',
-      `export const ${component.name} = createComponent(`,
-      `  '${component.name}',`,
-      '  {',
-      ...component.fields.map(
-        (f) =>
-          `    ${f.name}: { type: Types.${TYPES[fieldTypeName(f)].ts}, default: ${tsDefault(f)} },`,
-      ),
-      '  },',
-      `  'Cardinal component ${component.id}',`,
-      ');',
-      '',
       `function encode${component.name}(view: DataView, offset: number, data: Record<string, unknown>): void {`,
       ...laid.map(({ field, offset: at }) => tsEncodeField(field, at)),
       '}',
@@ -206,10 +201,8 @@ function clientArtifact() {
     );
   }
 
-  lines.push(
-    '/** Every schema component, keyed by its permanent wire id. */',
-    'export const CARDINAL_REGISTRY: ReadonlyMap<number, CardinalComponentSpec> = new Map([',
-  );
+  lines.push('/** Every schema component\'s codec, keyed by its permanent wire id. */',
+    'export const CARDINAL_CODECS: ReadonlyMap<number, CardinalCodec> = new Map([');
 
   for (const component of sorted) {
     lines.push(
@@ -220,9 +213,66 @@ function clientArtifact() {
       '    fields: [',
       ...component.fields.map((f) => `      { name: '${f.name}', slots: ${fieldSlots(f)} },`),
       '    ],',
-      `    component: ${component.name} as unknown as AnyComponent,`,
       `    encode: encode${component.name},`,
       `    decode: decode${component.name},`,
+      '  }],',
+    );
+  }
+
+  lines.push(']);', '');
+
+  return lines.join('\n');
+}
+
+/**
+ * The ECS layer: elics component definitions, and entity read/write built on
+ * the codecs above. Imports `@iwsdk/core`, so nothing in the network worker
+ * may import this file.
+ */
+function componentArtifact() {
+  const lines = [
+    BANNER('cardinal/components.mjs'),
+    '',
+    "import { Types, createComponent } from '@iwsdk/core';",
+    "import type { AnyComponent, Entity, World } from '@iwsdk/core';",
+    "import { CARDINAL_CODECS, type CardinalCodec } from './codecs.generated.js';",
+    '',
+    '/** A codec plus the ECS binding for the same component. */',
+    'export interface CardinalComponentSpec extends CardinalCodec {',
+    '  component: AnyComponent;',
+    '  read(entity: Entity): Record<string, unknown>;',
+    '  write(entity: Entity, data: Record<string, unknown>): void;',
+    '}',
+    '',
+  ];
+
+  for (const component of sorted) {
+    lines.push(
+      `/** Component ${component.id}. */`,
+      `export const ${component.name} = createComponent(`,
+      `  '${component.name}',`,
+      '  {',
+      ...component.fields.map(
+        (f) =>
+          `    ${f.name}: { type: Types.${TYPES[fieldTypeName(f)].ts}, default: ${tsDefault(f)} },`,
+      ),
+      '  },',
+      `  'Cardinal component ${component.id}',`,
+      ');',
+      '',
+    );
+  }
+
+  lines.push(
+    '/** Every schema component, keyed by its permanent wire id. */',
+    'export const CARDINAL_REGISTRY: ReadonlyMap<number, CardinalComponentSpec> = new Map([',
+  );
+
+  for (const component of sorted) {
+    lines.push(
+      `  [${component.id}, {`,
+      `    ...(CARDINAL_CODECS.get(${component.id}) as CardinalCodec),`,
+      `    component: ${component.name} as unknown as AnyComponent,`,
       '    read: (entity: Entity) => ({',
       // Multi-slot fields live in flat typed arrays; elics exposes them only
       // as views. `getValue` on one returns undefined, which would publish
@@ -529,9 +579,12 @@ function flattenValues(component, values) {
 // Write, in order: the code artifacts first, because the vectors import one.
 // ---------------------------------------------------------------------------
 
+const codecPath = join(outRoot, 'packages/client/src/cardinal/codecs.generated.ts');
+mkdirSync(dirname(codecPath), { recursive: true });
+writeFileSync(codecPath, codecArtifact());
+
 const clientPath = join(outRoot, 'packages/client/src/cardinal/components.generated.ts');
-mkdirSync(dirname(clientPath), { recursive: true });
-writeFileSync(clientPath, clientArtifact());
+writeFileSync(clientPath, componentArtifact());
 
 const serverPath = join(
   outRoot,
@@ -545,8 +598,10 @@ writeFileSync(serverPath, serverArtifact());
 // differ the vectors are therefore encoded with the *committed* codec, so a
 // schema change that alters a layout shows up as drift in the vector file too
 // — which is the behaviour the drift check wants.
-const { CARDINAL_REGISTRY } = await import(
-  pathToFileURL(join(root, 'packages/client/src/cardinal/components.generated.ts')).href
+// The codecs, not the components: this file has no ECS import, so it loads in
+// plain Node without pulling @iwsdk/core in.
+const { CARDINAL_CODECS: CARDINAL_REGISTRY } = await import(
+  pathToFileURL(join(root, 'packages/client/src/cardinal/codecs.generated.ts')).href
 );
 
 /**
@@ -651,4 +706,6 @@ const vectorPath = join(outRoot, 'fixtures/cardinal_vectors.tsv');
 mkdirSync(dirname(vectorPath), { recursive: true });
 writeFileSync(vectorPath, vectorLines.join('\n') + '\n');
 
-for (const path of [clientPath, serverPath, vectorPath]) console.log(`Wrote ${path}`);
+for (const path of [codecPath, clientPath, serverPath, vectorPath]) {
+  console.log(`Wrote ${path}`);
+}
