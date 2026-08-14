@@ -168,6 +168,43 @@ re-simulated. Clients may not assert their own transforms at all; a
 rather than ignored, so a misconfigured client is obvious instead of silently
 desynced.
 
+### Sectors — a world that keeps going without you
+
+A room is a sector: `SpatialGrid` divides the space *inside* one, so there is
+no separate layer above it. A sector opted into with `persistent: true` at
+join time keeps its world — time of day, weather — across the departure of
+every player.
+
+It does that by **stopping and fast-forwarding**, not by idling. When the last
+peer leaves, the sector writes a timestamped snapshot to a supervised ETS
+table and stops. The next start loads it, computes how long it slept, and
+advances the world in one step.
+
+The alternative — keep the process alive at a reduced tick — was rejected on
+arithmetic. At the scale this design targets, 30M concurrent in instances of
+80 is roughly 375,000 sectors; a 0.5 Hz idle tick across them is **187,500
+messages per second** for worlds nobody is watching. Fast-forward costs
+nothing.
+
+What that buys is a constraint, and a healthy one: **everything evolving
+without players must be a pure function of elapsed time.** Weather satisfies
+it by seeding its transitions from world time and sector id, so replaying an
+interval reproduces exactly what would have happened rather than inventing
+something new — `advance(state, 60min)` equals twelve `advance(state, 5min)`,
+and a test asserts precisely that. An event can only happen while someone is
+present, so there is never an event that fast-forward fails to reproduce.
+
+Two guards matter. Server time is monotonic, so its origin changes when the
+node restarts; a snapshot from a different `Clock.epoch()` is restored
+**without** advancing rather than leaping by an arbitrary span. And `advance`
+is capped at one day cycle: past it, only the waking time matters, not the
+sleep duration.
+
+The day/night cycle is not in the snapshot at all. It is a pure function of
+world time that both sides compute, so it costs zero bytes and a client
+reconnecting after three days is correct immediately. Weather does travel —
+as a Cardinal component, which is what that layer was built for.
+
 ### Cardinal — one schema, both runtimes
 
 The section below describes parity for one hand-written formula. Cardinal

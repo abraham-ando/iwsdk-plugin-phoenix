@@ -133,7 +133,8 @@ an honest client's prediction matches exactly and no correction is ever visible.
 
 - 33-byte transform frames, batched snapshots, optional 32-bit quaternion compression
 - Dedicated network worker; `SharedArrayBuffer` ring with `postMessage` fallback
-- Interpolation with a render delay, plus capped dead reckoning
+- Interpolation whose buffer is sized from measured arrival jitter, plus
+  capped dead reckoning
 - Client prediction with reconciliation and input replay
 - Distance-based publish-rate throttling
 - Server-arbitrated ownership transfer for picking up shared objects
@@ -150,8 +151,33 @@ an honest client's prediction matches exactly and no correction is ever visible.
   exploit, oversized timesteps and replayed input
 - Two-phase zone handoff that never loses or duplicates a player, with
   collision-free id allocation across zones
+- Persistent sectors: a world that keeps its time of day and weather across
+  the departure of every player, caught up in one step on the next join
 - Coalescing write-behind persistence, independent of Ecto
 - Works without Phoenix for everything except the channel itself
+
+### Persistent sectors
+
+Pass `persistent: true` in the join params and the room keeps its world —
+world time and weather — instead of being reaped with its last peer. It is off
+by default: a lobby or a match is not a world, and should not accumulate state
+nobody asked for.
+
+```ts
+installPhoenixNetworking(world, {
+  endpoint: 'wss://example.com/socket',
+  roomId: 'northmarch',
+  params: { persistent: true },
+});
+```
+
+Weather arrives as a Cardinal component on an entity the sector spawns for
+itself. The day/night cycle does not travel at all — `sunAngle(worldTimeMs)`
+is exported from this package and computed identically on both sides.
+
+World state currently lives **in memory only**: it survives every player
+leaving, but not a node restart. The snapshot is already shaped for
+`IwsdkPhoenix.Persistence`; wiring it is a separate piece of work.
 
 ## Documentation
 
