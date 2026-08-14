@@ -88,11 +88,14 @@ defmodule IwsdkPhoenix.Room.Server do
     tick_hz = Keyword.get(opts, :tick_hz, @default_tick_hz)
     interval = max(1, div(1000, tick_hz))
 
+    persistent = Keyword.get(opts, :persistent, false)
+
     state = %{
-      room: State.new(Keyword.fetch!(opts, :id), opts),
+      room: load_room(Keyword.fetch!(opts, :id), opts, persistent),
       interval: interval,
       broadcast: Keyword.get(opts, :broadcast),
       stop_when_empty: Keyword.get(opts, :stop_when_empty, false),
+      persistent: persistent,
       deadline: System.monotonic_time(:millisecond) + interval
     }
 
@@ -115,6 +118,10 @@ defmodule IwsdkPhoenix.Room.Server do
     # room that has not been joined yet is also empty, and stopping it there
     # would kill it out from under the peer on its way in.
     if state.stop_when_empty and State.player_count(room) == 0 do
+      # Written before stopping rather than in `terminate/2`: a `:stop` return
+      # does run terminate, but a brutal kill does not, and the snapshot is the
+      # only thing that makes a world persistent.
+      save_snapshot(%{state | room: room})
       {:stop, :normal, {:ok, player}, state}
     else
       {:reply, {:ok, player}, state}
@@ -201,6 +208,47 @@ defmodule IwsdkPhoenix.Room.Server do
   end
 
   # -- Internals --------------------------------------------------------------
+
+  # A persistent sector wakes into the world it left, advanced by however long
+  # it slept. Three cases, and the third is the one that matters: a snapshot
+  # from a different node epoch has a `last_seen_ms` in a monotonic base that
+  # no longer exists, so it is restored without advancing rather than jumping
+  # by an arbitrary span.
+  defp load_room(id, opts, false), do: State.new(id, opts)
+
+  defp load_room(id, opts, true) do
+    fresh = State.new(id, opts)
+
+    case IwsdkPhoenix.World.Snapshots.get(id) do
+      nil ->
+        fresh
+
+      %{epoch: epoch} = snapshot ->
+        elapsed =
+          if epoch == IwsdkPhoenix.Clock.epoch() do
+            trunc(IwsdkPhoenix.Clock.now_ms() - snapshot.last_seen_ms)
+          else
+            0
+          end
+
+        State.restore(fresh, snapshot, max(elapsed, 0))
+    end
+  end
+
+  # A persistent sector's state has to outlive its process; `last_seen_ms` and
+  # `epoch` are what let the next start compute how long it slept, and refuse
+  # to guess when the node has restarted underneath it.
+  defp save_snapshot(%{persistent: false}), do: :ok
+
+  defp save_snapshot(%{persistent: true, room: room}) do
+    snapshot =
+      room
+      |> State.snapshot()
+      |> Map.put(:last_seen_ms, IwsdkPhoenix.Clock.now_ms())
+      |> Map.put(:epoch, IwsdkPhoenix.Clock.epoch())
+
+    IwsdkPhoenix.World.Snapshots.put(room.id, snapshot)
+  end
 
   defp schedule(state, delay \\ nil) do
     Process.send_after(self(), :tick, delay || state.interval)
