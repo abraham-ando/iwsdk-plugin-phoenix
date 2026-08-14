@@ -211,6 +211,132 @@ defmodule DemoServerWeb.RoomChannelTest do
       assert t1 <= t2
     end
 
+    test "relays a component update to the other peer" do
+      room = unique_room()
+      {alice, alice_reply} = join_room("alice", room)
+      {_bob, _bob_reply} = join_room("bob", room)
+      drain_frames()
+
+      frame =
+        Protocol.encode_component_update(
+          [
+            %{
+              network_id: alice_reply.network_id,
+              component_id: 1,
+              payload: IwsdkPhoenix.Cardinal.Health.encode(%IwsdkPhoenix.Cardinal.Health{
+                current: 50.0,
+                max: 100.0
+              })
+            }
+          ],
+          0
+        )
+
+      push(alice, "frame", {:binary, frame})
+
+      records =
+        drain_frames()
+        |> of_kind(:component_update)
+        |> Enum.flat_map(& &1.records)
+
+      assert Enum.any?(records, &(&1.network_id == alice_reply.network_id))
+    end
+
+    test "a late joiner receives the cached component state" do
+      # The whole point of the cache: without it bob would only ever see
+      # Health if alice happened to publish again after he arrived.
+      room = unique_room()
+      {alice, alice_reply} = join_room("alice", room)
+
+      push(
+        alice,
+        "frame",
+        {:binary,
+         Protocol.encode_component_update(
+           [
+             %{
+               network_id: alice_reply.network_id,
+               component_id: 1,
+               payload:
+                 IwsdkPhoenix.Cardinal.Health.encode(%IwsdkPhoenix.Cardinal.Health{
+                   current: 50.0,
+                   max: 100.0
+                 })
+             }
+           ],
+           0
+         )}
+      )
+
+      drain_frames()
+      {_bob, _bob_reply} = join_room("bob", room)
+
+      records =
+        drain_frames()
+        |> of_kind(:component_update)
+        |> Enum.flat_map(& &1.records)
+
+      assert Enum.any?(records, &(&1.network_id == alice_reply.network_id))
+    end
+
+    test "an authoritative room rejects a client-published component" do
+      # The mode's premise: the client sends inputs, the server decides what is
+      # true. Rejecting rather than ignoring makes a misconfigured client
+      # obvious — the same choice the transform path already makes.
+      {alice, _reply} =
+        join_room("alice", unique_room(), %{"mode" => "server_authoritative"})
+
+      reference =
+        push(
+          alice,
+          "frame",
+          {:binary,
+           Protocol.encode_component_update(
+             [
+               %{
+                 network_id: 1,
+                 component_id: 1,
+                 payload:
+                   IwsdkPhoenix.Cardinal.Health.encode(%IwsdkPhoenix.Cardinal.Health{
+                     current: 50.0,
+                     max: 100.0
+                   })
+               }
+             ],
+             0
+           )}
+        )
+
+      assert_reply(reference, :error, %{reason: "client_authority_denied"})
+    end
+
+    test "refuses a join whose schema hash does not match" do
+      assert {:error, %{reason: "schema_mismatch"}} =
+               DemoServerWeb.UserSocket
+               |> socket("mallory", %{peer_id: "mallory"})
+               |> subscribe_and_join(
+                 IwsdkPhoenix.RoomChannel,
+                 "room:#{unique_room()}",
+                 %{"mode" => "host_relayed", "schema_hash" => "deadbeef"}
+               )
+    end
+
+    test "accepts a join carrying the matching schema hash" do
+      {_socket, reply} =
+        join_room("alice", unique_room(), %{
+          "schema_hash" => IwsdkPhoenix.Cardinal.Registry.schema_hash()
+        })
+
+      assert reply.peer_id == "alice"
+    end
+
+    test "accepts a join with no schema hash at all" do
+      # An application using no Cardinal components should not have to know
+      # this field exists.
+      {_socket, reply} = join_room("alice", unique_room())
+      assert reply.peer_id == "alice"
+    end
+
     test "a swapped epoch shows up on the very next pong" do
       # The restart-and-handoff scenario, without restarting anything: the
       # epoch is what tells a client its offset estimate has become fiction.

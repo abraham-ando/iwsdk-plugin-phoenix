@@ -146,6 +146,14 @@ if Code.ensure_loaded?(Phoenix.Channel) do
         push(socket, @frame_event, {:binary, Protocol.encode_spawn(entity)})
       end
 
+      # Component state last: the entities have to exist on the client before
+      # values can be applied to them. Without this replay a newcomer would see
+      # only future changes, and every component would sit at its default until
+      # something happened to touch it.
+      for frame <- State.component_frames(state) do
+        push(socket, @frame_event, {:binary, frame})
+      end
+
       {:noreply, socket}
     end
 

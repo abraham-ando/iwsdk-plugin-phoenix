@@ -85,6 +85,9 @@ defmodule IwsdkPhoenix.Room.Handler do
         state = track_positions(state, peer_id, frame)
         {:broadcast, frame, state}
 
+      opcode == Protocol.op_component_update() ->
+        relay_components(state, frame)
+
       true ->
         {:broadcast, frame, state}
     end
@@ -117,6 +120,13 @@ defmodule IwsdkPhoenix.Room.Handler do
       # to prevent. Rejecting rather than ignoring makes a misconfigured client
       # obvious instead of silently desynced.
       opcode in [Protocol.op_transform_update(), Protocol.op_snapshot()] ->
+        {:error, :client_authority_denied, state}
+
+      # Same reasoning as the transform rejection just above. Server-authored
+      # components arrive with the simulation layer; until then this room's
+      # component cache stays empty, which is correct rather than merely
+      # unimplemented.
+      opcode == Protocol.op_component_update() ->
         {:error, :client_authority_denied, state}
 
       true ->
@@ -184,6 +194,24 @@ defmodule IwsdkPhoenix.Room.Handler do
 
   # A pure relay with neither feature enabled keeps the zero-decode fast path:
   # peek one byte, forward the payload untouched.
+  # Relayed: cache the payloads and forward verbatim.
+  #
+  # No ownership check, deliberately — and this is worth stating, because the
+  # instinct is to add one. In this mode transforms are relayed regardless of
+  # ownership too: `track_positions/3` swallows an ownership failure and the
+  # frame is broadcast anyway, because a relayed room trusts its peers by
+  # definition. Enforcing components more strictly than transforms would be an
+  # inconsistency, not a hardening.
+  defp relay_components(state, frame) do
+    case Protocol.decode(frame) do
+      {:ok, :component_update, %{records: records}} ->
+        {:broadcast, frame, State.put_components(state, records, :host_relayed)}
+
+      {:error, reason} ->
+        {:error, reason, state}
+    end
+  end
+
   defp needs_positions?(state) do
     state.interest_radius != nil or map_size(state.entities) > 0
   end
@@ -245,10 +273,40 @@ defmodule IwsdkPhoenix.Room.Handler do
   """
   @spec validate_join(map()) :: {:ok, State.mode()} | {:error, atom()}
   def validate_join(params) when is_map(params) do
+    with {:ok, mode} <- validate_mode(params) do
+      validate_schema_hash(params, mode)
+    end
+  end
+
+  defp validate_mode(params) do
     case Map.get(params, "mode", "host_relayed") do
       "host_relayed" -> {:ok, :host_relayed}
       "server_authoritative" -> {:ok, :server_authoritative}
       _other -> {:error, :unsupported_mode}
+    end
+  end
+
+  # A client whose generated components disagree with the server's cannot be
+  # served: with no length field in a COMPONENT_UPDATE record, a component id
+  # one side does not know makes the whole frame undecodable. Refusing here
+  # turns that into an error message; allowing it would turn it into avatars
+  # quietly holding wrong values.
+  #
+  # The param is optional — an application using no Cardinal components should
+  # not have to know it exists.
+  defp validate_schema_hash(params, mode) do
+    # Compared in the body rather than a guard: a guard cannot call a remote
+    # function, and the hash lives in the generated registry.
+    case Map.get(params, "schema_hash") do
+      nil ->
+        {:ok, mode}
+
+      hash ->
+        if hash == IwsdkPhoenix.Cardinal.Registry.schema_hash() do
+          {:ok, mode}
+        else
+          {:error, :schema_mismatch}
+        end
     end
   end
 end
