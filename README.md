@@ -223,6 +223,24 @@ Regenerate after any protocol change, and treat the diff as the change record:
 pnpm build && node scripts/generate-fixtures.mjs
 ```
 
+### Adding a replicated component
+
+Component data is declared once, in `cardinal/components.mjs`, and generated
+into both runtimes. To add one, append it to that file with a **permanent**
+`id`, then regenerate and commit the result — the diff is the change record:
+
+```bash
+node scripts/generate-cardinal.mjs
+```
+
+That writes the client's ECS definitions and codecs, the server's structs and
+codecs, and the per-component golden vectors. You do not write a parity test:
+the vectors are generated per component and both suites iterate them.
+
+Never edit a `*.generated.*` file by hand. `pnpm test` runs
+`scripts/check-cardinal-drift.mjs`, which regenerates into a scratch tree and
+fails if the committed artifacts and the schema disagree — in either direction.
+
 Golden vectors prove the two sides *encode* identically. They cannot prove the
 two actually interoperate, so `packages/client/test/interop.test.ts` spawns the
 real Elixir server and drives a full session through it — input simulation,

@@ -32,6 +32,7 @@ a real change.
 | 9 | `OWNERSHIP_REQUEST` | client → server | 9 |
 | 10 | `OWNERSHIP_GRANT` | server → all clients | 14 |
 | 11 | `SIGNAL` | client → one peer, relayed | 11 + payload |
+| 12 | `COMPONENT_UPDATE` | both | 7 + Σ(6 + componentBytes) |
 
 ---
 
@@ -336,6 +337,47 @@ A known opcode with a bad body is reported distinctly from an unknown opcode:
 the first means protocol drift, the second means unrelated traffic, and
 conflating them makes version mismatches look like random corruption.
 
+## `COMPONENT_UPDATE` (12) — 7 + Σ(6 + componentBytes)
+
+| Offset | Type | Field |
+|---|---|---|
+| 0 | `u8` | opcode = 12 |
+| 1–2 | `u16` | record count |
+| 3–6 | `u32` | `serverTick` |
+
+Then, `count` times:
+
+| Type | Field |
+|---|---|
+| `u32` | `networkId` |
+| `u16` | `componentId` |
+| `u8[]` | payload — exactly `byteSize(componentId)` bytes |
+
+Component layouts are **generated**, not hand-written: `cardinal/components.mjs`
+is the source of truth, and `scripts/generate-cardinal.mjs` emits the codecs on
+both sides plus the golden vectors in `fixtures/cardinal_vectors.tsv`. Editing
+a generated file, or changing the schema without regenerating, fails
+`scripts/check-cardinal-drift.mjs` in `pnpm test`.
+
+A record carries **no length field**: the payload size is a property of the
+component id. That keeps per-record overhead at 6 bytes, and it means an
+unknown component id makes the rest of the frame unreadable — the reader
+cannot know how far to skip. Schema agreement is therefore checked once, at
+join: the client sends `schema_hash` in its join params and the server refuses
+a mismatch with `schema_mismatch`. The param is optional, so an application
+using no Cardinal components never encounters it.
+
+Frames are always batched. A single record would be about 15 bytes, below the
+BEAM's 64-byte heap-binary threshold, and would be copied to every recipient
+rather than shared by reference.
+
+Authority follows the transform rules exactly, per mode rather than per
+entity: in `host_relayed` a frame is relayed verbatim and its payloads cached
+for late joiners, because a relayed room trusts its peers by definition; in
+`server_authoritative` a client-published frame is refused with
+`client_authority_denied`, because a client asserting state is what that mode
+exists to prevent.
+
 ## Versioning
 
 Any change to a layout, an opcode value or the quantization mapping is a
@@ -347,3 +389,21 @@ treat the diff as the change record:
 ```bash
 pnpm build && node scripts/generate-fixtures.mjs
 ```
+
+Cardinal component layouts have their own generator and their own fixture.
+Never edit a `*.generated.*` file — change `cardinal/components.mjs` and
+regenerate:
+
+```bash
+node scripts/generate-cardinal.mjs
+```
+
+`pnpm test` runs `scripts/check-cardinal-drift.mjs`, which regenerates into a
+scratch tree and fails if the committed artifacts disagree with the schema. It
+catches both halves of the mistake: a hand-edited artifact, and a schema change
+left unregenerated.
+
+A component `id` is a permanent wire identity. Never renumber one, and never
+recycle an id after removing its component — the schema hash would still
+change, so a mismatched peer is refused at join rather than misreading bytes,
+but a recycled id makes every older recording and log meaningless.

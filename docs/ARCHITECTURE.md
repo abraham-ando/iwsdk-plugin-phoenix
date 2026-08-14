@@ -168,6 +168,22 @@ re-simulated. Clients may not assert their own transforms at all; a
 rather than ignored, so a misconfigured client is obvious instead of silently
 desynced.
 
+### Cardinal — one schema, both runtimes
+
+The section below describes parity for one hand-written formula. Cardinal
+generalizes that idea to all replicated component data: `cardinal/components.mjs`
+declares each component once, and `scripts/generate-cardinal.mjs` emits the
+client's ECS definitions, the server's structs, both binary codecs, and the
+golden vectors proving the two produce identical bytes.
+
+The client keeps its `elics` ECS and the server keeps idiomatic Elixir —
+only the *data* is defined once; systems stay hand-written on each side. What
+the generator buys is that parity stops being something a developer must
+remember: adding a component creates its proof, and the drift tripwire in
+`pnpm test` makes an unregenerated schema a failing build.
+
+See `docs/superpowers/specs/2026-08-14-cardinal-runtime-design.md`.
+
 ### Parity through a shared formula, not a shared binary
 
 The original design proposed running the same Havok WASM binary on the server
