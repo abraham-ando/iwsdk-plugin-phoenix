@@ -9,6 +9,7 @@
  */
 import { Presence, Socket } from 'phoenix';
 import type { ConnectOptions, ConnectionState } from '../interfaces/INetworkAdapter.js';
+import { BinaryProtocol } from '../protocol/BinaryProtocol.js';
 
 /** Channel event carrying binary frames in both directions. */
 export const FRAME_EVENT = 'frame';
@@ -175,6 +176,32 @@ export class PhoenixConnection {
   send(buffer: ArrayBuffer): void {
     if (!this.channel || this.currentState !== 'connected') return;
     this.channel.push(FRAME_EVENT, buffer);
+  }
+
+  /**
+   * One clock-synchronization exchange.
+   *
+   * Both local timestamps are taken here, as close to the socket as this code
+   * reaches: a stamp read anywhere further up measures whatever the caller was
+   * busy with, and the estimator has no way to tell that apart from network
+   * delay. The reply arrives as the push's own reply rather than as a
+   * broadcast frame, so it never touches the inbound frame path.
+   *
+   * `frame` is `null` when the server answered with something that is not
+   * binary — the caller drops the sample rather than guessing.
+   */
+  sendPing(
+    onPong: (frame: ArrayBuffer | null, t0: number, t3: number) => void,
+  ): void {
+    if (!this.channel || this.currentState !== 'connected') return;
+
+    const t0 = performance.now();
+    this.channel
+      .push(FRAME_EVENT, BinaryProtocol.encodePing(t0))
+      .receive('ok', (response?: unknown) => {
+        const t3 = performance.now();
+        onPong(response instanceof ArrayBuffer ? response : null, t0, t3);
+      });
   }
 
   /** Leave the channel and close the socket. */
