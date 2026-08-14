@@ -275,6 +275,26 @@ defmodule IwsdkPhoenix.ParityTest do
     end
   end
 
+  describe "day/night" do
+    test "matches the client formula" do
+      rows = Fixtures.rows("daynight")
+      assert rows != []
+
+      for [world_time, cycle, angle, elevation] <- rows do
+        t = String.to_integer(String.trim(world_time))
+        c = String.to_integer(String.trim(cycle))
+
+        assert_in_delta IwsdkPhoenix.World.DayNight.sun_angle(t, c),
+                        Fixtures.to_float(angle),
+                        1.0e-12
+
+        assert_in_delta IwsdkPhoenix.World.DayNight.sun_elevation(t, c),
+                        Fixtures.to_float(elevation),
+                        1.0e-12
+      end
+    end
+  end
+
   describe "cardinal components" do
     alias IwsdkPhoenix.Cardinal.Registry
     alias IwsdkPhoenix.CardinalFixtures

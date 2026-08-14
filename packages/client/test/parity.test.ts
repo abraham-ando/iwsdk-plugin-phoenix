@@ -15,6 +15,7 @@ import { describe, expect, it } from 'vitest';
 import { BinaryProtocol } from '../src/protocol/BinaryProtocol.js';
 import { compressQuaternion } from '../src/protocol/quaternion-compression.js';
 import { integrateMovement } from '../src/math/movement.js';
+import { sunAngle, sunElevation } from '../src/world/day-night.js';
 import { CARDINAL_CODECS, SCHEMA_HASH } from '../src/cardinal/codecs.generated.js';
 import { cardinalOf, valuesFor } from './cardinal-fixtures.js';
 
@@ -196,6 +197,19 @@ describe('golden vectors', () => {
       );
       expect(result.x).toBeCloseTo(num(outX), 12);
       expect(result.z).toBeCloseTo(num(outZ), 12);
+    }
+  });
+
+  it('day/night matches', () => {
+    // A shared formula rather than a frame: the client computes the sun, so
+    // the two implementations have to agree exactly or a headset and its
+    // server disagree about what time of day it is.
+    const cases = of('daynight');
+    expect(cases.length).toBeGreaterThan(0);
+
+    for (const [worldTimeMs, cycleMs, angle, elevation] of cases) {
+      expect(sunAngle(num(worldTimeMs), num(cycleMs))).toBeCloseTo(num(angle), 12);
+      expect(sunElevation(num(worldTimeMs), num(cycleMs))).toBeCloseTo(num(elevation), 12);
     }
   });
 

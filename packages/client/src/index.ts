@@ -99,6 +99,14 @@ export { JitterEstimator } from './math/jitter.js';
 export type { JitterEstimatorOptions } from './math/jitter.js';
 export type { MovementStep } from './math/movement.js';
 
+// World — shared formulas, computed on both sides rather than replicated
+export {
+  DEFAULT_CYCLE_MS,
+  sunAngle,
+  sunElevation,
+  timeOfDay,
+} from './world/day-night.js';
+
 // Cardinal — generated component runtime
 export {
   CARDINAL_REGISTRY,

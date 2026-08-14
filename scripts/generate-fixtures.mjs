@@ -24,6 +24,8 @@ const {
   BinaryProtocol,
   compressQuaternion,
   integrateMovement,
+  sunAngle,
+  sunElevation,
 } = await import(join(root, 'packages/client/dist/index.js'));
 
 const hex = (buffer) => Buffer.from(buffer).toString('hex');
@@ -332,6 +334,29 @@ for (const [target, sender, text] of [
     hex(BinaryProtocol.encodeSignalText(target, text, sender)),
   );
 }
+
+// The day/night cycle is a shared formula, not a frame: the client computes
+// the sun rather than receiving it, so the two implementations have to agree
+// exactly. These pin them together.
+comment('daynight <worldTimeMs> <cycleMs> <angle> <elevation>');
+for (const [worldTimeMs, cycleMs] of [
+  [0, 7200000],
+  [1800000, 7200000],
+  [3600000, 7200000],
+  [5400000, 7200000],
+  [7199999, 7200000],
+  [123456789, 7200000],
+  [1000, 60000],
+]) {
+  row(
+    'daynight',
+    String(worldTimeMs),
+    String(cycleMs),
+    f(sunAngle(worldTimeMs, cycleMs)),
+    f(sunElevation(worldTimeMs, cycleMs)),
+  );
+}
+comment('');
 
 const outputPath = join(root, 'fixtures/protocol_vectors.tsv');
 mkdirSync(dirname(outputPath), { recursive: true });
