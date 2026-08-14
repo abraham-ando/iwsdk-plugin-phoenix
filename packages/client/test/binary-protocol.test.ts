@@ -5,6 +5,7 @@ import {
   type TransformRecord,
 } from '../src/protocol/BinaryProtocol.js';
 import {
+  COMPONENT_UPDATE_HEADER_BYTES,
   INPUT_UPDATE_BYTES,
   OpCode,
   PONG_EXTENDED_BYTES,
@@ -343,6 +344,73 @@ describe('generic decode dispatch', () => {
 
   it('throws on an empty frame', () => {
     expect(() => BinaryProtocol.decode(new ArrayBuffer(0))).toThrow(ProtocolError);
+  });
+});
+
+describe('COMPONENT_UPDATE', () => {
+  const health = { networkId: 7, componentId: 1, data: { current: 12.5, max: 100 } };
+  const grab = {
+    networkId: 9,
+    componentId: 2,
+    data: { holderId: 3, grabPoint: [1, -2, 3.5] },
+  };
+
+  it('round-trips a heterogeneous batch', () => {
+    const frame = BinaryProtocol.encodeComponentUpdate([health, grab], 4242);
+    const decoded = BinaryProtocol.decodeComponentUpdate(frame);
+
+    expect(decoded.serverTick).toBe(4242);
+    expect(decoded.records).toHaveLength(2);
+    expect(decoded.records[0]).toEqual(health);
+    expect(decoded.records[1]!.networkId).toBe(9);
+    expect(decoded.records[1]!.componentId).toBe(2);
+    expect(decoded.records[1]!.data.holderId).toBe(3);
+    expect(decoded.records[1]!.data.grabPoint).toEqual([1, -2, 3.5]);
+  });
+
+  it('sizes the frame from the schema, with no per-record length field', () => {
+    const frame = BinaryProtocol.encodeComponentUpdate([health, grab], 0);
+    // 7 header + (6 + 8) + (6 + 16)
+    expect(frame.byteLength).toBe(7 + 14 + 22);
+  });
+
+  it('carries the opcode', () => {
+    const frame = BinaryProtocol.encodeComponentUpdate([health], 0);
+    expect(new DataView(frame).getUint8(0)).toBe(OpCode.COMPONENT_UPDATE);
+  });
+
+  it('encodes an empty batch as a header alone', () => {
+    const frame = BinaryProtocol.encodeComponentUpdate([], 1);
+    expect(frame.byteLength).toBe(COMPONENT_UPDATE_HEADER_BYTES);
+    expect(BinaryProtocol.decodeComponentUpdate(frame).records).toEqual([]);
+  });
+
+  it('throws on an unknown component id — it cannot skip what it cannot size', () => {
+    // With no length field the reader has no way to advance past an unknown
+    // record. That is the deliberate trade the join-time hash check pays for.
+    const frame = BinaryProtocol.encodeComponentUpdate([health], 0);
+    new DataView(frame).setUint16(7 + 4, 999, true);
+    expect(() => BinaryProtocol.decodeComponentUpdate(frame)).toThrow(ProtocolError);
+  });
+
+  it('throws on a truncated frame rather than reading past the end', () => {
+    const frame = BinaryProtocol.encodeComponentUpdate([health, grab], 0);
+    expect(() => BinaryProtocol.decodeComponentUpdate(frame.slice(0, 20))).toThrow(
+      ProtocolError,
+    );
+  });
+
+  it('refuses to encode an unknown component id', () => {
+    expect(() =>
+      BinaryProtocol.encodeComponentUpdate([{ networkId: 1, componentId: 999, data: {} }], 0),
+    ).toThrow(ProtocolError);
+  });
+
+  it('decodes through the generic decode() entry point', () => {
+    const frame = BinaryProtocol.encodeComponentUpdate([health], 5);
+    const decoded = BinaryProtocol.decode(frame);
+    if (decoded.opCode !== OpCode.COMPONENT_UPDATE) throw new Error('wrong opcode');
+    expect(decoded.componentUpdate.records[0]).toEqual(health);
   });
 });
 

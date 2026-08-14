@@ -7,7 +7,10 @@
  * body. All multi-byte fields are little-endian, matching the native byte order
  * of every platform IWSDK targets.
  */
+import { CARDINAL_REGISTRY } from '../cardinal/components.generated.js';
 import {
+  COMPONENT_UPDATE_HEADER_BYTES,
+  COMPONENT_UPDATE_RECORD_HEADER_BYTES,
   INPUT_UPDATE_BYTES,
   LITTLE_ENDIAN,
   OWNERSHIP_GRANT_BYTES,
@@ -117,6 +120,19 @@ export interface PongTimes {
   epoch: number;
 }
 
+/** One component's value for one entity. */
+export interface ComponentRecord {
+  networkId: number;
+  componentId: number;
+  data: Record<string, unknown>;
+}
+
+/** A batch of component values sharing one server tick. */
+export interface ComponentUpdateFrame {
+  serverTick: number;
+  records: ComponentRecord[];
+}
+
 /** Union of everything {@link BinaryProtocol.decode} can return. */
 export type DecodedFrame =
   | { opCode: OpCode.TRANSFORM_UPDATE; transform: TransformRecord }
@@ -128,7 +144,8 @@ export type DecodedFrame =
   | { opCode: OpCode.PING | OpCode.PONG; timestamp: number; pong?: PongTimes }
   | { opCode: OpCode.OWNERSHIP_REQUEST; ownershipRequest: OwnershipRequestFrame }
   | { opCode: OpCode.OWNERSHIP_GRANT; ownershipGrant: OwnershipGrantFrame }
-  | { opCode: OpCode.SIGNAL; signal: SignalFrame };
+  | { opCode: OpCode.SIGNAL; signal: SignalFrame }
+  | { opCode: OpCode.COMPONENT_UPDATE; componentUpdate: ComponentUpdateFrame };
 
 /** Thrown when a frame cannot be interpreted. */
 export class ProtocolError extends Error {
@@ -502,6 +519,93 @@ export class BinaryProtocol {
     return buffer;
   }
 
+  // ---------------------------------------------------------------------------
+  // Cardinal components
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Batch component values into one frame.
+   *
+   * Always batched, never one frame per component: a lone record would be
+   * ~15 bytes, under the BEAM's 64-byte heap-binary threshold, so the server
+   * would *copy* it to every recipient instead of sharing one reference. A
+   * tick's batch crosses that threshold almost immediately.
+   */
+  static encodeComponentUpdate(
+    records: ComponentRecord[],
+    serverTick = 0,
+  ): ArrayBuffer {
+    let total = COMPONENT_UPDATE_HEADER_BYTES;
+    for (const record of records) {
+      const spec = CARDINAL_REGISTRY.get(record.componentId);
+      if (!spec) {
+        throw new ProtocolError(`unknown component id ${record.componentId}`);
+      }
+      total += COMPONENT_UPDATE_RECORD_HEADER_BYTES + spec.bytes;
+    }
+
+    const buffer = new ArrayBuffer(total);
+    const view = new DataView(buffer);
+    view.setUint8(0, OpCode.COMPONENT_UPDATE);
+    view.setUint16(1, records.length, LITTLE_ENDIAN);
+    view.setUint32(3, serverTick, LITTLE_ENDIAN);
+
+    let offset = COMPONENT_UPDATE_HEADER_BYTES;
+    for (const record of records) {
+      const spec = CARDINAL_REGISTRY.get(record.componentId)!;
+      view.setUint32(offset, record.networkId, LITTLE_ENDIAN);
+      view.setUint16(offset + 4, record.componentId, LITTLE_ENDIAN);
+      spec.encode(view, offset + COMPONENT_UPDATE_RECORD_HEADER_BYTES, record.data);
+      offset += COMPONENT_UPDATE_RECORD_HEADER_BYTES + spec.bytes;
+    }
+
+    return buffer;
+  }
+
+  /** Decode a batch. Throws rather than guessing past an unknown record. */
+  static decodeComponentUpdate(
+    buffer: ArrayBufferLike,
+    byteOffset = 0,
+  ): ComponentUpdateFrame {
+    const view = new DataView(buffer, byteOffset);
+    if (view.byteLength < COMPONENT_UPDATE_HEADER_BYTES) {
+      throw new ProtocolError('COMPONENT_UPDATE header truncated');
+    }
+
+    const count = view.getUint16(1, LITTLE_ENDIAN);
+    const serverTick = view.getUint32(3, LITTLE_ENDIAN);
+    const records: ComponentRecord[] = [];
+
+    let offset = COMPONENT_UPDATE_HEADER_BYTES;
+    for (let i = 0; i < count; i++) {
+      if (offset + COMPONENT_UPDATE_RECORD_HEADER_BYTES > view.byteLength) {
+        throw new ProtocolError('COMPONENT_UPDATE record header truncated');
+      }
+
+      const networkId = view.getUint32(offset, LITTLE_ENDIAN);
+      const componentId = view.getUint16(offset + 4, LITTLE_ENDIAN);
+      const spec = CARDINAL_REGISTRY.get(componentId);
+      // Fatal, not skippable: without a length field there is no way to know
+      // how far past an unknown record to advance. The join-time schema hash
+      // check is what makes this acceptable.
+      if (!spec) {
+        throw new ProtocolError(`unknown component id ${componentId}`);
+      }
+
+      const payloadAt = offset + COMPONENT_UPDATE_RECORD_HEADER_BYTES;
+      if (payloadAt + spec.bytes > view.byteLength) {
+        throw new ProtocolError(
+          `COMPONENT_UPDATE payload truncated for id ${componentId}`,
+        );
+      }
+
+      records.push({ networkId, componentId, data: spec.decode(view, payloadAt) });
+      offset = payloadAt + spec.bytes;
+    }
+
+    return { serverTick, records };
+  }
+
   /**
    * Extended PONG — the server's half of a clock-sync exchange.
    *
@@ -757,6 +861,11 @@ export class BinaryProtocol {
         };
       case OpCode.SIGNAL:
         return { opCode, signal: BinaryProtocol.decodeSignal(buffer, byteOffset) };
+      case OpCode.COMPONENT_UPDATE:
+        return {
+          opCode,
+          componentUpdate: BinaryProtocol.decodeComponentUpdate(buffer, byteOffset),
+        };
       case OpCode.PING:
       case OpCode.PONG: {
         const view = new DataView(buffer as ArrayBuffer, byteOffset);

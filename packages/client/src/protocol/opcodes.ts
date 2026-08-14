@@ -33,6 +33,14 @@ export enum OpCode {
    * needing to understand any of it.
    */
   SIGNAL = 11,
+  /**
+   * Batched Cardinal component payloads.
+   *
+   * @see COMPONENT_UPDATE_HEADER_BYTES
+   * @see {@link file://../cardinal/components.generated.ts} for the layouts,
+   * which are generated from `cardinal/components.mjs`.
+   */
+  COMPONENT_UPDATE = 12,
 }
 
 /**
@@ -67,6 +75,20 @@ export const INPUT_UPDATE_BYTES = 22;
 
 /** Byte size of a {@link OpCode.RECONCILE} frame. */
 export const RECONCILE_BYTES = 21;
+
+/** Byte size of a {@link OpCode.COMPONENT_UPDATE} header: op + count + tick. */
+export const COMPONENT_UPDATE_HEADER_BYTES = 7;
+
+/**
+ * Byte size of one component record's header, before its payload.
+ *
+ * There is no length field: the payload size is a property of the component
+ * id, looked up in the registry. That keeps per-record overhead at 6 bytes —
+ * and it means an unknown id makes the rest of the frame unreadable, since
+ * there is no way to know how far to skip. Schema agreement is checked once,
+ * at join, which is what pays for this.
+ */
+export const COMPONENT_UPDATE_RECORD_HEADER_BYTES = 6;
 
 /**
  * Byte size of an extended {@link OpCode.PONG} frame.
