@@ -27,3 +27,8 @@ export {
   type AffordanceCheck,
 } from './world/affordances';
 export { registerDefaultContent } from './content/objects';
+export {
+  GroundTruthWorld,
+  type NamedPlace,
+  type WorldSnapshot,
+} from './world/GroundTruthWorld';
