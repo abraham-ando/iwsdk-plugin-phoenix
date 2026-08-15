@@ -29,7 +29,7 @@ describe('CloudInferenceAdapter', () => {
       model: 'gpt-4o-mini',
     });
 
-    await expect(adapter.init()).rejects.toThrow('API key is required');
+    await expect(adapter.init()).rejects.toThrow('Authentication required');
   });
 
   it('should format request and send to correct Groq endpoint', async () => {

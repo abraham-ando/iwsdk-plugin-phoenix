@@ -1,6 +1,6 @@
 /**
  * Plugin entrypoint for Cardinal AI.
- * Registers ECS components and systems on an IWSDK World with Tri-Modal LLM Providers.
+ * Registers ECS components and systems on an IWSDK World with Tri-Modal LLM Providers and Group Conversations.
  */
 import type { World } from '@iwsdk/core';
 import { SmartNPC } from './components/SmartNPC';
@@ -21,6 +21,7 @@ import { LipSyncSystem } from './systems/LipSyncSystem';
 import { VoiceInputSystem } from './systems/VoiceInputSystem';
 import { GazeIKSystem } from './gaze/GazeIKSystem';
 import { NPCBanterSystem } from './social/NPCBanterSystem';
+import { GroupConversationSystem } from './social/GroupConversationSystem';
 import { SpatialRAGSystem } from './rag/SpatialRAGSystem';
 import { AcousticOcclusionSystem } from './acoustics/AcousticOcclusionSystem';
 import { DialogueBubbleSystem } from './ui/DialogueBubbleSystem';
@@ -47,6 +48,7 @@ export const AISystemPriority = {
   SPATIAL_RAG: 128,
   INTELLIGENCE: 130,
   BANTER: 132,
+  GROUP_CONVERSATION: 133,
   ACOUSTIC_OCCLUSION: 138,
   SPATIAL_AUDIO: 140,
   LIP_SYNC: 145,
@@ -143,6 +145,10 @@ export function installCardinalAI(
     priority: AISystemPriority.BANTER,
   });
 
+  world.registerSystem(GroupConversationSystem, {
+    priority: AISystemPriority.GROUP_CONVERSATION,
+  });
+
   world.registerSystem(AcousticOcclusionSystem, {
     priority: AISystemPriority.ACOUSTIC_OCCLUSION,
   });
@@ -183,6 +189,7 @@ export function installCardinalAI(
       world.unregisterSystem(LipSyncSystem);
       world.unregisterSystem(CardinalSpatialAudioSystem);
       world.unregisterSystem(AcousticOcclusionSystem);
+      world.unregisterSystem(GroupConversationSystem);
       world.unregisterSystem(NPCBanterSystem);
       world.unregisterSystem(CardinalIntelligenceSystem);
       world.unregisterSystem(SpatialRAGSystem);

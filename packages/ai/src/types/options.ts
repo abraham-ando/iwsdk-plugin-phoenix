@@ -1,6 +1,6 @@
 /**
  * Configuration options for the Cardinal AI Plugin.
- * Supports Tri-Modal inference (Local WebGPU, Cloud API, Self-Hosted Local Server).
+ * Supports Tri-Modal inference (Local WebGPU, Cloud API, Self-Hosted Local Server) and Security Profiles.
  */
 
 export type InferenceProviderType = 'local-webgpu' | 'cloud' | 'self-hosted';
@@ -16,6 +16,8 @@ export interface LLMModelConfig {
   temperature?: number;
   /** Custom URL for remote model weights if hosted on custom CDN */
   modelUrl?: string;
+  /** Expected cryptographic SHA-256 checksum for model weights integrity */
+  checksum?: string;
   /** Local cache storage mechanism for model weights (default: 'opfs') */
   cacheType?: CacheStorageType;
   /** Custom local directory path for desktop / native environments */
@@ -28,9 +30,15 @@ export interface LLMModelConfig {
 
 export interface CloudProviderConfig {
   /** Cloud provider flavor for URL routing */
-  provider?: 'openai' | 'groq' | 'deepseek' | 'openrouter' | 'anthropic-proxy' | 'custom';
-  /** API key for the cloud service */
-  apiKey: string;
+  provider?: 'openai' | 'groq' | 'deepseek' | 'openrouter' | 'anthropic-proxy' | 'proxy' | 'custom';
+  /** API key for the cloud service (optional if using proxyUrl or sessionToken) */
+  apiKey?: string;
+  /** Ephemeral session token / JWT issued by your application backend */
+  sessionToken?: string;
+  /** Backend-For-Frontend (BFF) proxy URL (e.g. '/api/v1/chat') where the server injects the secret key */
+  proxyUrl?: string;
+  /** Dynamic token provider function for automatic session token refreshing */
+  tokenProvider?: () => Promise<{ token: string; expiresInSeconds?: number }>;
   /** Custom base URL (e.g. 'https://api.groq.com/openai/v1' or 'https://openrouter.ai/api/v1') */
   baseURL?: string;
   /** Model name in the cloud catalog (e.g. 'llama-3.1-8b-instant', 'gpt-4o-mini', 'deepseek-chat') */
@@ -50,6 +58,8 @@ export interface SelfHostedProviderConfig {
   endpoint: string;
   /** Model name running on the local server (e.g. 'llama3.2:3b', 'mistral', 'qwen2.5:7b') */
   model: string;
+  /** Optional pre-shared authentication token for secured LAN endpoints */
+  authToken?: string;
   /** Custom HTTP headers */
   headers?: Record<string, string>;
   /** Max output tokens */
@@ -63,6 +73,8 @@ export interface TTSConfig {
   voiceId: string;
   /** Custom URL to the Piper WASM / ONNX model files */
   modelUrl?: string;
+  /** Expected SHA-256 checksum of the voice model */
+  checksum?: string;
   /** Playback speech speed multiplier (default: 1.0) */
   speed?: number;
   /** Speech pitch multiplier (default: 1.0) */

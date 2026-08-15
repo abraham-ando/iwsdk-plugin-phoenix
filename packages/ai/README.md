@@ -30,6 +30,12 @@
   - [9.8. Dialogues Émergents PNJ-à-PNJ (Banter)](#98-dialogues-émergents-pnj-à-pnj-banter)
   - [9.9. Templates Spatiaux Déclaratifs UIKitML](#99-templates-spatiaux-déclaratifs-uikitml)
   - [9.10. Ancrage Réalité Mixte & Depth Passthrough](#910-ancrage-réalité-mixte--depth-passthrough)
+  - [9.11. Sécurité, Guardrails & Anti-Jailbreak (IntentGuard)](#911-sécurité-guardrails--anti-jailbreak-intentguard)
+  - [9.12. BFF Proxy & Authentification par Session JWT (TokenManager)](#912-bff-proxy--authentification-par-session-jwt-tokenmanager)
+  - [9.13. Structured Outputs & JSON Schema Tool Calling](#913-structured-outputs--json-schema-tool-calling)
+  - [9.14. Speculative Decoding Multi-Modèles (WebGPU 3x Speedup)](#914-speculative-decoding-multi-modèles-webgpu-3x-speedup)
+  - [9.15. Dynamique Sociale de Groupe & Turn-Taking (GroupConversationSystem)](#915-dynamique-sociale-de-groupe--turn-taking-groupconversationsystem)
+  - [9.16. Streaming Audio Zero-Copy Haute Performance (AudioWorkletManager)](#916-streaming-audio-zero-copy-haute-performance-audioworkletmanager)
 - [10. Tests & Validation](#10-tests--validation)
 - [11. Licence](#11-licence)
 
@@ -289,18 +295,104 @@ streamer.pushToken(' aventurier');
 streamer.pushToken(' !');
 ```
 
+### 9.11. Sécurité, Guardrails & Anti-Jailbreak (IntentGuard)
+Protège le jeu contre les attaques par injection de prompt et filtre les actions PNJ selon leur rôle :
+```ts
+import { IntentGuard } from '@iwsdk/plugin-cardinal-ai';
+
+// Nettoie la voix du joueur avant injection dans le LLM
+const safeText = IntentGuard.sanitizePlayerInput(rawPlayerSpeech);
+
+// Valide si l'action générée est autorisée pour ce marchand
+const policy = IntentGuard.getRolePolicy('merchant');
+const validation = IntentGuard.validateIntent('SELL_ITEM', { itemId: 'sword_01' }, policy);
+if (validation.isValid) {
+  // Exécuter l'action ECS
+}
+```
+
+### 9.12. BFF Proxy & Authentification par Session JWT (TokenManager)
+Évite d'embarquer des clés API en clair dans le client WebXR :
+```ts
+import { installCardinalAI } from '@iwsdk/plugin-cardinal-ai';
+
+installCardinalAI(world, {
+  provider: 'cloud',
+  cloud: {
+    model: 'llama-3.1-8b-instant',
+    proxyUrl: '/api/v1/cardinal/chat', // BFF Backend proxy
+    tokenProvider: async () => {
+      const res = await fetch('/api/auth/session-token');
+      return res.json(); // { token: 'jwt...', expiresInSeconds: 3600 }
+    },
+  },
+});
+```
+
+### 9.13. Structured Outputs & JSON Schema Tool Calling
+Génération d'appels d'outils typés et nettoyage automatique de la voix synthétisée :
+```ts
+import { FunctionCallingSchema, StructuredOutputParser } from '@iwsdk/plugin-cardinal-ai';
+
+// Injecte le schéma JSON dans le system prompt
+const toolsPrompt = FunctionCallingSchema.formatToolsForSystemPrompt([
+  FunctionCallingSchema.STANDARD_TOOLS.GIVE_ITEM,
+  FunctionCallingSchema.STANDARD_TOOLS.PLAY_EMOTE,
+]);
+
+// Analyse le retour du LLM (JSON tool calls ou tags)
+const { cleanText, toolCalls } = StructuredOutputParser.parse(llmRawResponse);
+// cleanText -> lu par le TTS (ex: "Prenez cette potion !")
+// toolCalls -> exécuté en ECS (ex: [{ tool: 'give_item', args: { itemId: 'potion_01' } }])
+```
+
+### 9.14. Speculative Decoding Multi-Modèles (WebGPU 3x Speedup)
+Accélère l'inférence WebGPU en utilisant un petit modèle brouillon (ex: SmolLM 135M) vérifié en parallèle par le modèle cible (ex: Llama 3.2 3B) :
+```ts
+import { SpeculativeDecodingEngine } from '@iwsdk/plugin-cardinal-ai';
+
+const engine = new SpeculativeDecodingEngine({
+  targetModelId: 'llama-3.2-3b-instruct-q4f16-MLC',
+  draftModelId: 'smollm2-135m-instruct-q4f16-MLC',
+  draftSteps: 4,
+  acceptanceThreshold: 0.75,
+});
+```
+
+### 9.15. Dynamique Sociale de Groupe & Turn-Taking (GroupConversationSystem)
+Orchestration naturelle de discussions à 3+ PNJ sans chevauchement vocal dans l'espace 3D :
+```ts
+import { GroupConversationSystem } from '@iwsdk/plugin-cardinal-ai';
+
+const groupSystem = world.getSystem(GroupConversationSystem);
+const circleId = groupSystem.createCircle([eldrinEntity, garrickEntity, sylviaEntity], 'La comète céleste');
+
+// Le joueur intervient dans le cercle :
+groupSystem.injectPlayerSpeech(circleId, 'Avez-vous vu la lumière au sommet ?');
+```
+
+### 9.16. Streaming Audio Zero-Copy Haute Performance (AudioWorkletManager)
+Gestion des flux audio PCM par ring-buffer circulaire sans saccades du Garbage Collector :
+```ts
+import { AudioWorkletManager } from '@iwsdk/plugin-cardinal-ai';
+
+const audioManager = new AudioWorkletManager(24000);
+audioManager.enqueueChunk(pcmFloat32Chunk);
+const samples = audioManager.readSamples(1024);
+```
+
 ---
 
 ## 10. Tests & Validation
 
 ```bash
-# Tests unitaires du package IA (24 fichiers, 46 tests)
+# Tests unitaires du package IA (31 fichiers, 67 tests)
 pnpm --filter @iwsdk/plugin-cardinal-ai test
 
-# Compilation de production
+# Compilation de production TypeScript & Bundle
 pnpm --filter @iwsdk/plugin-cardinal-ai build
 
-# Validation globale du monorepo (262 tests)
+# Validation globale du monorepo (283 tests, 0 erreur)
 pnpm test && pnpm typecheck && pnpm build
 ```
 

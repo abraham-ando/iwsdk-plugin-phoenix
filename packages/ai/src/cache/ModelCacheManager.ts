@@ -1,4 +1,5 @@
 import type { CacheStorageType } from '../types/options';
+import { ChecksumValidator } from '../security/ChecksumValidator';
 
 export interface StorageEstimateResult {
   usageBytes: number;
@@ -47,13 +48,23 @@ export class ModelCacheManager {
   }
 
   /**
-   * Save a model weight binary shard into OPFS storage for persistent offline use.
+   * Save a model weight binary shard into OPFS storage with optional cryptographic SHA-256 integrity verification.
    */
   public static async saveToOPFS(
     modelId: string,
     filename: string,
-    data: ArrayBuffer
+    data: ArrayBuffer,
+    expectedChecksum?: string
   ): Promise<void> {
+    if (expectedChecksum) {
+      const isValid = await ChecksumValidator.verifySHA256(data, expectedChecksum);
+      if (!isValid) {
+        throw new Error(
+          `[ModelCacheManager] SHA-256 integrity check failed for shard '${filename}' in model '${modelId}'`
+        );
+      }
+    }
+
     if (typeof navigator === 'undefined' || !navigator.storage?.getDirectory) {
       return;
     }
@@ -150,7 +161,7 @@ export class ModelCacheManager {
             }
           }
         } else {
-          cleared = await caches.delete(this.CACHE_NAME) || cleared;
+          cleared = (await caches.delete(this.CACHE_NAME)) || cleared;
         }
       } catch {
         // Handled silently

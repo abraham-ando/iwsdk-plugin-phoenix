@@ -1,12 +1,18 @@
 import type { IInferenceAdapter, InferenceRequest, InferenceResponse } from './types';
 import type { CloudProviderConfig } from '../types/options';
+import { TokenManager } from '../security/TokenManager';
 
 export class CloudInferenceAdapter implements IInferenceAdapter {
   private _isReady = false;
   private baseURL: string;
+  private tokenManager: TokenManager;
 
   constructor(private config: CloudProviderConfig) {
     this.baseURL = this.resolveBaseURL(config);
+    this.tokenManager = new TokenManager({
+      token: config.sessionToken ?? config.apiKey,
+      fetchToken: config.tokenProvider,
+    });
   }
 
   public get isReady(): boolean {
@@ -14,7 +20,12 @@ export class CloudInferenceAdapter implements IInferenceAdapter {
   }
 
   private resolveBaseURL(config: CloudProviderConfig): string {
-    if (config.baseURL) return config.baseURL.replace(/\/$/, '');
+    if (config.proxyUrl) {
+      return config.proxyUrl.replace(/\/$/, '');
+    }
+    if (config.baseURL) {
+      return config.baseURL.replace(/\/$/, '');
+    }
 
     switch (config.provider) {
       case 'groq':
@@ -30,8 +41,8 @@ export class CloudInferenceAdapter implements IInferenceAdapter {
   }
 
   public async init(): Promise<void> {
-    if (!this.config.apiKey) {
-      throw new Error('[CloudInferenceAdapter] API key is required for cloud inference');
+    if (!this.config.apiKey && !this.config.sessionToken && !this.config.proxyUrl && !this.config.tokenProvider) {
+      throw new Error('[CloudInferenceAdapter] Authentication required (apiKey, sessionToken, tokenProvider, or proxyUrl)');
     }
     this._isReady = true;
   }
@@ -42,13 +53,27 @@ export class CloudInferenceAdapter implements IInferenceAdapter {
     }
 
     const startTime = performance.now();
-    const endpoint = `${this.baseURL}/chat/completions`;
+    const endpoint = this.config.proxyUrl
+      ? this.baseURL
+      : `${this.baseURL}/chat/completions`;
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${this.config.apiKey}`,
       ...this.config.headers,
     };
+
+    // If an auth token is available, inject Authorization header
+    try {
+      const token = await this.tokenManager.getValidToken();
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+    } catch {
+      // If using an unauthenticated proxy or custom backend, allow request
+      if (!this.config.proxyUrl) {
+        throw new Error('[CloudInferenceAdapter] Missing authorization token for request');
+      }
+    }
 
     const messages = [
       {
@@ -94,5 +119,6 @@ export class CloudInferenceAdapter implements IInferenceAdapter {
 
   public dispose(): void {
     this._isReady = false;
+    this.tokenManager.clear();
   }
 }
