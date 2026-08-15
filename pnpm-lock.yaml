@@ -18,11 +18,32 @@ importers:
         specifier: ^5.9.2
         version: 5.9.3
 
+  apps/bff-server:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.13.0
+        version: 22.20.1
+      tsup:
+        specifier: ^8.3.6
+        version: 8.5.1(postcss@8.5.26)(tsx@4.23.12)(typescript@5.9.3)
+      tsx:
+        specifier: ^4.19.2
+        version: 4.23.12
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.5
+        version: 3.2.7(@types/node@22.20.1)(tsx@4.23.12)
+
   apps/demo:
     dependencies:
       '@iwsdk/core':
         specifier: 0.5.3
         version: 0.5.3(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))(react@19.2.8)
+      '@iwsdk/plugin-cardinal-ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
       '@iwsdk/plugin-phoenix':
         specifier: workspace:*
         version: link:../../packages/client
@@ -38,7 +59,7 @@ importers:
         version: 0.5.3(zod@4.4.3)
       '@iwsdk/vite-plugin-dev':
         specifier: 0.5.3
-        version: 0.5.3(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))(@pmndrs/uikit@1.0.75(super-three@0.181.0))(@types/node@22.20.1)(react@19.2.8)(use-sync-external-store@1.6.0(react@19.2.8))(vite@7.3.6(@types/node@22.20.1))
+        version: 0.5.3(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))(@pmndrs/uikit@1.0.75(super-three@0.181.0))(@types/node@22.20.1)(react@19.2.8)(use-sync-external-store@1.6.0(react@19.2.8))(vite@7.3.6(@types/node@22.20.1)(tsx@4.23.12))
       '@meta-quest/metavr':
         specifier: ^1.3.2
         version: 1.3.2
@@ -50,7 +71,7 @@ importers:
         version: 5.9.3
       vite:
         specifier: ^7.1.4
-        version: 7.3.6(@types/node@22.20.1)
+        version: 7.3.6(@types/node@22.20.1)(tsx@4.23.12)
 
   packages/ai:
     devDependencies:
@@ -65,13 +86,13 @@ importers:
         version: 3.4.2
       tsup:
         specifier: ^8.5.0
-        version: 8.5.1(postcss@8.5.26)(typescript@5.9.3)
+        version: 8.5.1(postcss@8.5.26)(tsx@4.23.12)(typescript@5.9.3)
       typescript:
         specifier: ^5.9.2
         version: 5.9.3
       vitest:
         specifier: ^3.2.4
-        version: 3.2.7(@types/node@22.20.1)
+        version: 3.2.7(@types/node@22.20.1)(tsx@4.23.12)
 
   packages/client:
     dependencies:
@@ -93,13 +114,28 @@ importers:
         version: 3.4.2
       tsup:
         specifier: ^8.5.0
-        version: 8.5.1(postcss@8.5.26)(typescript@5.9.3)
+        version: 8.5.1(postcss@8.5.26)(tsx@4.23.12)(typescript@5.9.3)
       typescript:
         specifier: ^5.9.2
         version: 5.9.3
       vitest:
         specifier: ^3.2.4
-        version: 3.2.7(@types/node@22.20.1)
+        version: 3.2.7(@types/node@22.20.1)(tsx@4.23.12)
+
+  packages/simulation:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.20.1
+        version: 22.20.1
+      tsup:
+        specifier: ^8.5.0
+        version: 8.5.1(postcss@8.5.26)(tsx@4.23.12)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@22.20.1)(tsx@4.23.12)
 
 packages:
 
@@ -2154,6 +2190,11 @@ packages:
       typescript:
         optional: true
 
+  tsx@4.23.12:
+    resolution: {integrity: sha512-FDf4L4sYzKtzWYhU/Xm0AQFdTjdIxNo9ElTf2mxXM6k8YMHXzYUe4yODVaXP4V9uMFbVg8c0qyBccK2OOxb45Q==}
+    engines: {node: '>=18.0.0'}
+    hasBin: true
+
   type-fest@0.13.1:
     resolution: {integrity: sha512-34R7HTnG0XIJcBSn5XhDd7nNFPRcXYRZrBB2O2jdKqYODldSzBAqzsWoZYYvduky73toYS/ESqxPvkDf/F0XMg==}
     engines: {node: '>=10'}
@@ -2848,7 +2889,7 @@ snapshots:
 
   '@iwsdk/scene-composition@0.5.3': {}
 
-  '@iwsdk/vite-plugin-dev@0.5.3(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))(@pmndrs/uikit@1.0.75(super-three@0.181.0))(@types/node@22.20.1)(react@19.2.8)(use-sync-external-store@1.6.0(react@19.2.8))(vite@7.3.6(@types/node@22.20.1))':
+  '@iwsdk/vite-plugin-dev@0.5.3(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))(@pmndrs/uikit@1.0.75(super-three@0.181.0))(@types/node@22.20.1)(react@19.2.8)(use-sync-external-store@1.6.0(react@19.2.8))(vite@7.3.6(@types/node@22.20.1)(tsx@4.23.12))':
     dependencies:
       '@drawcall/uikitml': 0.1.8(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))(@pmndrs/uikit@1.0.75(super-three@0.181.0))(super-three@0.181.0)
       '@iwer/devui': 2.3.0(iwer@2.3.0)(use-sync-external-store@1.6.0(react@19.2.8))
@@ -2856,7 +2897,7 @@ snapshots:
       '@iwsdk/core': 0.5.3(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))(react@19.2.8)
       '@iwsdk/scene-composition': 0.5.3
       '@preact/signals-core': 1.14.4
-      '@vitejs/plugin-basic-ssl': 2.3.0(vite@7.3.6(@types/node@22.20.1))
+      '@vitejs/plugin-basic-ssl': 2.3.0(vite@7.3.6(@types/node@22.20.1)(tsx@4.23.12))
       iwer: 2.3.0
       lucide: 0.468.0
       open: 10.2.0
@@ -2865,7 +2906,7 @@ snapshots:
       sharp: 0.35.3(@types/node@22.20.1)
       three: super-three@0.181.0
       three-viewport-gizmo: 2.2.0(super-three@0.181.0)
-      vite: 7.3.6(@types/node@22.20.1)
+      vite: 7.3.6(@types/node@22.20.1)(tsx@4.23.12)
       ws: 8.21.3
     transitivePeerDependencies:
       - '@opentelemetry/core'
@@ -3196,9 +3237,9 @@ snapshots:
 
   '@types/webxr@0.5.24': {}
 
-  '@vitejs/plugin-basic-ssl@2.3.0(vite@7.3.6(@types/node@22.20.1))':
+  '@vitejs/plugin-basic-ssl@2.3.0(vite@7.3.6(@types/node@22.20.1)(tsx@4.23.12))':
     dependencies:
-      vite: 7.3.6(@types/node@22.20.1)
+      vite: 7.3.6(@types/node@22.20.1)(tsx@4.23.12)
 
   '@vitest/expect@3.2.7':
     dependencies:
@@ -3208,13 +3249,13 @@ snapshots:
       chai: 5.3.3
       tinyrainbow: 2.0.0
 
-  '@vitest/mocker@3.2.7(vite@7.3.6(@types/node@22.20.1))':
+  '@vitest/mocker@3.2.7(vite@7.3.6(@types/node@22.20.1)(tsx@4.23.12))':
     dependencies:
       '@vitest/spy': 3.2.7
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
-      vite: 7.3.6(@types/node@22.20.1)
+      vite: 7.3.6(@types/node@22.20.1)(tsx@4.23.12)
 
   '@vitest/pretty-format@3.2.7':
     dependencies:
@@ -3858,11 +3899,12 @@ snapshots:
     optionalDependencies:
       fsevents: 2.3.2
 
-  postcss-load-config@6.0.1(postcss@8.5.26):
+  postcss-load-config@6.0.1(postcss@8.5.26)(tsx@4.23.12):
     dependencies:
       lilconfig: 3.1.3
     optionalDependencies:
       postcss: 8.5.26
+      tsx: 4.23.12
 
   postcss@8.5.26:
     dependencies:
@@ -4232,7 +4274,7 @@ snapshots:
   tslib@2.8.1:
     optional: true
 
-  tsup@8.5.1(postcss@8.5.26)(typescript@5.9.3):
+  tsup@8.5.1(postcss@8.5.26)(tsx@4.23.12)(typescript@5.9.3):
     dependencies:
       bundle-require: 5.1.0(esbuild@0.27.7)
       cac: 6.7.14
@@ -4243,7 +4285,7 @@ snapshots:
       fix-dts-default-cjs-exports: 1.0.1
       joycon: 3.1.1
       picocolors: 1.1.1
-      postcss-load-config: 6.0.1(postcss@8.5.26)
+      postcss-load-config: 6.0.1(postcss@8.5.26)(tsx@4.23.12)
       resolve-from: 5.0.0
       rollup: 4.62.4
       source-map: 0.7.6
@@ -4259,6 +4301,12 @@ snapshots:
       - supports-color
       - tsx
       - yaml
+
+  tsx@4.23.12:
+    dependencies:
+      esbuild: 0.28.2
+    optionalDependencies:
+      fsevents: 2.3.3
 
   type-fest@0.13.1: {}
 
@@ -4282,13 +4330,13 @@ snapshots:
 
   vary@1.1.2: {}
 
-  vite-node@3.2.4(@types/node@22.20.1):
+  vite-node@3.2.4(@types/node@22.20.1)(tsx@4.23.12):
     dependencies:
       cac: 6.7.14
       debug: 4.4.3
       es-module-lexer: 1.7.0
       pathe: 2.0.3
-      vite: 7.3.6(@types/node@22.20.1)
+      vite: 7.3.6(@types/node@22.20.1)(tsx@4.23.12)
     transitivePeerDependencies:
       - '@types/node'
       - jiti
@@ -4303,7 +4351,7 @@ snapshots:
       - tsx
       - yaml
 
-  vite@7.3.6(@types/node@22.20.1):
+  vite@7.3.6(@types/node@22.20.1)(tsx@4.23.12):
     dependencies:
       esbuild: 0.28.2
       fdir: 6.5.0(picomatch@4.0.5)
@@ -4314,12 +4362,13 @@ snapshots:
     optionalDependencies:
       '@types/node': 22.20.1
       fsevents: 2.3.3
+      tsx: 4.23.12
 
-  vitest@3.2.7(@types/node@22.20.1):
+  vitest@3.2.7(@types/node@22.20.1)(tsx@4.23.12):
     dependencies:
       '@types/chai': 5.2.3
       '@vitest/expect': 3.2.7
-      '@vitest/mocker': 3.2.7(vite@7.3.6(@types/node@22.20.1))
+      '@vitest/mocker': 3.2.7(vite@7.3.6(@types/node@22.20.1)(tsx@4.23.12))
       '@vitest/pretty-format': 3.2.7
       '@vitest/runner': 3.2.7
       '@vitest/snapshot': 3.2.7
@@ -4337,8 +4386,8 @@ snapshots:
       tinyglobby: 0.2.17
       tinypool: 1.1.1
       tinyrainbow: 2.0.0
-      vite: 7.3.6(@types/node@22.20.1)
-      vite-node: 3.2.4(@types/node@22.20.1)
+      vite: 7.3.6(@types/node@22.20.1)(tsx@4.23.12)
+      vite-node: 3.2.4(@types/node@22.20.1)(tsx@4.23.12)
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 22.20.1
