@@ -10,3 +10,4 @@ export {
   type TickContext,
   type TickHandler,
 } from './kernel/SimKernel';
+export { SpatialGrid } from './world/SpatialGrid';
