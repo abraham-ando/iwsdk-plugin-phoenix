@@ -28,7 +28,7 @@ export class WebGPUInferenceAdapter implements IInferenceAdapter {
         if (this.workerFactory) {
           this.worker = this.workerFactory();
         } else if (typeof Worker !== 'undefined') {
-          this.worker = new Worker(new URL('../workers/gemma.worker.js', import.meta.url), {
+          this.worker = new Worker(new URL('../workers/llm.worker.js', import.meta.url), {
             type: 'module',
           });
         } else {

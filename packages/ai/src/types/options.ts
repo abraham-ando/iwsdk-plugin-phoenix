@@ -1,18 +1,61 @@
 /**
  * Configuration options for the Cardinal AI Plugin.
+ * Supports Tri-Modal inference (Local WebGPU, Cloud API, Self-Hosted Local Server).
  */
 
+export type InferenceProviderType = 'local-webgpu' | 'cloud' | 'self-hosted';
+
+export type CacheStorageType = 'opfs' | 'cache-storage' | 'indexeddb' | 'none';
+
 export interface LLMModelConfig {
-  /** Identifier of the quantized model (e.g. 'gemma-2b-it-q4f16_1-MLC' or 'smollm-1.3b-q4f16') */
+  /** Identifier of the quantized model (e.g. 'llama-3.2-1b-it-q4f16-MLC', 'qwen2.5-1.5b-it-q4f16', 'gemma-2b-it-q4f16_1-MLC') */
   modelId: string;
   /** Max output tokens per inference cycle (default: 128 for VR budget) */
   maxTokens?: number;
   /** Temperature for sampling (default: 0.7) */
   temperature?: number;
-  /** Custom URL for remote model weights if hosted locally / CDN */
+  /** Custom URL for remote model weights if hosted on custom CDN */
   modelUrl?: string;
+  /** Local cache storage mechanism for model weights (default: 'opfs') */
+  cacheType?: CacheStorageType;
+  /** Custom local directory path for desktop / native environments */
+  cacheDirectory?: string;
   /** Enable cooperative GPU time-slicing (default: true) */
   timeSlicing?: boolean;
+  /** Custom app configuration passed to WebLLM engine */
+  appConfig?: Record<string, any>;
+}
+
+export interface CloudProviderConfig {
+  /** Cloud provider flavor for URL routing */
+  provider?: 'openai' | 'groq' | 'deepseek' | 'openrouter' | 'anthropic-proxy' | 'custom';
+  /** API key for the cloud service */
+  apiKey: string;
+  /** Custom base URL (e.g. 'https://api.groq.com/openai/v1' or 'https://openrouter.ai/api/v1') */
+  baseURL?: string;
+  /** Model name in the cloud catalog (e.g. 'llama-3.1-8b-instant', 'gpt-4o-mini', 'deepseek-chat') */
+  model: string;
+  /** Custom HTTP headers to include with requests */
+  headers?: Record<string, string>;
+  /** Max output tokens */
+  maxTokens?: number;
+  /** Temperature */
+  temperature?: number;
+}
+
+export interface SelfHostedProviderConfig {
+  /** Server engine type */
+  serverType?: 'ollama' | 'lmstudio' | 'vllm' | 'localai' | 'openai-compatible';
+  /** Endpoint URL (e.g. 'http://192.168.1.100:11434' for Ollama on LAN, or 'http://localhost:1234' for LM Studio) */
+  endpoint: string;
+  /** Model name running on the local server (e.g. 'llama3.2:3b', 'mistral', 'qwen2.5:7b') */
+  model: string;
+  /** Custom HTTP headers */
+  headers?: Record<string, string>;
+  /** Max output tokens */
+  maxTokens?: number;
+  /** Temperature */
+  temperature?: number;
 }
 
 export interface TTSConfig {
@@ -22,14 +65,22 @@ export interface TTSConfig {
   modelUrl?: string;
   /** Playback speech speed multiplier (default: 1.0) */
   speed?: number;
+  /** Speech pitch multiplier (default: 1.0) */
+  pitch?: number;
 }
 
 export interface CardinalAIOptions {
-  /** Configuration for the local LLM engine */
+  /** Active inference provider mode (default: 'local-webgpu') */
+  provider?: InferenceProviderType;
+  /** Configuration for the local WebGPU LLM engine */
   llm?: LLMModelConfig;
+  /** Configuration for the Cloud LLM provider */
+  cloud?: CloudProviderConfig;
+  /** Configuration for the Self-Hosted local LAN server (Ollama, LM Studio) */
+  selfHosted?: SelfHostedProviderConfig;
   /** Configuration for the local TTS engine */
   tts?: TTSConfig;
-  /** Optional fallback remote endpoint if WebGPU is unsupported */
+  /** Optional fallback remote endpoint if WebGPU fails */
   remoteFallbackUrl?: string;
   /** Callback for model downloading/compiling progress */
   onProgress?: (progress: { stage: 'llm' | 'tts'; text: string; progress: number }) => void;

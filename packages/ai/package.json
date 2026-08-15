@@ -13,8 +13,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./llm-worker": {
+      "import": "./dist/llm.worker.js"
+    },
     "./gemma-worker": {
-      "import": "./dist/gemma.worker.js"
+      "import": "./dist/llm.worker.js"
     },
     "./tts-worker": {
       "import": "./dist/tts.worker.js"

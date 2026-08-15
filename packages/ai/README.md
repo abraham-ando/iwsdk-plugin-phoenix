@@ -5,37 +5,39 @@
 [![Target: Meta Quest](https://img.shields.io/badge/Target-Meta%20Quest%202%2F3%2F3S%2FPro-0066FF.svg)](https://www.meta.com/quest/)
 [![Framework: IWSDK](https://img.shields.io/badge/Framework-IWSDK%20%28%40iwsdk%2Fcore%29-FF4081.svg)](https://github.com/meta-quest)
 
-**Edge AI cognitive engine, local WebGPU SLM inference, procedural gaze IK, 3D spatialized voice (Piper TTS WASM), dynamic LOD 90 FPS, and emergent social interactions for Meta's Immersive Web SDK (`@iwsdk/core`) and the Cardinal architecture.**
+**Edge AI cognitive engine, multi-model WebGPU SLM inference, Tri-Modal LLM providers (Local WebGPU, Cloud, Self-Hosted/Ollama), procedural gaze IK, 3D spatialized voice (Piper TTS WASM), dynamic LOD 90 FPS, persistent OPFS caching, and emergent social interactions for Meta's Immersive Web SDK (`@iwsdk/core`) and the Cardinal architecture.**
 
 ---
 
 ## 📑 Table des Matières
 
 - [1. Vue d'Ensemble & Architecture](#1-vue-densemble--architecture)
-- [2. Matrice des 17 Fonctionnalités Majeures](#2-matrice-des-17-fonctionnalités-majeures)
-- [3. Installation](#3-installation)
-- [4. Démarrage Rapide](#4-démarrage-rapide)
-- [5. Guide Complet des Composants ECS (`elics`)](#5-guide-complet-des-composants-ecs-elics)
-- [6. Guide des Systèmes ECS & Priorités d'Exécution](#6-guide-des-systèmes-ecs--priorités-dexécution)
-- [7. Modules & Fonctionnalités Avancées](#7-modules--fonctionnalités-avancées)
-  - [7.1. Dynamic LOD & Throttling 90 FPS (Meta Quest)](#71-dynamic-lod--throttling-90-fps-meta-quest)
-  - [7.2. Réactivité aux Grabbables & Contrôleurs IWSDK](#72-réactivité-aux-grabbables--contrôleurs-iwsdk)
-  - [7.3. Gaze IK & Saccades Oculaires Procédurales](#73-gaze-ik--saccades-oculaires-procédurales)
-  - [7.4. Streaming de Tokens & Latence Masquée (< 150 ms)](#74-streaming-de-tokens--latence-masquée--150-ms)
-  - [7.5. Base Vectorielle de Lore & RAG Spatial 3D](#75-base-vectorielle-de-lore--rag-spatial-3d)
-  - [7.6. Lip-Sync & Animation Faciale Morph Targets](#76-lip-sync--animation-faciale-morph-targets)
-  - [7.7. Occlusion Acoustique Murale & Cône Vocal Meta](#77-occlusion-acoustique-murale--cône-vocal-meta)
-  - [7.8. Dialogues Émergents PNJ-à-PNJ (Banter)](#78-dialogues-émergents-pnj-à-pnj-banter)
-  - [7.9. Templates Spatiaux Déclaratifs UIKitML](#79-templates-spatiaux-déclaratifs-uikitml)
-  - [7.10. Ancrage Réalité Mixte & Depth Passthrough](#710-ancrage-réalité-mixte--depth-passthrough)
-- [8. Tests & Validation](#8-tests--validation)
-- [9. Licence](#9-licence)
+- [2. Tri-Mode d'Inférence LLM (WebGPU / Cloud / Self-Hosted)](#2-tri-mode-dinférence-llm-webgpu--cloud--self-hosted)
+- [3. Gestion du Cache & Stockage sur Meta Quest (OPFS / Cache API)](#3-gestion-du-cache--stockage-sur-meta-quest-opfs--cache-api)
+- [4. Matrice des Fonctionnalités Majeures](#4-matrice-des-fonctionnalités-majeures)
+- [5. Installation](#5-installation)
+- [6. Démarrage Rapide (3 Exemples)](#6-démarrage-rapide-3-exemples)
+- [7. Guide Complet des Composants ECS (`elics`)](#7-guide-complet-des-composants-ecs-elics)
+- [8. Guide des Systèmes ECS & Priorités d'Exécution](#8-guide-des-systèmes-ecs--priorités-dexécution)
+- [9. Modules & Fonctionnalités Avancées](#9-modules--fonctionnalités-avancées)
+  - [9.1. Dynamic LOD & Throttling 90 FPS (Meta Quest)](#91-dynamic-lod--throttling-90-fps-meta-quest)
+  - [9.2. Réactivité aux Grabbables & Contrôleurs IWSDK](#92-réactivité-aux-grabbables--contrôleurs-iwsdk)
+  - [9.3. Gaze IK & Saccades Oculaires Procédurales](#93-gaze-ik--saccades-oculaires-procédurales)
+  - [9.4. Streaming de Tokens & Latence Masquée (< 150 ms)](#94-streaming-de-tokens--latence-masquée--150-ms)
+  - [9.5. Base Vectorielle de Lore & RAG Spatial 3D](#95-base-vectorielle-de-lore--rag-spatial-3d)
+  - [9.6. Lip-Sync & Animation Faciale Morph Targets](#96-lip-sync--animation-faciale-morph-targets)
+  - [9.7. Occlusion Acoustique Murale & Cône Vocal Meta](#97-occlusion-acoustique-murale--cône-vocal-meta)
+  - [9.8. Dialogues Émergents PNJ-à-PNJ (Banter)](#98-dialogues-émergents-pnj-à-pnj-banter)
+  - [9.9. Templates Spatiaux Déclaratifs UIKitML](#99-templates-spatiaux-déclaratifs-uikitml)
+  - [9.10. Ancrage Réalité Mixte & Depth Passthrough](#910-ancrage-réalité-mixte--depth-passthrough)
+- [10. Tests & Validation](#10-tests--validation)
+- [11. Licence](#11-licence)
 
 ---
 
 ## 1. Vue d'Ensemble & Architecture
 
-`@iwsdk/plugin-cardinal-ai` est conçu spécifiquement pour exécuter une intelligence artificielle complète directement sur le processeur graphique embarqué des casques VR/MR autonomes (**Meta Quest 2, 3, 3S et Pro**) sans impacter la boucle de rendu à 90 FPS.
+`@iwsdk/plugin-cardinal-ai` est conçu spécifiquement pour exécuter ou relier une intelligence artificielle complète en réalité virtuelle/mixte (**Meta Quest 2, 3, 3S et Pro**) sans impacter la boucle de rendu à 90 FPS.
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
@@ -54,10 +56,10 @@
 │     └─► NPCMemory (Ring buffer de mémoire conversationnelle)                           │
 │     │                                                                                  │
 │     ▼                                                                                  │
-│  [ COGNITION & PLANIFICATION 90 FPS ]                                                  │
-│     ├─► CognitiveScheduler (Ordonnancement priorisé regard/distance)                   │
-│     ├─► NPCEmotion (Humeurs modulant prompts & acoustique)                             │
-│     └─► gemma.worker.ts (Inférence WebGPU INT4 optimisée mobile)                       │
+│  [ COGNITION & INFÉRENCE TRI-MODALE ]                                                  │
+│     ├─► Mode 'local-webgpu' : llm.worker.ts (Llama 3.2, Qwen 2.5, Gemma 2, Phi 3.5)   │
+│     ├─► Mode 'cloud'        : CloudInferenceAdapter (Groq, OpenAI, DeepSeek, OpenRouter)│
+│     └─► Mode 'self-hosted'  : SelfHostedInferenceAdapter (Ollama, LM Studio, vLLM LAN) │
 │     │                                                                                  │
 │     ▼                                                                                  │
 │  [ STREAMING & DÉCISION ]                                                              │
@@ -80,31 +82,70 @@
 
 ---
 
-## 2. Matrice des 17 Fonctionnalités Majeures
+## 2. Tri-Mode d'Inférence LLM (WebGPU / Cloud / Self-Hosted)
 
-| N° | Axe / Fonctionnalité | Rôle & Innovation Technique |
-| :--- | :--- | :--- |
-| **1** | **Mémoire Conversationnelle & Humeurs** | Ring buffer glissant multi-tours, 6 états émotionnels (`NEUTRAL`, `JOY`, `ANGER`, `FEAR`, `SADNESS`, `SURPRISE`). |
-| **2** | **Intent Calling Structuré** | Détection d'actions dans le texte (`[ACTION: GIVE_ITEM id=potion_01]`) avec dispatching ECS. |
-| **3** | **Auto-Contexte Cardinal** | Injection en temps réel de la météo (pluie, orage, brume) et du timestamp mondial ($T_{now}$). |
-| **4** | **Scheduler Cognitif 90 FPS** | Ordonnanceur pondéré par produit scalaire de regard (*dot product*) et distance euclidienne. |
-| **5** | **Lip-Sync & Animation Faciale 3D** | Morph targets Three.js (`jawOpen`, visèmes `AA`, `O`, `E`) avec lissage exponentiel. |
-| **6** | **Capture Vocale VR & VAD** | Enregistrement micro casque, détection d'activité vocale et worker STT non bloquant. |
-| **7** | **Gizmos 3D & Télémétrie Live** | Visualisation Three.js des sphères d'audition, de regard et stats de latence/tokens en VR. |
-| **8** | **Regard Procédural & Gaze IK** | Orientation progressive tête/cou vers le joueur et micro-saccades oculaires naturelles. |
-| **9** | **Dialogues Émergents PNJ-à-PNJ (Banter)** | Discussions autonomes spontanées entre plusieurs PNJs proches avec voix et bulles 3D. |
-| **10** | **Streaming Phrase-par-Phrase** | Découpage des tokens par ponctuation pour débuter la diction vocale en temps masqué (< 150 ms). |
-| **11** | **RAG Spatial & Lore Vectoriel Local** | Index vectoriel de similarité cosinus ($k$-NN) partitionné par coordonnées $(x,y,z)$. |
-| **12** | **Occlusion Acoustique 3D** | Filtres passe-bas (cutoff 700 Hz) et atténuation murale par raycasting ou flag d'occlusion. |
-| **13** | **Bulles Spatiales 3D & Karaoké** | Sous-titres 3D flottants au-dessus de l'avatar avec surlignage mot-à-mot calé sur l'audio. |
-| **14** | **Dynamic LOD 90 FPS (Meta Quest)** | Throttling adaptatif (`FULL`, `MEDIUM`, `LOW`, `CULLED`) garantissant 72/90/120 FPS. |
-| **15** | **Réactivité Grabbables & Rayons IWSDK** | Verrouillage du regard sur les objets tenus (`OneHandGrabbable`) ou pointés du laser. |
-| **16** | **Audio HRTF & Cône Vocal Meta Quest** | PannerNode binaural avec cône directif $120^\circ$ (atténuation naturelle de dos). |
-| **17** | **Templates Déclaratifs UIKitML** | Balisage XML haute fidélité conforme à `@iwsdk/ui` (styles fantasy, cyberpunk, minimal). |
+Le moteur supporte **3 modes d'inférence interchangeables** configurables via l'option `provider` :
+
+| Mode | Fournisseur / Backend | Avantages VR / Meta Quest | Cas d'Usage Idéal |
+| :--- | :--- | :--- | :--- |
+| **`local-webgpu`** | `llm.worker.ts` (WebGPU) | 100% hors-ligne, zéro latence réseau, respecte le GPU Quest. | Déploiement autonome autonome sans internet. |
+| **`self-hosted`** | Ollama, LM Studio, vLLM sur LAN Wi-Fi | Zéro token payant, aucun modèle lourd sur le casque, GPU PC puissant (RTX). | Développement local, démos privées, jeux VR locaux. |
+| **`cloud`** | Groq, OpenAI, DeepSeek, OpenRouter | Latence minimale (~100 ms sur Groq), modèles de pointe (70B, GPT-4o-mini). | Expériences connectées avec intelligence maximale. |
 
 ---
 
-## 3. Installation
+## 3. Gestion du Cache & Stockage sur Meta Quest (OPFS / Cache API)
+
+Pour éviter de retélécharger les 700 Mo à 1.5 Go de poids de modèles à chaque ouverture sur Meta Quest Browser :
+
+1. **Origin Private File System (`OPFS`) :** Système de fichiers virtuel sandboxé, rapide et persistant.
+2. **Cache Storage API (`caches.open()`) :** Mise en cache permanente des shards binaires WASM et poids de tenseurs.
+3. **`ModelCacheManager` :** API complète pour vérifier l'état du cache, inspecter le quota restant (`navigator.storage.estimate()`), et vider le cache.
+
+```ts
+import { ModelCacheManager } from '@iwsdk/plugin-cardinal-ai';
+
+// Vérifier si un modèle est déjà téléchargé
+const isReady = await ModelCacheManager.isModelCached('llama-3.2-1b-it-q4f16-MLC', 'opfs');
+
+// Consulter le stockage disponible sur le Meta Quest
+const { usageMb, quotaMb } = await ModelCacheManager.getStorageQuota();
+console.log(`Espace utilisé : ${usageMb} Mo / ${quotaMb} Mo`);
+
+// Vider le cache d'un modèle spécifique
+await ModelCacheManager.clearCache('llama-3.2-1b-it-q4f16-MLC');
+```
+
+---
+
+## 4. Matrice des Fonctionnalités Majeures
+
+| N° | Fonctionnalité | Rôle & Innovation Technique |
+| :--- | :--- | :--- |
+| **1** | **Multi-Modèles WebGPU Agnostique** | Supporte Llama 3.2, Qwen 2.5, Phi-3.5, Gemma 2, SmolLM dans `llm.worker.ts`. |
+| **2** | **Tri-Mode d'Inférence** | Bascule transparente entre `local-webgpu`, `cloud`, et `self-hosted` (Ollama LAN). |
+| **3** | **Persistance OPFS & Cache API** | Caching local persistant des modèles sur Meta Quest Browser. |
+| **4** | **Mémoire Conversationnelle & Humeurs** | Ring buffer multi-tours, 6 émotions (`NEUTRAL`, `JOY`, `ANGER`, `FEAR`, `SADNESS`, `SURPRISE`). |
+| **5** | **Intent Calling Structuré** | Extraction d'actions dans le texte (`[ACTION: GIVE_ITEM id=potion_01]`) avec dispatching ECS. |
+| **6** | **Auto-Contexte Cardinal** | Injection en temps réel de la météo et du timestamp mondial ($T_{now}$). |
+| **7** | **Scheduler Cognitif 90 FPS** | Ordonnanceur pondéré par produit scalaire de regard (*dot product*) et distance. |
+| **8** | **Lip-Sync & Animation Faciale 3D** | Morph targets Three.js (`jawOpen`, visèmes `AA`, `O`, `E`) avec lissage exponentiel. |
+| **9** | **Capture Vocale VR & VAD** | Enregistrement micro casque, détection d'activité vocale et worker STT non bloquant. |
+| **10** | **Gizmos 3D & Télémétrie Live** | Visualisation Three.js des sphères d'audition, de regard et stats de latence/tokens en VR. |
+| **11** | **Regard Procédural & Gaze IK** | Orientation progressive tête/cou vers le joueur et micro-saccades oculaires naturelles. |
+| **12** | **Dialogues Émergents PNJ-à-PNJ (Banter)** | Discussions autonomes spontanées entre plusieurs PNJs proches avec voix et bulles 3D. |
+| **13** | **Streaming Phrase-par-Phrase** | Découpage des tokens par ponctuation pour débuter la diction vocale en temps masqué (< 150 ms). |
+| **14** | **RAG Spatial & Lore Vectoriel Local** | Index vectoriel de similarité cosinus ($k$-NN) partitionné par coordonnées $(x,y,z)$. |
+| **15** | **Occlusion Acoustique 3D** | Filtres passe-bas (cutoff 700 Hz) et atténuation murale par raycasting ou flag d'occlusion. |
+| **16** | **Bulles Spatiales 3D & Karaoké** | Sous-titres 3D flottants au-dessus de l'avatar avec surlignage mot-à-mot calé sur l'audio. |
+| **17** | **Dynamic LOD 90 FPS (Meta Quest)** | Throttling adaptatif (`FULL`, `MEDIUM`, `LOW`, `CULLED`) garantissant 72/90/120 FPS. |
+| **18** | **Réactivité Grabbables & Rayons IWSDK** | Verrouillage du regard sur les objets tenus (`OneHandGrabbable`) ou pointés du laser. |
+| **19** | **Audio HRTF & Cône Vocal Meta Quest** | PannerNode binaural avec cône directif $120^\circ$ (atténuation naturelle de dos). |
+| **20** | **Templates Déclaratifs UIKitML** | Balisage XML haute fidélité conforme à `@iwsdk/ui` (styles fantasy, cyberpunk, minimal). |
+
+---
+
+## 5. Installation
 
 ```bash
 pnpm add @iwsdk/plugin-cardinal-ai
@@ -112,66 +153,70 @@ pnpm add @iwsdk/plugin-cardinal-ai
 
 ---
 
-## 4. Démarrage Rapide
+## 6. Démarrage Rapide (3 Exemples)
+
+### Exemple 1 : Local WebGPU (100% Hors-Ligne sur Meta Quest)
 
 ```ts
 import { World } from '@iwsdk/core';
-import {
-  installCardinalAI,
-  SmartNPC,
-  SpatialVoice,
-  NPCMemory,
-  NPCEmotion,
-  FacialLipSync,
-  NPCGazeTracker,
-  AILOD,
-  CardinalIntelligenceSystem,
-  CardinalSpatialAudioSystem,
-} from '@iwsdk/plugin-cardinal-ai';
+import { installCardinalAI } from '@iwsdk/plugin-cardinal-ai';
 
-// 1. Initialiser le World ECS IWSDK
 const world = new World();
 
-// 2. Installer le plugin Cardinal AI
 const ai = installCardinalAI(world, {
+  provider: 'local-webgpu',
   llm: {
-    modelId: 'gemma-2b-it-q4f16_1-MLC',
+    modelId: 'llama-3.2-1b-it-q4f16-MLC', // ou 'qwen2.5-1.5b-it-q4f16', 'gemma-2b-it-q4f16_1-MLC'
+    cacheType: 'opfs',
     temperature: 0.7,
     maxTokens: 128,
   },
   tts: {
     voiceId: 'fr_FR-siwis-medium',
-    pitch: 1.0,
   },
   onProgress: (progress) => {
-    console.log(`[AI Loading] ${progress.text} (${Math.round(progress.progress * 100)}%)`);
+    console.log(`[AI Progress] ${progress.text} (${Math.round(progress.progress * 100)}%)`);
   },
 });
 
 await ai.ready;
+```
 
-// 3. Créer une entité PNJ complète
-const npc = world.createEntity();
-npc.addComponent(SmartNPC, { personalityId: 1, interactionRadius: 3.5 });
-npc.addComponent(SpatialVoice, { refDistance: 2.0, maxDistance: 25.0 });
-npc.addComponent(NPCMemory, { capacity: 8 });
-npc.addComponent(NPCEmotion, { currentEmotion: 1, intensity: 0.8 }); // 1 = JOY
-npc.addComponent(FacialLipSync, { smoothing: 0.35, intensityMultiplier: 1.2 });
-npc.addComponent(NPCGazeTracker, { maxHeadTurnAngleRad: 1.2 });
-npc.addComponent(AILOD, {});
+### Exemple 2 : Self-Hosted (Ollama / LM Studio sur PC en Wi-Fi)
 
-// 4. Interagir avec le PNJ
-const intelligence = world.getSystem(CardinalIntelligenceSystem);
-const response = await intelligence.queryNPC(npc, 'Bonjour gardien, où mène cette porte ?');
+```ts
+const ai = installCardinalAI(world, {
+  provider: 'self-hosted',
+  selfHosted: {
+    endpoint: 'http://192.168.1.50:11434', // IP locale du PC avec Ollama
+    model: 'llama3.2:3b',
+    serverType: 'ollama',
+  },
+  tts: { voiceId: 'fr_FR-siwis-medium' },
+});
 
-// 5. Synthétiser la voix 3D avec Lip-Sync automatique
-const audio = world.getSystem(CardinalSpatialAudioSystem);
-await audio.speak(npc, response);
+await ai.ready;
+```
+
+### Exemple 3 : Cloud Provider (Groq / OpenAI / DeepSeek)
+
+```ts
+const ai = installCardinalAI(world, {
+  provider: 'cloud',
+  cloud: {
+    provider: 'groq',
+    apiKey: process.env.GROQ_API_KEY!,
+    model: 'llama-3.1-8b-instant', // Latence ultra-faible ~100ms
+  },
+  tts: { voiceId: 'fr_FR-siwis-medium' },
+});
+
+await ai.ready;
 ```
 
 ---
 
-## 5. Guide Complet des Composants ECS (`elics`)
+## 7. Guide Complet des Composants ECS (`elics`)
 
 | Composant | Champs Clés | Description |
 | :--- | :--- | :--- |
@@ -189,9 +234,7 @@ await audio.speak(npc, response);
 
 ---
 
-## 6. Guide des Systèmes ECS & Priorités d'Exécution
-
-Tous les systèmes sont ordonnancés après les calculs physiques et de rendu WebXR :
+## 8. Guide des Systèmes ECS & Priorités d'Exécution
 
 ```ts
 export const AISystemPriority = {
@@ -200,7 +243,7 @@ export const AISystemPriority = {
   GAZE_IK: 120,             // Oriente le regard et la tête vers la cible
   VOICE_INPUT: 125,         // Analyse l'activité vocale du micro
   SPATIAL_RAG: 128,         // Injecte le lore local dans le prompt
-  INTELLIGENCE: 130,        // Exécute l'inférence LLM WebGPU
+  INTELLIGENCE: 130,        // Exécute l'inférence LLM (Local/Cloud/LAN)
   BANTER: 132,              // Gère les discussions autonomes PNJ-PNJ
   ACOUSTIC_OCCLUSION: 138,  // Calcule les filtres passe-bas muraux
   SPATIAL_AUDIO: 140,       // Joue la voix 3D avec Panner HRTF
@@ -211,160 +254,58 @@ export const AISystemPriority = {
 
 ---
 
-## 7. Modules & Fonctionnalités Avancées
+## 9. Modules & Fonctionnalités Avancées
 
-### 7.1. Dynamic LOD & Throttling 90 FPS (Meta Quest)
-Garantit une cadence d'images ininterrompue en adaptant le taux de rafraîchissement selon la distance :
+### 9.1. Dynamic LOD & Throttling 90 FPS (Meta Quest)
 - **`< 3.0 m` (FULL) :** Calcul à 90 Hz complet (Lip-sync et regard ultra-précis).
 - **`3.0 à 8.0 m` (MEDIUM) :** Throttling à 30 Hz ($33.3\text{ ms}$).
 - **`8.0 à 16.0 m` (LOW) :** Throttling à 10 Hz ($100\text{ ms}$).
 - **`> 16.0 m` (CULLED) :** Suspension complète des calculs faciaux et IK.
 
-```ts
-const lodSystem = world.getSystem(AILODSystem);
-lodSystem.setPlayerPosition([playerX, playerY, playerZ]);
-```
-
-### 7.2. Réactivité aux Grabbables & Contrôleurs IWSDK
-Permet aux PNJ de remarquer un objet tenu en main ou pointé par le joueur :
-
+### 9.2. Réactivité aux Grabbables & Contrôleurs IWSDK
 ```ts
 const reactionSystem = world.getSystem(GrabbableReactionSystem);
-
-// Écouter lorsqu'un objet est présenté à un PNJ
 reactionSystem.onItemOffered(({ npc, itemEntity, itemName }) => {
   console.log(`Le joueur tend ${itemName} au PNJ #${npc.index}`);
 });
-
-// Déclencher la perception lors d'une saisie avec OneHandGrabbable
-reactionSystem.presentItemToNPC(npcEntity, potionEntity, 'Potion de Soin');
 ```
 
-### 7.3. Gaze IK & Saccades Oculaires Procédurales
-Oriente dynamiquement la tête et les yeux vers le joueur avec micro-mouvements oculaires naturels :
-
+### 9.3. Gaze IK & Saccades Oculaires Procédurales
 ```ts
 const gazeSystem = world.getSystem(GazeIKSystem);
 gazeSystem.setPlayerHeadPosition([camera.position.x, camera.position.y, camera.position.z]);
-
-// Récupérer les angles de lacet (yaw) et de tangage (pitch) calculés
 const { yaw, pitch } = gazeSystem.getHeadEuler(npcEntity);
 ```
 
-### 7.4. Streaming de Tokens & Latence Masquée (< 150 ms)
-Le `SentenceStreamer` découpe le flux de tokens émis par le LLM dès qu'une ponctuation finale (`.`, `!`, `?`, `:`) est rencontrée, démarrant la synthèse vocale Piper en parallèle pendant la suite de la génération :
-
+### 9.4. Streaming de Tokens & Latence Masquée (< 150 ms)
 ```ts
 import { SentenceStreamer } from '@iwsdk/plugin-cardinal-ai';
 
 const streamer = new SentenceStreamer((sentence) => {
-  // Synthétisé immédiatement avant même la fin du texte complet !
   audioSystem.speak(npcEntity, sentence);
 });
-
 streamer.pushToken('Bienvenue');
 streamer.pushToken(' aventurier');
-streamer.pushToken(' !'); // Déclenche 'Bienvenue aventurier !'
-```
-
-### 7.5. Base Vectorielle de Lore & RAG Spatial 3D
-Injecte des connaissances de quêtes contextuelles basées sur les coordonnées géographiques $(x,y,z)$ :
-
-```ts
-import { SpatialVectorStore } from '@iwsdk/plugin-cardinal-ai';
-
-const vectorStore = new SpatialVectorStore();
-vectorStore.addDocument({
-  id: 'lore_forge_01',
-  text: "La forge d'Ignis requiert un cristal de lave pour forger l'armure d'or.",
-  position: [12.5, 0.0, -45.0],
-  radius: 20.0,
-  embedding: [0.12, 0.85, 0.44, /* ... */],
-});
-
-// Requête de similarité cosinus avec filtrage de rayon spatial
-const relevantLore = vectorStore.search('Comment forger une armure ?', {
-  userPosition: [13.0, 0.0, -44.0],
-  maxResults: 2,
-});
-```
-
-### 7.6. Lip-Sync & Animation Faciale Morph Targets
-Applique les amplitudes vocales directement sur le mesh Three.js du PNJ :
-
-```ts
-import { LipSyncSystem } from '@iwsdk/plugin-cardinal-ai';
-
-const lipSync = world.getSystem(LipSyncSystem);
-lipSync.applyMorphTargetsToMesh(npcMesh, npcEntity);
-```
-
-### 7.7. Occlusion Acoustique Murale & Cône Vocal Meta
-Atténue le son et applique un filtre passe-bas ($700\text{ Hz}$) si un mur obstrue la ligne de vue :
-
-```ts
-const occlusionSystem = world.getSystem(AcousticOcclusionSystem);
-occlusionSystem.setOccluded(npcEntity, true); // Filtre passe-bas actif
-```
-
-### 7.8. Dialogues Émergents PNJ-à-PNJ (Banter)
-Déclenche des discussions autonomes lorsque deux PNJ sont proches :
-
-```ts
-const banterSystem = world.getSystem(NPCBanterSystem);
-banterSystem.triggerBanter(guardNPC, merchantNPC, 'Rumeurs sur la porte nord');
-```
-
-### 7.9. Templates Spatiaux Déclaratifs UIKitML
-Génération de balisage XML spatial conforme à `@iwsdk/ui` :
-
-```ts
-import { UIKitMLTemplateBuilder } from '@iwsdk/plugin-cardinal-ai';
-
-const xmlMarkup = UIKitMLTemplateBuilder.buildSpeechBubble({
-  npcName: 'Aldric le Forgeron',
-  theme: 'fantasy', // 'fantasy' | 'cyberpunk' | 'minimal'
-  speechText: 'Approche, que puis-je forger pour toi ?',
-  karaokeWordIndex: 2,
-  emotionTag: 'JOY',
-});
-```
-
-### 7.10. Ancrage Réalité Mixte & Depth Passthrough
-Configuration des matériaux Three.js pour occlusion par la géométrie réelle de la pièce :
-
-```ts
-import { MRDepthOcclusionHelper } from '@iwsdk/plugin-cardinal-ai';
-
-MRDepthOcclusionHelper.applyMROcclusion(npcObject3D, {
-  depthTest: true,
-  depthWrite: true,
-  renderOrderOffset: 1,
-});
+streamer.pushToken(' !');
 ```
 
 ---
 
-## 8. Tests & Validation
-
-L'ensemble de la suite de tests est exécutable via Vitest :
+## 10. Tests & Validation
 
 ```bash
-# Lancer les tests unitaires du package IA (21 fichiers, 33 tests)
+# Tests unitaires du package IA (24 fichiers, 46 tests)
 pnpm --filter @iwsdk/plugin-cardinal-ai test
-
-# Vérification TypeScript stricte
-pnpm --filter @iwsdk/plugin-cardinal-ai typecheck
 
 # Compilation de production
 pnpm --filter @iwsdk/plugin-cardinal-ai build
 
-# Validation globale du monorepo (249 tests)
+# Validation globale du monorepo (262 tests)
 pnpm test && pnpm typecheck && pnpm build
 ```
 
 ---
 
-## 9. Licence
+## 11. Licence
 
 MIT © IWSDK & Phoenix Monorepo Contributors.

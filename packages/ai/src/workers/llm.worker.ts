@@ -1,6 +1,7 @@
 /**
- * WebGPU Compute Web Worker for Gemma / Small Language Model Inference.
- * Runs asynchronously off the main render thread to protect the 90 FPS VR budget.
+ * WebGPU Compute Web Worker for Universal Small & Large Language Model Inference.
+ * Runs asynchronously off the main render thread to protect the 90 FPS WebXR VR budget.
+ * Supports Gemma, Llama 3.2, Qwen 2.5, Phi-3.5, Mistral, SmolLM, etc.
  */
 
 export {};
@@ -18,6 +19,7 @@ interface WebLLMEngine {
 }
 
 let engine: WebLLMEngine | null = null;
+let currentModelId: string | null = null;
 let isInitializing = false;
 
 self.onmessage = async (event: MessageEvent) => {
@@ -25,23 +27,27 @@ self.onmessage = async (event: MessageEvent) => {
 
   switch (type) {
     case 'LOAD_MODEL': {
-      if (engine || isInitializing) return;
+      const modelId = payload?.modelId ?? 'llama-3.2-1b-it-q4f16-MLC';
+      if (engine && currentModelId === modelId) {
+        self.postMessage({ type: 'MODEL_READY', payload: { modelId } });
+        return;
+      }
+      if (isInitializing) return;
       isInitializing = true;
 
-      const modelId = payload?.modelId ?? 'gemma-2b-it-q4f16_1-MLC';
-
       try {
-        // Send initial progress
         self.postMessage({
           type: 'MODEL_PROGRESS',
-          payload: { text: `Initializing WebGPU context for ${modelId}...`, progress: 0.1 },
+          payload: { text: `Initializing WebGPU context for ${modelId}...`, progress: 0.05 },
         });
 
         // Dynamic import or WebLLM initialization if available in environment
         try {
           const webllm = await import('@mlc-ai/web-llm' as any);
           if (webllm && webllm.CreateMLCEngine) {
+            const appConfig = payload?.appConfig;
             engine = await webllm.CreateMLCEngine(modelId, {
+              appConfig,
               initProgressCallback: (progress: { text: string; progress: number }) => {
                 self.postMessage({
                   type: 'MODEL_PROGRESS',
@@ -51,7 +57,7 @@ self.onmessage = async (event: MessageEvent) => {
             });
           }
         } catch {
-          // If @mlc-ai/web-llm is not bundled, provide standard responsive engine
+          // Responsive fallback engine when WebLLM is not installed/mocked
           engine = {
             chat: {
               completions: {
@@ -61,7 +67,7 @@ self.onmessage = async (event: MessageEvent) => {
                     choices: [
                       {
                         message: {
-                          content: `[Cardinal AI Gemma]: Réponse locale simulée à "${userMsg}".`,
+                          content: `[Cardinal AI - ${modelId}]: Réponse locale simulée à "${userMsg}".`,
                         },
                       },
                     ],
@@ -72,13 +78,14 @@ self.onmessage = async (event: MessageEvent) => {
           };
         }
 
+        currentModelId = modelId;
         isInitializing = false;
-        self.postMessage({ type: 'MODEL_READY' });
+        self.postMessage({ type: 'MODEL_READY', payload: { modelId } });
       } catch (error: any) {
         isInitializing = false;
         self.postMessage({
           type: 'ERROR',
-          payload: { message: error?.message || 'Failed to initialize WebGPU model' },
+          payload: { message: error?.message || `Failed to load WebGPU model ${modelId}` },
         });
       }
       break;
@@ -88,7 +95,7 @@ self.onmessage = async (event: MessageEvent) => {
       if (!engine) {
         self.postMessage({
           type: 'ERROR',
-          payload: { message: 'Gemma WebGPU Model is not initialized', requestId: payload?.requestId },
+          payload: { message: 'LLM WebGPU Engine is not initialized', requestId: payload?.requestId },
         });
         return;
       }

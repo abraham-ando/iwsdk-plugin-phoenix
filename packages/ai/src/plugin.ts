@@ -1,6 +1,6 @@
 /**
  * Plugin entrypoint for Cardinal AI.
- * Registers ECS components and systems on an IWSDK World.
+ * Registers ECS components and systems on an IWSDK World with Tri-Modal LLM Providers.
  */
 import type { World } from '@iwsdk/core';
 import { SmartNPC } from './components/SmartNPC';
@@ -28,6 +28,8 @@ import { AILODSystem } from './lod/AILODSystem';
 import { GrabbableReactionSystem } from './perception/GrabbableReactionSystem';
 
 import { WebGPUInferenceAdapter } from './adapters/WebGPUInferenceAdapter';
+import { CloudInferenceAdapter } from './adapters/CloudInferenceAdapter';
+import { SelfHostedInferenceAdapter } from './adapters/SelfHostedInferenceAdapter';
 import { RemoteInferenceAdapter } from './adapters/RemoteInferenceAdapter';
 import { PiperTTSAdapter } from './adapters/PiperTTSAdapter';
 import type { IInferenceAdapter, ITTSAdapter } from './adapters/types';
@@ -70,16 +72,28 @@ export function installCardinalAI(
   options: CardinalAIOptions = {},
 ): CardinalAIHandle {
   const {
-    llm = { modelId: 'gemma-2b-it-q4f16_1-MLC' },
+    provider = 'local-webgpu',
+    llm = { modelId: 'llama-3.2-1b-it-q4f16-MLC' },
+    cloud,
+    selfHosted,
     tts = { voiceId: 'fr_FR-siwis-medium' },
     remoteFallbackUrl,
     onProgress,
   } = options;
 
-  // 1. Instantiate Adapters
-  const inferenceAdapter: IInferenceAdapter = remoteFallbackUrl
-    ? new RemoteInferenceAdapter(remoteFallbackUrl)
-    : new WebGPUInferenceAdapter(llm, onProgress);
+  // 1. Instantiate Inference Adapter based on selected provider mode
+  let inferenceAdapter: IInferenceAdapter;
+
+  if (remoteFallbackUrl) {
+    inferenceAdapter = new RemoteInferenceAdapter(remoteFallbackUrl);
+  } else if (provider === 'cloud' && cloud) {
+    inferenceAdapter = new CloudInferenceAdapter(cloud);
+  } else if (provider === 'self-hosted' && selfHosted) {
+    inferenceAdapter = new SelfHostedInferenceAdapter(selfHosted);
+  } else {
+    // Default to Local WebGPU in-browser inference
+    inferenceAdapter = new WebGPUInferenceAdapter(llm, onProgress);
+  }
 
   const ttsAdapter: ITTSAdapter = new PiperTTSAdapter(tts, onProgress);
 

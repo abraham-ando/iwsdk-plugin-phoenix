@@ -5,7 +5,7 @@ import { defineConfig } from 'tsup';
  *
  * 1. The library entry (`src/index.ts`) keeps `@iwsdk/core`, `three`, and `elics`
  *    external so the host application resolves a single copy.
- * 2. `gemma.worker.ts` is a self-contained Web Worker entry for WebGPU LLM compute.
+ * 2. `llm.worker.ts` is a self-contained Web Worker entry for WebGPU LLM compute (Gemma, Llama, Qwen, Phi, etc.).
  * 3. `tts.worker.ts` is a self-contained Web Worker entry for Piper TTS WASM.
  */
 export default defineConfig([
@@ -20,7 +20,7 @@ export default defineConfig([
     external: ['@iwsdk/core', 'three', 'elics'],
   },
   {
-    entry: { 'gemma.worker': 'src/workers/gemma.worker.ts' },
+    entry: { 'llm.worker': 'src/workers/llm.worker.ts' },
     format: ['esm'],
     dts: false,
     sourcemap: true,

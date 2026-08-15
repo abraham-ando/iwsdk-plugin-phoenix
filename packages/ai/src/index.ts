@@ -19,5 +19,6 @@ export * from './ui';
 export * from './lod';
 export * from './perception';
 export * from './mr';
+export * from './cache';
 export * from './types';
 export * from './plugin';
