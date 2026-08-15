@@ -44,3 +44,11 @@ export {
   type AgentNeeds,
   type NeedContext,
 } from './agents/needs';
+export {
+  defaultIntrinsics,
+  checkIntrinsic,
+  applyIntrinsic,
+  invTotal,
+  INVENTORY_CAPACITY,
+  type IntrinsicActionDef,
+} from './agents/intrinsics';
