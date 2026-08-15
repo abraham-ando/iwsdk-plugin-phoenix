@@ -26,3 +26,4 @@ export {
   type ActorContext,
   type AffordanceCheck,
 } from './world/affordances';
+export { registerDefaultContent } from './content/objects';
