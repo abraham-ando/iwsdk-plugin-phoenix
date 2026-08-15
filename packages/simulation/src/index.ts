@@ -62,3 +62,4 @@ export {
   type PerceivedAgent,
 } from './agents/Perception';
 export { BeliefState, type Belief } from './agents/BeliefState';
+export { stepToward, WALK_SPEED, ARRIVE_RADIUS } from './agents/navigation';
