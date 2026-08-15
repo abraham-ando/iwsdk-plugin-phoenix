@@ -32,3 +32,4 @@ export {
   type NamedPlace,
   type WorldSnapshot,
 } from './world/GroundTruthWorld';
+export { snapshotSim, restoreSim, type SimSnapshot } from './kernel/snapshot';
