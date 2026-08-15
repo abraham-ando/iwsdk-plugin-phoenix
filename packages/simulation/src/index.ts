@@ -70,3 +70,4 @@ export {
   type CurrentAction,
 } from './agents/AgentState';
 export { executeActionTick, type ActionEvent } from './agents/actions';
+export { selectAction } from './agents/Mode1';
