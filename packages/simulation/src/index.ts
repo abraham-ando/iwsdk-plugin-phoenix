@@ -71,3 +71,4 @@ export {
 } from './agents/AgentState';
 export { executeActionTick, type ActionEvent } from './agents/actions';
 export { selectAction } from './agents/Mode1';
+export { AgentRuntime, type AgentView } from './agents/AgentRuntime';

@@ -16,7 +16,7 @@ import { WALK_SPEED } from './navigation';
  */
 const DAMPING = 0.7;
 const MAX_DEPTH = 3;
-const MIN_SCORE = 0.001;
+const MIN_SCORE = 0.005;
 const TICKS_PER_METER = 1 / (WALK_SPEED * 0.1);
 
 interface Candidate {
