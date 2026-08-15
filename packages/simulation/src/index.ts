@@ -61,3 +61,4 @@ export {
   type ObservedObject,
   type PerceivedAgent,
 } from './agents/Perception';
+export { BeliefState, type Belief } from './agents/BeliefState';
