@@ -80,6 +80,11 @@ export class GroundTruthWorld {
     return result;
   }
 
+  /** Content-declared affordances for a type (perception & Mode-1 read defs here). */
+  affordancesOf(type: string): AffordanceDef[] {
+    return this.registry.get(type).affordances;
+  }
+
   definePlace(name: string, x: number, z: number, radius: number): void {
     if (this.places.has(name)) {
       throw new Error(`GroundTruthWorld.definePlace: duplicate place ${name}`);

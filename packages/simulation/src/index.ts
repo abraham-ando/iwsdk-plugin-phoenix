@@ -52,3 +52,12 @@ export {
   INVENTORY_CAPACITY,
   type IntrinsicActionDef,
 } from './agents/intrinsics';
+export {
+  perceive,
+  DAY_VISION,
+  NIGHT_VISION,
+  HEARING_RADIUS,
+  type Observation,
+  type ObservedObject,
+  type PerceivedAgent,
+} from './agents/Perception';
