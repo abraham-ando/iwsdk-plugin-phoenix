@@ -33,3 +33,14 @@ export {
   type WorldSnapshot,
 } from './world/GroundTruthWorld';
 export { snapshotSim, restoreSim, type SimSnapshot } from './kernel/snapshot';
+export {
+  createDefaultNeeds,
+  decayNeeds,
+  urgency,
+  wellbeingCost,
+  isNightHour,
+  clampNeed,
+  type NeedId,
+  type AgentNeeds,
+  type NeedContext,
+} from './agents/needs';
