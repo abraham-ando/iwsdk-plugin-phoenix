@@ -174,7 +174,7 @@ if Code.ensure_loaded?(Phoenix.Channel) do
     # hand. Without this clause the catch-all below swallowed it and every
     # directed signal vanished silently: the sender saw its frame accepted, the
     # recipient never heard from it, and nothing anywhere logged a thing.
-    def handle_info(%Phoenix.Socket.Broadcast{event: @frame_event, payload: payload}, socket) do
+    def handle_info(%{__struct__: Phoenix.Socket.Broadcast, event: @frame_event, payload: payload}, socket) do
       push(socket, @frame_event, payload)
       {:noreply, socket}
     end

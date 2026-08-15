@@ -1,0 +1,70 @@
+{
+  "name": "@iwsdk/plugin-cardinal-ai",
+  "version": "0.1.0",
+  "description": "Edge AI and local 3D spatialized voice subsystem for Meta's Immersive Web SDK and the Cardinal engine",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./gemma-worker": {
+      "import": "./dist/gemma.worker.js"
+    },
+    "./tts-worker": {
+      "import": "./dist/tts.worker.js"
+    },
+    "./stt-worker": {
+      "import": "./dist/stt.worker.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "webxr",
+    "iwsdk",
+    "webgpu",
+    "gemma",
+    "llm",
+    "edge-ai",
+    "tts",
+    "spatial-audio",
+    "ecs",
+    "metaquest"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "peerDependencies": {
+    "@iwsdk/core": ">=0.5.0"
+  },
+  "peerDependenciesMeta": {
+    "@iwsdk/core": {
+      "optional": false
+    }
+  },
+  "devDependencies": {
+    "@iwsdk/core": "0.5.3",
+    "@types/node": "^22.20.1",
+    "elics": "3.4.2",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  },
+  "engines": {
+    "node": ">=20.19.0"
+  }
+}

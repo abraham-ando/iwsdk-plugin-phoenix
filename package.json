@@ -9,9 +9,10 @@
     "node": ">=20.19.0"
   },
   "scripts": {
-    "build": "pnpm --filter @iwsdk/plugin-phoenix build",
-    "test": "node scripts/check-single-three.mjs && node scripts/check-cardinal-drift.mjs && node --test 'scripts/__tests__/**/*.test.mjs' && pnpm --filter @iwsdk/plugin-phoenix test",
-    "typecheck": "pnpm --filter @iwsdk/plugin-phoenix typecheck",
+    "build": "pnpm --filter @iwsdk/plugin-phoenix build && pnpm --filter @iwsdk/plugin-cardinal-ai build",
+    "test": "node scripts/check-single-three.mjs && node scripts/check-cardinal-drift.mjs && node --test 'scripts/__tests__/**/*.test.mjs' && pnpm --filter @iwsdk/plugin-phoenix test && pnpm --filter @iwsdk/plugin-cardinal-ai test",
+    "typecheck": "pnpm --filter @iwsdk/plugin-phoenix typecheck && pnpm --filter @iwsdk/plugin-cardinal-ai typecheck",
+    "test:ai": "pnpm --filter @iwsdk/plugin-cardinal-ai test",
     "test:server": "cd packages/server && mix test",
     "fixtures": "node scripts/generate-fixtures.mjs",
     "demo": "pnpm build && pnpm --filter @iwsdk/plugin-phoenix-demo dev",

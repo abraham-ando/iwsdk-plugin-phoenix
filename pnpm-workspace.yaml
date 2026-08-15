@@ -1,5 +1,5 @@
 packages:
-  - 'packages/client'
+  - 'packages/*'
   - 'apps/*'
 
 # One Three instance, graph-wide. IWSDK's own examples pin exactly this alias

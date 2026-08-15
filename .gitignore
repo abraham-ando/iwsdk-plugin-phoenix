@@ -158,3 +158,6 @@ packages/server/_build_core/
 
 # Visual brainstorming companion sessions
 .superpowers/
+
+# Claude / agent worktrees
+.claude/
