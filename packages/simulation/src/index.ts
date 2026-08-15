@@ -63,3 +63,10 @@ export {
 } from './agents/Perception';
 export { BeliefState, type Belief } from './agents/BeliefState';
 export { stepToward, WALK_SPEED, ARRIVE_RADIUS } from './agents/navigation';
+export {
+  createAgent,
+  type AgentProfile,
+  type AgentState,
+  type CurrentAction,
+} from './agents/AgentState';
+export { executeActionTick, type ActionEvent } from './agents/actions';
