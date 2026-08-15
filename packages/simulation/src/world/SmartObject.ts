@@ -16,6 +16,7 @@ export interface AffordanceDef {
   effects: {
     object?: Record<string, number>;
     actorInventory?: Record<string, number>;
+    actorNeeds?: Record<string, number>;
   };
 }
 

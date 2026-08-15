@@ -1,9 +1,11 @@
 import type { AffordanceDef, Comparison, SmartObjectInstance } from './SmartObject';
+import { clampNeed } from '../agents/needs';
 
 export interface ActorContext {
   x: number;
   z: number;
   inventory: Record<string, number>;
+  needs?: Record<string, number>;
 }
 
 const COMPARISON_RE = /^(>=|<=|==|>|<)\s*(-?\d+(?:\.\d+)?)$/;
@@ -86,6 +88,11 @@ export function applyAffordance(
   if (def.effects.actorInventory !== undefined) {
     for (const [item, delta] of Object.entries(def.effects.actorInventory)) {
       actor.inventory[item] = Math.max(0, (actor.inventory[item] ?? 0) + delta);
+    }
+  }
+  if (def.effects.actorNeeds !== undefined && actor.needs !== undefined) {
+    for (const [need, delta] of Object.entries(def.effects.actorNeeds)) {
+      actor.needs[need] = clampNeed((actor.needs[need] ?? 0) + delta);
     }
   }
 }

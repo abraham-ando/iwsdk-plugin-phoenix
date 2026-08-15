@@ -94,3 +94,29 @@ describe('applyAffordance', () => {
     expect(bush.state.berriesLeft).toBe(0);
   });
 });
+
+describe('actorNeeds effects', () => {
+  it('applies need deltas clamped to [0, 100]', () => {
+    const rest: AffordanceDef = {
+      verb: 'rest_nearby',
+      durationTicks: 100,
+      effects: { actorNeeds: { warmth: 20, energy: 10 } },
+    };
+    const fire: SmartObjectInstance = { id: 'f1', type: 'campfire', x: 0, z: 0, state: { lit: 1 } };
+    const actor: ActorContext = { x: 0, z: 0, inventory: {}, needs: { warmth: 95, energy: 50 } };
+    applyAffordance(rest, fire, actor);
+    expect(actor.needs?.warmth).toBe(100); // clamped
+    expect(actor.needs?.energy).toBe(60);
+  });
+
+  it('ignores actorNeeds when the actor has no needs (étape 1 callers)', () => {
+    const rest: AffordanceDef = {
+      verb: 'rest_nearby',
+      durationTicks: 100,
+      effects: { actorNeeds: { warmth: 20 } },
+    };
+    const fire: SmartObjectInstance = { id: 'f1', type: 'campfire', x: 0, z: 0, state: { lit: 1 } };
+    const actor: ActorContext = { x: 0, z: 0, inventory: {} };
+    expect(() => applyAffordance(rest, fire, actor)).not.toThrow();
+  });
+});

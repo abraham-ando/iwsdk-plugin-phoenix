@@ -60,3 +60,15 @@ describe('default content catalog', () => {
     expect(def.regrowth).toEqual([{ field: 'berriesLeft', perDay: 4, max: 12 }]);
   });
 });
+
+describe('need-restoring affordances', () => {
+  it('rest_nearby, sleep_inside and drink restore needs', () => {
+    const reg = freshRegistry();
+    const rest = reg.get('campfire').affordances.find((a) => a.verb === 'rest_nearby');
+    expect(rest?.effects.actorNeeds).toEqual({ warmth: 20, energy: 10 });
+    const sleep = reg.get('shelter').affordances.find((a) => a.verb === 'sleep_inside');
+    expect(sleep?.effects.actorNeeds).toEqual({ energy: 60, warmth: 15 });
+    const drink = reg.get('river_bank').affordances.find((a) => a.verb === 'drink');
+    expect(drink?.effects.actorNeeds).toEqual({ stress: -5 });
+  });
+});
