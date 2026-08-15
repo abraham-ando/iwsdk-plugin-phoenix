@@ -11,3 +11,4 @@ export {
   type TickHandler,
 } from './kernel/SimKernel';
 export { SpatialGrid } from './world/SpatialGrid';
+export { WORLD_SIZE, getTerrainHeight, isRiverAt, isShoreAt } from './world/terrain';

@@ -17,6 +17,8 @@
   "dependencies": {
     "@iwsdk/core": "0.5.3",
     "@iwsdk/plugin-phoenix": "workspace:*",
+    "@iwsdk/plugin-cardinal-ai": "workspace:*",
+    "@iwsdk/cardinal-simulation": "workspace:*",
     "three": "npm:super-three@0.181.0"
   },
   "devDependencies": {
