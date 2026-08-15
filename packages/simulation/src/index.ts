@@ -32,7 +32,7 @@ export {
   type NamedPlace,
   type WorldSnapshot,
 } from './world/GroundTruthWorld';
-export { snapshotSim, restoreSim, type SimSnapshot } from './kernel/snapshot';
+export { snapshotSim, restoreSim, type SimSnapshot, type SerializedAgent } from './kernel/snapshot';
 export {
   createDefaultNeeds,
   decayNeeds,
