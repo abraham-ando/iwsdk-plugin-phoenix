@@ -67,6 +67,7 @@ export class CardinalSimulationSystem extends createSystem({}) {
 
   private listeners: Array<(e: SimEvent) => void> = [];
   private lastDay = 0;
+  private lastSpeech = new Map<string, string>();
   private sceneData: PrehistoricSceneResult | null = null;
   private elapsed = 0;
   private campfireBindings: Array<{ group: Group; objectId: string }> = [];
@@ -106,7 +107,13 @@ export class CardinalSimulationSystem extends createSystem({}) {
     }
     for (const agent of VILLAGE_LAYOUT.agents) {
       this.runtime.addAgent(
-        { id: agent.id, name: agent.name, tribe: agent.tribe, role: agent.role },
+        {
+          id: agent.id,
+          name: agent.name,
+          tribe: agent.tribe,
+          role: agent.role,
+          persona: agent.persona,
+        },
         agent.x,
         agent.z
       );
@@ -148,6 +155,16 @@ export class CardinalSimulationSystem extends createSystem({}) {
         avatar.position.set(view.x, view.y, view.z);
         avatar.rotation.y = view.heading;
         applyAvatarPose(avatar, view.animation, this.elapsed);
+        // Surface fresh dialogue lines to the HUD chronicle.
+        if (view.dialogue !== null && this.lastSpeech.get(view.id) !== view.dialogue) {
+          this.lastSpeech.set(view.id, view.dialogue);
+          this.emit({
+            tick: this.kernel.tick,
+            kind: 'action',
+            agentName: view.name,
+            text: `💬 ${view.name} : « ${view.dialogue} »`,
+          });
+        }
       }
       for (const binding of this.campfireBindings) {
         const fire = this.simWorld.get(binding.objectId);

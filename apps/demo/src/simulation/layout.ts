@@ -13,6 +13,7 @@ export interface LayoutObject {
 export interface LayoutAgent {
   id: string;
   name: string;
+  persona: string;
   tribe: 'Aube' | 'Rive' | 'Pic';
   role: string;
   gender: 'masculine' | 'feminine';
@@ -57,19 +58,19 @@ const SHARED_OBJECTS: LayoutObject[] = [
 
 const AGENTS: LayoutAgent[] = [
   // Tribu de l'Aube (famille)
-  { id: 'haran', name: 'Haran', tribe: 'Aube', role: 'Père & Éclaireur', gender: 'masculine', x: 1.0, z: -3.8 },
-  { id: 'mira', name: 'Mira', tribe: 'Aube', role: 'Mère & Gardienne', gender: 'feminine', x: -1.0, z: -3.8 },
-  { id: 'lio', name: 'Lio', tribe: 'Aube', role: 'Fils Aîné', gender: 'masculine', x: 0.8, z: -5.4 },
-  { id: 'aya', name: 'Aya', tribe: 'Aube', role: 'Petite Fille', gender: 'feminine', x: -0.8, z: -5.4 },
+  { id: 'haran', name: 'Haran', persona: "Protecteur pragmatique, pense d'abord à la sécurité des siens", tribe: 'Aube', role: 'Père & Éclaireur', gender: 'masculine', x: 1.0, z: -3.8 },
+  { id: 'mira', name: 'Mira', persona: "Douce et prévoyante, partage toujours ce qu'elle cueille", tribe: 'Aube', role: 'Mère & Gardienne', gender: 'feminine', x: -1.0, z: -3.8 },
+  { id: 'lio', name: 'Lio', persona: 'Curieux et impatient, veut prouver sa valeur', tribe: 'Aube', role: 'Fils Aîné', gender: 'masculine', x: 0.8, z: -5.4 },
+  { id: 'aya', name: 'Aya', persona: 'Rêveuse espiègle, suit sa mère partout', tribe: 'Aube', role: 'Petite Fille', gender: 'feminine', x: -0.8, z: -5.4 },
   // Tribu de la Rive (chasseurs-artisans)
-  { id: 'dagan', name: 'Dagan', tribe: 'Rive', role: 'Chef & Chasseur', gender: 'masculine', x: 6.5, z: -2.4 },
-  { id: 'sira', name: 'Sira', tribe: 'Rive', role: 'Artisane', gender: 'feminine', x: 4.6, z: -2.4 },
-  { id: 'nia', name: 'Nia', tribe: 'Rive', role: 'Jeune Apprentie', gender: 'feminine', x: 6.2, z: -3.9 },
-  { id: 'kan', name: 'Kan', tribe: 'Rive', role: 'Guerrier Solitaire', gender: 'masculine', x: 4.8, z: -4.0 },
+  { id: 'dagan', name: 'Dagan', persona: 'Chef exigeant, respecte la force et la loyauté', tribe: 'Rive', role: 'Chef & Chasseur', gender: 'masculine', x: 6.5, z: -2.4 },
+  { id: 'sira', name: 'Sira', persona: 'Artisane méticuleuse, fière de ses outils', tribe: 'Rive', role: 'Artisane', gender: 'feminine', x: 4.6, z: -2.4 },
+  { id: 'nia', name: 'Nia', persona: 'Apprentie vive, pose mille questions', tribe: 'Rive', role: 'Jeune Apprentie', gender: 'feminine', x: 6.2, z: -3.9 },
+  { id: 'kan', name: 'Kan', persona: 'Solitaire fier, préfère agir seul mais protège les faibles', tribe: 'Rive', role: 'Guerrier Solitaire', gender: 'masculine', x: 4.8, z: -4.0 },
   // Tribu du Pic (survivants)
-  { id: 'narek', name: 'Narek', tribe: 'Pic', role: 'Pisteur Expérimenté', gender: 'masculine', x: -4.6, z: -2.4 },
-  { id: 'ivan', name: 'Ivan', tribe: 'Pic', role: 'Tailleur de Silex', gender: 'masculine', x: -6.4, z: -2.4 },
-  { id: 'tao', name: 'Tao', tribe: 'Pic', role: 'Sentinelle du Froid', gender: 'masculine', x: -5.5, z: -4.1 },
+  { id: 'narek', name: 'Narek', persona: 'Pisteur taciturne, lit la vallée comme un livre', tribe: 'Pic', role: 'Pisteur Expérimenté', gender: 'masculine', x: -4.6, z: -2.4 },
+  { id: 'ivan', name: 'Ivan', persona: 'Tailleur patient, croit au travail bien fait', tribe: 'Pic', role: 'Tailleur de Silex', gender: 'masculine', x: -6.4, z: -2.4 },
+  { id: 'tao', name: 'Tao', persona: 'Sentinelle stoïque, endure le froid sans se plaindre', tribe: 'Pic', role: 'Sentinelle du Froid', gender: 'masculine', x: -5.5, z: -4.1 },
 ];
 
 export const VILLAGE_LAYOUT = {

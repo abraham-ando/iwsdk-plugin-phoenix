@@ -161,6 +161,9 @@ export class SimulationHud {
     } else if (event.kind === 'day') {
       border = 'rgba(59, 130, 246, 0.4)';
       color = '#bfdbfe';
+    } else if (event.text.startsWith('💬')) {
+      border = 'rgba(59, 130, 246, 0.4)';
+      color = '#bfdbfe';
     }
 
     entry.style.borderLeft = `3px solid ${border}`;

@@ -38,6 +38,17 @@ describe('mode-2 triggers', () => {
     expect(runtime.drainPlanRequests().filter((r) => r.reason === 'dawn')).toHaveLength(0);
   });
 
+  it('releasePendingRequest frees the agent after a transport failure', () => {
+    const { kernel, runtime } = setup();
+    const agent = runtime.addAgent({ id: 'mira', name: 'Mira', tribe: 'Aube', role: 'C' }, 0, 0);
+    agent.needs = { hunger: 100, warmth: 100, energy: 100, affection: 100, stress: 0 };
+    for (let t = 0; t < DAWN_TICK + 5; t++) kernel.step();
+    const request = runtime.drainPlanRequests()[0]!;
+    expect(agent.mode2.pendingRequestId).toBe(request.requestId);
+    runtime.releasePendingRequest('mira', request.requestId);
+    expect(agent.mode2.pendingRequestId).toBeNull();
+  });
+
   it('a failed action triggers a surprise request and a memory', () => {
     const { world, kernel, runtime } = setup();
     const bush = world.spawn('berry_bush', 2, 0);
