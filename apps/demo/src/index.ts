@@ -42,8 +42,8 @@ World.create(container, projectOptions)
     setupCardinalVillage(world);
 
     // 2a. Mount the procedural environment package (sky rig, quality tiers)
-    const { quality, materials } = installCardinalWorld(world, { latitudeDeg: 45 });
-    console.log(`[demo] environment quality tier: ${quality}`);
+    const { quality, materials, colorManaged } = installCardinalWorld(world, { latitudeDeg: 45 });
+    console.log(`[demo] environment quality tier: ${quality}, colour managed: ${colorManaged}`);
 
     // 2. Mount the Cardinal simulation engine + its VR projection & HUD
     world.registerSystem(CardinalSimulationSystem);

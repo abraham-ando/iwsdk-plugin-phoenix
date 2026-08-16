@@ -85,12 +85,12 @@ describe('ExposureSystem', () => {
 describe('applyColorManagement', () => {
   it('sets the output colour space and ACES tone mapping', () => {
     const renderer = { outputColorSpace: '', toneMapping: 0 };
-    applyColorManagement(renderer);
+    expect(applyColorManagement(renderer)).toBe(true);
     expect(renderer.outputColorSpace).toBe('srgb');
     expect(renderer.toneMapping).toBe(4); // ACESFilmicToneMapping in the mock
   });
 
-  it('is a no-op without a renderer', () => {
-    expect(() => applyColorManagement(undefined)).not.toThrow();
+  it('reports when it did nothing, so a silent no-op stays visible', () => {
+    expect(applyColorManagement(undefined)).toBe(false);
   });
 });

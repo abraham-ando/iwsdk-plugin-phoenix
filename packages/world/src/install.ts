@@ -43,7 +43,7 @@ export function withLevelRoot(world: World, callback: (root: Entity) => void): v
 export function installCardinalWorld(
   world: World,
   options: CardinalWorldOptions = {},
-): { quality: QualityTier; materials: MaterialLibrary } {
+): { quality: QualityTier; materials: MaterialLibrary; colorManaged: boolean } {
   const quality = options.quality ?? detectQuality();
   const materials = new MaterialLibrary(quality);
 
@@ -59,7 +59,7 @@ export function installCardinalWorld(
   world.registerSystem(ExposureSystem);
   world.registerSystem(MaterialSystem, { configData: { library: materials } });
 
-  applyColorManagement((world as unknown as { renderer?: unknown }).renderer);
+  const colorManaged = applyColorManagement((world as unknown as { renderer?: unknown }).renderer);
 
   withLevelRoot(world, (root) => {
     if (!root.hasComponent(CelestialTime)) {
@@ -80,5 +80,5 @@ export function installCardinalWorld(
     if (!root.hasComponent(IBLGradient)) root.addComponent(IBLGradient, {});
   });
 
-  return { quality, materials };
+  return { quality, materials, colorManaged };
 }
