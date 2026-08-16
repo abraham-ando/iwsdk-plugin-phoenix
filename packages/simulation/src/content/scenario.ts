@@ -1,4 +1,5 @@
 import { SimKernel } from '../kernel/SimKernel';
+import type { EventLog } from '../kernel/EventLog';
 import { GroundTruthWorld } from '../world/GroundTruthWorld';
 import { SmartObjectRegistry } from '../world/SmartObject';
 import { WeatherMachine } from '../world/WeatherMachine';
@@ -110,10 +111,10 @@ export interface VillageSim {
   registry: SmartObjectRegistry;
 }
 
-export function buildVillageSim(seed: number): VillageSim {
+export function buildVillageSim(seed: number, replayLog?: EventLog): VillageSim {
   const registry = new SmartObjectRegistry();
   registerDefaultContent(registry);
-  const kernel = new SimKernel({ seed });
+  const kernel = replayLog ? new SimKernel({ seed, replayLog }) : new SimKernel({ seed });
   const world = new GroundTruthWorld(registry);
   world.attachTo(kernel);
   const weather = new WeatherMachine();

@@ -11,7 +11,7 @@ export type { PlannedStep } from './AgentState';
  * plain JSON. Responses come back through the kernel's external-event journal,
  * validated here before touching the agent.
  */
-export type PlanRequestReason = 'dawn' | 'surprise' | 'dialogue' | 'reflection';
+export type PlanRequestReason = 'dawn' | 'surprise' | 'dialogue' | 'reflection' | 'player_dialogue';
 
 export interface PlanToolCandidate {
   verb: string;
@@ -36,6 +36,8 @@ export interface PlanRequest {
   memories: string[];
   tools: PlanToolCandidate[];
   currentPlan: string[];
+  /** The player's utterance, for reason 'player_dialogue' (spec §10.5). */
+  playerText?: string;
 }
 
 const MAX_BELIEFS = 12;
@@ -49,7 +51,8 @@ export function buildPlanRequest(
   tick: number,
   reason: PlanRequestReason,
   place: string | null,
-  participantIds?: string[]
+  participantIds?: string[],
+  playerText?: string
 ): PlanRequest {
   const beliefs = agent.beliefs
     .known()
@@ -95,6 +98,7 @@ export function buildPlanRequest(
     memories: agent.memories.retrieve(memoryQuery, tick, MAX_MEMORIES).map((m) => m.text),
     tools,
     currentPlan: agent.plan.map((s) => `${s.verb}${s.objectId ? ` (${s.objectId})` : ''}`),
+    ...(playerText !== undefined ? { playerText } : {}),
   };
 }
 

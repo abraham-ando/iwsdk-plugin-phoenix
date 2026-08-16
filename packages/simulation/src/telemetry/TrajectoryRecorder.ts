@@ -71,7 +71,8 @@ export class TrajectoryRecorder {
         if (
           external.type === 'llm_plan' ||
           external.type === 'llm_dialogue' ||
-          external.type === 'llm_reflection'
+          external.type === 'llm_reflection' ||
+          external.type === 'llm_player_reply'
         ) {
           this.onLlmResponse(external.type, external.payload, ctx.tick);
         }
@@ -182,6 +183,9 @@ export class TrajectoryRecorder {
         agentId: request.agentId,
         reason: request.reason,
         requestId: request.requestId,
+        // Player-derived data is tagged so shared datasets can exclude it
+        // (spec §9.4).
+        ...(request.reason === 'player_dialogue' ? { source: 'player_text' } : {}),
       },
       tools: request.tools.map((t) => ({
         type: 'function',

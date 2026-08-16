@@ -29,6 +29,9 @@ export function mockPlanResponse(request: PlanRequest): Record<string, unknown> 
   if (request.reason === 'reflection') {
     return { ...base, insights: ['Jour vécu: besoins gérés, tribu soudée.'] };
   }
+  if (request.reason === 'player_dialogue') {
+    return { ...base, reply: 'Bienvenue près de notre feu, étranger.' };
+  }
   const withObject = request.tools
     .filter((t) => t.objectId !== undefined)
     .sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0));

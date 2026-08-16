@@ -33,6 +33,15 @@ export const REFLECTION_HOUR = 21;
 export const DIALOGUE_RADIUS = 3;
 export const DIALOGUE_COOLDOWN_TICKS = 1200;
 export const SPEECH_DISPLAY_TICKS = 50;
+export const PLAYER_ID = 'player';
+export const PLAYER_SIGHTING_COOLDOWN = 600;
+export const PLAYER_SPEAK_RADIUS = 6;
+
+interface PlayerPresence {
+  x: number;
+  z: number;
+  lastSightingByAgent: Map<string, number>;
+}
 
 const GATHER_VERBS = /^(gather_|eat_|fish$)/;
 const CRAFT_VERBS = /^(light_fire|add_wood|build|knap_flint|deposit_|take_)/;
@@ -52,6 +61,7 @@ export class AgentRuntime {
   private currentTick = 0;
   private eventSubscribers: Array<(e: ActionEvent) => void> = [];
   private planRequestSubscribers: Array<(r: PlanRequest) => void> = [];
+  private player: PlayerPresence | null = null;
 
   constructor(
     private world: GroundTruthWorld,
@@ -80,7 +90,11 @@ export class AgentRuntime {
 
   private tickAll(ctx: TickContext): void {
     this.currentTick = ctx.tick;
-    for (const event of ctx.events) this.handleExternalEvent(event, ctx.tick);
+    for (const event of ctx.events) {
+      if (!this.handlePlayerEvent(event, ctx.tick)) {
+        this.handleExternalEvent(event, ctx.tick);
+      }
+    }
     const roster = this.sortedAgents();
     for (const agent of roster) {
       this.tickAgent(agent, ctx, roster);
@@ -176,6 +190,23 @@ export class AgentRuntime {
       return;
     }
 
+    if (event.type === 'llm_player_reply') {
+      const agent = this.agents.get(payload.agentId ?? '');
+      if (agent === undefined) return;
+      if (agent.mode2.pendingRequestId === payload.requestId) agent.mode2.pendingRequestId = null;
+      const reply = (payload as { reply?: unknown }).reply;
+      if (typeof reply === 'string' && reply.length > 0) {
+        agent.speech = { text: reply, untilTick: tick + SPEECH_DISPLAY_TICKS };
+        agent.memories.add({
+          tick,
+          text: `J'ai répondu à l'étranger: "${reply}"`,
+          importance: 4,
+          kind: 'dialogue',
+        });
+      }
+      return;
+    }
+
     if (event.type === 'llm_reflection') {
       const agent = this.agents.get(payload.agentId ?? '');
       if (agent === undefined) return;
@@ -191,6 +222,64 @@ export class AgentRuntime {
     }
   }
 
+  // --- Player presence (spec §10.5) ---
+
+  /** Register the human player as a perceivable living being of the world. */
+  registerPlayer(x: number, z: number): void {
+    this.player = { x, z, lastSightingByAgent: new Map() };
+  }
+
+  playerPosition(): { x: number; z: number } | null {
+    return this.player === null ? null : { x: this.player.x, z: this.player.z };
+  }
+
+  private handlePlayerEvent(event: ExternalEvent, tick: number): boolean {
+    if (this.player === null) return event.type.startsWith('player_');
+    const payload = event.payload as Record<string, unknown> | null;
+
+    if (event.type === 'player_move') {
+      if (typeof payload?.x === 'number' && typeof payload?.z === 'number') {
+        this.player.x = payload.x;
+        this.player.z = payload.z;
+      }
+      return true;
+    }
+
+    if (event.type === 'player_speak') {
+      const text = typeof payload?.text === 'string' ? payload.text : null;
+      if (text === null) return true;
+      const explicit =
+        typeof payload?.targetAgentId === 'string'
+          ? this.agents.get(payload.targetAgentId)
+          : undefined;
+      const target = explicit ?? this.nearestAgentTo(this.player.x, this.player.z, PLAYER_SPEAK_RADIUS);
+      if (target === undefined) return true;
+      target.memories.add({
+        tick,
+        text: `L'étranger m'a dit: "${text}"`,
+        importance: 6,
+        kind: 'dialogue',
+      });
+      this.emitPlanRequest(target, 'player_dialogue', tick, [PLAYER_ID, target.profile.id], text);
+      return true;
+    }
+
+    return false;
+  }
+
+  private nearestAgentTo(x: number, z: number, maxRadius: number): AgentState | undefined {
+    let best: AgentState | undefined;
+    let bestDistance = maxRadius;
+    for (const agent of this.sortedAgents()) {
+      const distance = Math.hypot(agent.x - x, agent.z - z);
+      if (distance <= bestDistance) {
+        bestDistance = distance;
+        best = agent;
+      }
+    }
+    return best;
+  }
+
   /** Transport layer failed to deliver a request: let the agent ask again. */
   releasePendingRequest(agentId: string, requestId: string): void {
     const agent = this.agents.get(agentId);
@@ -203,7 +292,8 @@ export class AgentRuntime {
     agent: AgentState,
     reason: PlanRequestReason,
     tick: number,
-    participantIds?: string[]
+    participantIds?: string[],
+    playerText?: string
   ): void {
     if (agent.mode2.pendingRequestId !== null) return;
     const consumesBudget = reason !== 'reflection';
@@ -215,7 +305,8 @@ export class AgentRuntime {
       tick,
       reason,
       this.world.placeAt(agent.x, agent.z),
-      participantIds
+      participantIds,
+      playerText
     );
     this.pushPlanRequest(request);
     agent.mode2.pendingRequestId = request.requestId;
@@ -281,9 +372,32 @@ export class AgentRuntime {
           verb: o.currentAction === null ? null : verbOf(o),
           distance: 0,
         }));
-      agent.beliefs.update(
-        perceive(this.world, { id: agent.profile.id, x: agent.x, z: agent.z }, others, ctx.tick)
+      if (this.player !== null) {
+        others.push({ id: PLAYER_ID, x: this.player.x, z: this.player.z, verb: null, distance: 0 });
+      }
+      const observation = perceive(
+        this.world,
+        { id: agent.profile.id, x: agent.x, z: agent.z },
+        others,
+        ctx.tick
       );
+      agent.beliefs.update(observation);
+
+      // Meeting the stranger is memorable (spec §10.5), with a cooldown so
+      // standing nearby does not flood the memory stream.
+      if (this.player !== null && observation.agents.some((a) => a.id === PLAYER_ID)) {
+        const lastSeen = this.player.lastSightingByAgent.get(agent.profile.id) ?? -Infinity;
+        if (ctx.tick - lastSeen >= PLAYER_SIGHTING_COOLDOWN) {
+          this.player.lastSightingByAgent.set(agent.profile.id, ctx.tick);
+          const place = this.world.placeAt(this.player.x, this.player.z);
+          agent.memories.add({
+            tick: ctx.tick,
+            text: `J'ai croisé l'étranger${place !== null ? ` près de ${place}` : ''}`,
+            importance: 3,
+            kind: 'event',
+          });
+        }
+      }
     }
 
     // Mode-2 clock triggers: dawn plan (budget reset), nightly reflection.
