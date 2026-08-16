@@ -32,7 +32,6 @@ export interface TerrainData {
 }
 import { ProceduralGrassField } from './ProceduralGrassField';
 import { ProceduralVegetation } from './ProceduralVegetation';
-import { ProceduralRiver } from './ProceduralRiver';
 import { createAgentAvatar } from './AgentAvatarFactory';
 import type { MaterialLibrary } from '@iwsdk/cardinal-world';
 import type { VILLAGE_LAYOUT } from './layout';
@@ -43,7 +42,6 @@ export interface PrehistoricSceneResult {
   agentAvatars: Map<string, Group>;
   entities: Entity[];
   grassField: ProceduralGrassField;
-  river: ProceduralRiver;
   terrain: TerrainData;
 }
 
@@ -69,9 +67,9 @@ export class PrehistoricEnvironment3D {
       isRiver: isRiverAt,
       size: 64,
     };
-    const river = new ProceduralRiver();
-    const riverMesh = river.createRiver();
-    root.add(riverMesh);
+    // La surface d'eau est désormais construite et animée par
+    // @iwsdk/cardinal-world : elle porte sa profondeur par sommet, ses vagues
+    // de Gerstner et son écume de rive, et suit le cours du moteur.
 
     // 2. Procedural Volumetric Wind-Swaying Grass Field (3200+ Blades)
     const grassField = new ProceduralGrassField(3200);
@@ -289,7 +287,7 @@ export class PrehistoricEnvironment3D {
       agentAvatars.set(agent.id, avatar);
     }
 
-    return { root, campfires, agentAvatars, entities, grassField, river, terrain };
+    return { root, campfires, agentAvatars, entities, grassField, terrain };
   }
 
   public static createCampfire(tribeName: string): Group {

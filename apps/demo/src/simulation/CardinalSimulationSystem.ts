@@ -241,7 +241,6 @@ export class CardinalSimulationSystem extends createSystem({}) {
     }
     // Scenery animation (wind, water) lives with rendering, not simulation.
     sceneData.grassField.updateWind(this.elapsed);
-    sceneData.river.updateWater(this.elapsed);
     this.wolfVisual?.update(this.wolf.view());
   }
 

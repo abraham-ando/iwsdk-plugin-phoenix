@@ -1,4 +1,4 @@
-import { DomeGradient, IBLGradient, type Entity, type World } from '@iwsdk/core';
+import { DomeGradient, IBLGradient, Mesh, type Entity, type World } from '@iwsdk/core';
 import { detectQuality, type QualityTier } from './core/quality';
 import { CelestialTime, SkyModel, StarField } from './atmosphere/components';
 import { CelestialTimeSystem } from './atmosphere/CelestialTimeSystem';
@@ -12,6 +12,10 @@ import { applyColorManagement } from './core/colorManagement';
 import { TerrainTile } from './terrain/components';
 import { TerrainStreamingSystem } from './terrain/TerrainStreamingSystem';
 import { TerrainMeshSystem } from './terrain/TerrainMeshSystem';
+import { WaterSurface } from './water/components';
+import { WaterSystem } from './water/WaterSystem';
+import { buildRiverGeometry } from './water/riverGeometry';
+import { createWaterMaterial } from './water/WaterMaterial';
 
 export interface CardinalWorldOptions {
   quality?: QualityTier;
@@ -51,6 +55,7 @@ export function installCardinalWorld(
   materials: MaterialLibrary;
   colorManaged: boolean;
   terrain: { streaming: TerrainStreamingSystem; mesh: TerrainMeshSystem };
+  water: WaterSystem;
 } {
   const quality = options.quality ?? detectQuality();
   const materials = new MaterialLibrary(quality);
@@ -60,7 +65,8 @@ export function installCardinalWorld(
     .registerComponent(SkyModel)
     .registerComponent(StarField)
     .registerComponent(ProceduralMaterial)
-    .registerComponent(TerrainTile);
+    .registerComponent(TerrainTile)
+    .registerComponent(WaterSurface);
 
   world.registerSystem(CelestialTimeSystem);
   world.registerSystem(SkyRenderSystem, { configData: { quality } });
@@ -75,6 +81,7 @@ export function installCardinalWorld(
   terrainMaterial.vertexColors = true;
   world.registerSystem(TerrainStreamingSystem, { configData: { material: terrainMaterial } });
   world.registerSystem(TerrainMeshSystem);
+  world.registerSystem(WaterSystem);
 
   const colorManaged = applyColorManagement((world as unknown as { renderer?: unknown }).renderer);
 
@@ -95,6 +102,16 @@ export function installCardinalWorld(
     }
     if (!root.hasComponent(DomeGradient)) root.addComponent(DomeGradient, {});
     if (!root.hasComponent(IBLGradient)) root.addComponent(IBLGradient, {});
+
+    // La nappe est construite UNE fois : seule une uniforme de temps bouge
+    // ensuite. Elle ne projette ni ne reçoit d'ombre — une ombre portée sur
+    // de l'eau transparente coûte cher et ne se voit pas.
+    const water = new Mesh(buildRiverGeometry(), createWaterMaterial());
+    water.name = 'RiverSurface';
+    water.castShadow = false;
+    water.receiveShadow = false;
+    const surface = world.createTransformEntity(water, root);
+    surface.addComponent(WaterSurface, {});
   });
 
   return {
@@ -105,5 +122,6 @@ export function installCardinalWorld(
       streaming: world.getSystem(TerrainStreamingSystem) as TerrainStreamingSystem,
       mesh: world.getSystem(TerrainMeshSystem) as TerrainMeshSystem,
     },
+    water: world.getSystem(WaterSystem) as WaterSystem,
   };
 }

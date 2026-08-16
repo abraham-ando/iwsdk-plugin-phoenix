@@ -36,6 +36,15 @@ const MAX_POINTS = 700;
 const WIDTH_SOURCE = 2.6;
 const WIDTH_MOUTH = 8;
 
+/**
+ * Revanche : de combien la surface libre se tient SOUS le sol environnant.
+ *
+ * Sans elle, l'altitude du cours égalait celle du sol au village — la nappe
+ * affleurait le plateau et s'y répandait, noyant le village. Une rivière a
+ * toujours ses berges au-dessus de son eau ; c'est ce qui fait un chenal.
+ */
+const FREEBOARD = 0.6;
+
 function smoothstepLocal(edge0: number, edge1: number, x: number): number {
   const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
   return t * t * (3 - 2 * t);
@@ -163,7 +172,7 @@ function buildCourse(): RiverCourse {
     const p = all[i]!;
     const t = i / Math.max(1, all.length - 1);
     // Le sol sec donne l'altitude visée ; le plafond garantit la descente.
-    const elevation = Math.max(SEA_LEVEL - 2, Math.min(dryReliefAt(p.x, p.z), ceiling));
+    const elevation = Math.max(SEA_LEVEL - 2, Math.min(dryReliefAt(p.x, p.z) - FREEBOARD, ceiling));
     ceiling = elevation;
     if (i > 0) {
       const q = all[i - 1]!;

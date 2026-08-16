@@ -22,7 +22,15 @@ export const WATER_EDGE_LIFT = 0.02;
 
 /** Bornes de la recherche de rive, en multiples de la largeur du lit. */
 const EDGE_SEARCH_MIN = 0.6;
-const EDGE_SEARCH_MAX = 6;
+/**
+ * La rive ne peut pas s'écarter au-delà de ce multiple de la largeur du lit.
+ *
+ * Sans borne serrée, le ruban atteignait 96 m là où le fond de vallée passe
+ * sous la nappe : géométriquement l'eau SERAIT si large, mais cela se lit
+ * comme une inondation et non comme une rivière. Ce qui déborde vraiment de
+ * ces bornes relève du marais ou de l'estuaire, hors du périmètre de la §7.
+ */
+const EDGE_SEARCH_MAX = 2.5;
 const EDGE_SEARCH_STEPS = 12;
 
 /**

@@ -101,6 +101,21 @@ describe('buildRiverGeometry', () => {
     }
   });
 
+  it("NE S'ÉTALE PAS EN INONDATION : la largeur reste celle d'une rivière", () => {
+    // Sans borne, le ruban atteignait 96 m là où le fond de vallée passe sous
+    // la nappe. L'eau SERAIT géométriquement si large, mais cela se lit comme
+    // une inondation ; ce qui déborde relève du marais, hors périmètre.
+    const pos = geom.getAttribute('position');
+    for (let row = 0; row < course.points.length; row++) {
+      const a = row * RIVER_COLUMNS;
+      const b = a + RIVER_COLUMNS - 1;
+      const span = Math.hypot(pos.getX(b) - pos.getX(a), pos.getZ(b) - pos.getZ(a));
+      // Tolérance à 1 cm : les positions sont stockées en flottants 32 bits,
+      // dont la précision est plus grossière qu'un epsilon symbolique.
+      expect(span, `rangée ${row}`).toBeLessThanOrEqual(course.points[row]!.width * 5 + 0.01);
+    }
+  });
+
   it('ne produit aucun NaN', () => {
     for (const name of ['position', 'aDepth', 'aFlow']) {
       const a = geom.getAttribute(name);

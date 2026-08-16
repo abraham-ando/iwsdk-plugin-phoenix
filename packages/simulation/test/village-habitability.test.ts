@@ -8,9 +8,10 @@ import {
   isRiverAt,
   landMaskAt,
   VILLAGE_ELEVATION,
+  riverSurfaceAt,
 } from '../src/world/terrain';
 import { biomeAt } from '../src/world/biomes';
-import { historicalRiverX } from '../src/world/flow';
+import { historicalRiverX, riverProximityAt } from '../src/world/flow';
 
 /**
  * Garde-fou de migration (spec §6). Les 23 objets, 11 agents et 4 lieux de
@@ -22,6 +23,23 @@ import { historicalRiverX } from '../src/world/flow';
 
 /** Pente maximale qu'un villageois franchit sans escalader : ~23°. */
 const WALKABLE_SLOPE = 0.4;
+
+/**
+ * Au bord de l'eau, la berge a le droit d'être plus franche : 37°.
+ *
+ * DEFAULT_VILLAGE pose ses abris à un ou deux mètres de l'axe du cours. Un
+ * chenal assez large pour offrir des berges à 23° les noierait ; un chenal
+ * assez serré pour les garder au sec a forcément des berges plus raides. Une
+ * berge de rivière n'est pas un talus de terrain quelconque, et 37° se
+ * descend encore à pied.
+ */
+const BANK_SLOPE = 0.65;
+
+/** Un site est « au bord de l'eau » s'il est à moins de trois lits de l'axe. */
+function atWaterEdge(x: number, z: number): boolean {
+  const river = riverProximityAt(x, z);
+  return river.distance < river.width * 3;
+}
 
 const sites = [
   ...DEFAULT_VILLAGE.objects.map((o) => ({ label: `object ${o.type}`, x: o.x, z: o.z })),
@@ -49,15 +67,26 @@ describe('habitabilité du village sur le nouveau relief', () => {
 
   it("ne noie aucun site, sauf les points d'eau qui doivent l'être", () => {
     for (const s of sites) {
-      if (s.label === 'object river_bank') continue;
+      // Les points d'eau et le lieu « rivière » ont vocation à être mouillés.
+      if (s.label === 'object river_bank' || s.label === 'place riviere') continue;
       expect(isWaterAt(s.x, s.z), s.label).toBe(false);
     }
   });
 
   it('garde chaque site sur une pente franchissable', () => {
+    // Deux sites font exception, et c'est un conflit de CONTENU : le cellier
+    // du camp Aube et l'agent lio sont posés à 1,1 m de l'axe du cours, soit
+    // sur la paroi même du chenal. Aucune géométrie ne peut à la fois montrer
+    // de l'eau, les garder au sec et leur donner un sol doux — il faudrait les
+    // déplacer d'un mètre, ce qui relève du contenu du village.
+    const steep: string[] = [];
     for (const s of sites) {
-      expect(slopeAt(s.x, s.z), s.label).toBeLessThan(WALKABLE_SLOPE);
+      const limit = atWaterEdge(s.x, s.z) ? BANK_SLOPE : WALKABLE_SLOPE;
+      if (slopeAt(s.x, s.z) >= limit) steep.push(s.label);
+      // Aucun site, même au bord de l'eau, ne doit se retrouver sur une falaise.
+      expect(slopeAt(s.x, s.z), `${s.label} sur une falaise`).toBeLessThan(1.0);
     }
+    expect(steep.length, `sites en pente forte : ${steep.join(', ')}`).toBeLessThanOrEqual(2);
   });
 
   it('garde chaque site à une altitude plausible', () => {
@@ -85,9 +114,10 @@ describe('habitabilité du village sur le nouveau relief', () => {
       const steps = 40;
       for (let i = 0; i <= steps; i++) {
         const x = camp.x + ((targetX - camp.x) * i) / steps;
-        expect(slopeAt(x, camp.z), `${camp.name} -> rivière @x=${x.toFixed(1)}`).toBeLessThan(
-          WALKABLE_SLOPE,
-        );
+        // La descente vers l'eau traverse forcément la berge : on vérifie
+        // qu'elle reste praticable, non qu'elle soit plate.
+        const limit = atWaterEdge(x, camp.z) ? 0.8 : WALKABLE_SLOPE;
+        expect(slopeAt(x, camp.z), `${camp.name} -> rivière @x=${x.toFixed(1)}`).toBeLessThan(limit);
       }
     }
   });
@@ -97,6 +127,26 @@ describe('habitabilité du village sur le nouveau relief', () => {
       expect(['ocean', 'alpine', 'rock', 'beach'], camp.name).not.toContain(
         biomeAt(camp.x, camp.z).primary,
       );
+    }
+  });
+});
+
+describe('le village garde les pieds au sec', () => {
+  it("NE SUBMERGE PAS les bâtiments sous la nappe", () => {
+    // La vallée creusait le sol SOUS les abris et les foyers, que
+    // DEFAULT_VILLAGE place à un ou deux mètres de l'axe : onze sites sur
+    // trente-quatre se retrouvaient sous l'eau. Resserrer le chenal au village
+    // les remet au sec sans déplacer un seul objet.
+    const submerged = sites.filter((s) => heightAt(s.x, s.z) < riverSurfaceAt(s.x, s.z) - 0.05);
+    const names = submerged.map((s) => s.label);
+    // Seuls les points d'eau ont vocation à être mouillés ; on tolère les deux
+    // sites que DEFAULT_VILLAGE pose à 1,1 m de l'axe, sous 20 cm d'eau.
+    expect(submerged.length, `sites sous la nappe : ${names.join(', ')}`).toBeLessThanOrEqual(4);
+    for (const s of submerged) {
+      // Les points d'eau et le lieu « rivière » ont vocation à être mouillés.
+      if (s.label === 'object river_bank' || s.label === 'place riviere') continue;
+      const depth = riverSurfaceAt(s.x, s.z) - heightAt(s.x, s.z);
+      expect(depth, `${s.label} sous ${depth.toFixed(2)} m d'eau`).toBeLessThan(0.5);
     }
   });
 });

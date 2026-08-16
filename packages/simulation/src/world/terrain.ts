@@ -1,5 +1,5 @@
 import { lerp, smoothstep } from './noise';
-import { SEA_LEVEL, dryReliefAt } from './relief';
+import { SEA_LEVEL, PLATEAU_RADIUS, dryReliefAt, distanceToVillage } from './relief';
 import { riverProximityAt } from './flow';
 
 /**
@@ -48,6 +48,18 @@ const BED_DEPTH = 1.1;
 /** Largeur de la berge, au-delà du lit. */
 const SHORE_WIDTH = 3.5;
 
+/**
+ * Le chenal se resserre là où le village est bâti.
+ *
+ * Une vallée large creusait le sol SOUS les abris et les foyers, que
+ * DEFAULT_VILLAGE place à un ou deux mètres de l'axe : ils se retrouvaient
+ * sous la nappe. Un village de bord de rivière a des berges franches, pas une
+ * vallée évasée — resserrer le chenal les remet au sec sans déplacer un seul
+ * objet ni toucher à ce que le moteur appelle « être dans la rivière ».
+ */
+const VILLAGE_CHANNEL_TIGHTEN = 0.3;
+const VILLAGE_CHANNEL_RANGE = 25;
+
 export function isRiverAt(x: number, z: number): boolean {
   const river = riverProximityAt(x, z);
   return river.distance < river.width;
@@ -71,7 +83,11 @@ export function heightAt(x: number, z: number): number {
   // La vallée s'élargit AVEC sa profondeur : c'est ce qui borne la pente des
   // berges, quelle que soit l'épaisseur de relief que le cours doit traverser.
   const depth = Math.max(0, ground - river.elevation);
-  const reach = river.width * VALLEY_RATIO + depth * BANK_RUN;
+  const tighten =
+    1 -
+    (1 - VILLAGE_CHANNEL_TIGHTEN) *
+      (1 - smoothstep(PLATEAU_RADIUS, PLATEAU_RADIUS + VILLAGE_CHANNEL_RANGE, distanceToVillage(x, z)));
+  const reach = (river.width * VALLEY_RATIO + depth * BANK_RUN) * tighten;
   if (river.distance >= reach) return ground;
 
   // Profil de vallée : le fond du lit au centre, le sol intact au bord.

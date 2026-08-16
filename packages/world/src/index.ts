@@ -58,3 +58,25 @@ export {
 } from './terrain/tiling';
 export { sampleTile, BIOME_RGB, type TileSample } from './terrain/sampling';
 export { buildTileGeometry, tileVertexCount, tileTriangleCount, SKIRT_DEPTH } from './terrain/geometry';
+
+export { WaterSurface } from './water/components';
+export { WaterSystem } from './water/WaterSystem';
+export {
+  createWaterMaterial,
+  buildWaterUniforms,
+  waterVertexShader,
+  waterFragmentShader,
+  WATER_UNIFORM_NAMES,
+} from './water/WaterMaterial';
+export {
+  buildRiverGeometry,
+  riverVertexCount,
+  RIVER_COLUMNS,
+  WATER_EDGE_LIFT,
+} from './water/riverGeometry';
+export {
+  RIVER_WAVES_LOW,
+  totalSteepness,
+  gerstnerDisplacement,
+  type GerstnerWave,
+} from './water/waves';

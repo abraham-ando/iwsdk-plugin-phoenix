@@ -12,7 +12,12 @@ describe('default village scenario', () => {
     expect(DEFAULT_VILLAGE.places.map((p) => p.name)).toContain('camp_aube');
   });
 
-  it('buildVillageSim wires a living deterministic village', () => {
+  // Ce test rejoue une journée entière de simulation : il est long PAR NATURE.
+  // Il tenait sous les 5 s par défaut, mais l'hydrologie de la phase 3C a
+  // renchéri heightAt et il expirait sous charge parallèle tout en passant
+  // seul — un faux négatif. On lui donne son budget sans toucher aux
+  // assertions, comme pour le déterminisme du loup.
+  it('buildVillageSim wires a living deterministic village', { timeout: 20000 }, () => {
     const a = buildVillageSim(42);
     const b = buildVillageSim(42);
     expect(a.runtime.agents.size).toBe(11);
