@@ -28,6 +28,14 @@ export {
 } from './world/affordances';
 export { registerDefaultContent } from './content/objects';
 export {
+  DEFAULT_VILLAGE,
+  buildVillageSim,
+  type ScenarioObject,
+  type ScenarioAgent,
+  type ScenarioPlace,
+  type VillageSim,
+} from './content/scenario';
+export {
   GroundTruthWorld,
   type NamedPlace,
   type WorldSnapshot,
