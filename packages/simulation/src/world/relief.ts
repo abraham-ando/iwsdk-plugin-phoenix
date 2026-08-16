@@ -9,7 +9,19 @@ import { lerp, smoothstep, erodedFbm, ridgedFbm } from './noise';
  * modules ; en isolant le terrain sec, le graphe redevient un arbre :
  * noise -> relief -> flow -> terrain.
  */
-export const WORLD_SIZE = 64;
+/**
+ * Côté du carré simulé, en mètres — un CÔTÉ, non un rayon : la navigation
+ * borne les agents à ±200 m de l'origine.
+ *
+ * Cette constante ne borne QUE la navigation : le champ de hauteur est défini
+ * sur le plan infini et n'en dépend pas. La changer ne modifie ni le relief,
+ * ni la rivière, ni l'habitabilité du village.
+ *
+ * 400 m donnent une centaine de tuiles de semis et plusieurs biomes à
+ * parcourir, tout en restant très en deçà des 800 m qui séparent le village
+ * de la mer : la côte reste hors d'atteinte, et c'est voulu.
+ */
+export const WORLD_SIZE = 400;
 export const SEA_LEVEL = 0;
 
 /** Cœur du village : rigoureusement plat, pour poser abris et foyer. */

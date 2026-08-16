@@ -20,10 +20,10 @@ import { getRiverCourse, riverProximityAt, historicalRiverX } from '../src/world
 import { biomeAt } from '../src/world/biomes';
 
 describe('constantes', () => {
-  it('garde la zone simulée à 64 m et la mer à zéro', () => {
+  it('garde la zone simulée à 400 m et la mer à zéro', () => {
     // WORLD_SIZE borne la SIMULATION (clamp de navigation, SpatialGrid),
     // pas l'étendue du terrain, qui est désormais infinie.
-    expect(WORLD_SIZE).toBe(64);
+    expect(WORLD_SIZE).toBe(400);
     expect(SEA_LEVEL).toBe(0);
     expect(PLATEAU_RADIUS).toBe(5);
   });
@@ -61,18 +61,40 @@ describe('plateau du village', () => {
 });
 
 describe('bassin habitable', () => {
-  it('garde un relief doux sur toute la zone simulée', () => {
+  it('garde un relief doux DANS LE BASSIN, où vit le village', () => {
     // Le village et ses ressources vivent ici : sans cette garantie, les agents
     // se retrouveraient dans une falaise (spec §6, risque de migration assumé).
     // La borne basse laisse passer le lit de la rivière et rien d'autre.
-    expect(BASIN_RADIUS).toBeGreaterThan(WORLD_SIZE / 2 - 10);
-    for (let x = -WORLD_SIZE / 2; x <= WORLD_SIZE / 2; x += 2) {
-      for (let z = -WORLD_SIZE / 2; z <= WORLD_SIZE / 2; z += 2) {
+    //
+    // La garantie porte sur le BASSIN, non sur toute la zone navigable. Tant
+    // que celle-ci faisait 64 m, les deux coïncidaient ; à 400 m elles se
+    // séparent, et c'est voulu — l'écologie E1 veut « plusieurs biomes à
+    // parcourir », ce qu'un bassin uniformément doux ne donnerait pas.
+    for (let x = -BASIN_RADIUS; x <= BASIN_RADIUS; x += 2) {
+      for (let z = -BASIN_RADIUS; z <= BASIN_RADIUS; z += 2) {
+        if (Math.hypot(x, z) > BASIN_RADIUS) continue;
         const y = heightAt(x, z);
         expect(y).toBeGreaterThan(VILLAGE_ELEVATION - 8);
         expect(y).toBeLessThan(VILLAGE_ELEVATION + 6);
       }
     }
+  });
+
+  it('RESTE PARCOURABLE PARTOUT AILLEURS, quoique varié', () => {
+    // Au-delà du bassin, le relief a le droit de monter et de s'incliner : la
+    // rareté géographique a besoin de cette variété. Ce qu'il n'a PAS le droit
+    // de faire, c'est noyer un agent ou l'enfermer derrière une falaise.
+    // Mesuré : altitudes de 4,1 à 73,7 m, pentes > 45° sur 1,0 % de l'aire.
+    let steep = 0;
+    let samples = 0;
+    for (let x = -WORLD_SIZE / 2; x <= WORLD_SIZE / 2; x += 4) {
+      for (let z = -WORLD_SIZE / 2; z <= WORLD_SIZE / 2; z += 4) {
+        expect(heightAt(x, z), `noyé en ${x},${z}`).toBeGreaterThan(SEA_LEVEL);
+        if (slopeAt(x, z) > 1.0) steep++;
+        samples++;
+      }
+    }
+    expect(steep / samples, `${((steep / samples) * 100).toFixed(1)} % de pentes > 45°`).toBeLessThan(0.05);
   });
 
 

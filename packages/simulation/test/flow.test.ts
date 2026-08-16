@@ -58,8 +58,11 @@ describe('épinglage sur la formule historique', () => {
   it("passe EXACTEMENT par l'axe d'origine dans la zone simulée", () => {
     // Les deux points d'eau de DEFAULT_VILLAGE y sont calés à la main, l'un
     // avec 0,43 m de marge. Un cours qui dérive ici assoiffe le village.
+    // Sur le SEGMENT ÉPINGLÉ, non sur toute la zone navigable : au-delà, la
+    // rivière cherche elle-même son exutoire vers la mer, et c'est sa raison
+    // d'être. Tant que la zone faisait 64 m, les deux coïncidaient.
     const course = getRiverCourse();
-    for (let z = -WORLD_SIZE / 2; z <= 0; z += 4) {
+    for (let z = -PINNED_HALF_LENGTH; z <= 0; z += 4) {
       const expected = historicalRiverX(z);
       // On cherche s'il EXISTE un point du cours sur l'axe historique. Filtrer
       // par proximité en z seul ramènerait aussi des points d'amont ou d'aval
@@ -74,7 +77,10 @@ describe('épinglage sur la formule historique', () => {
   it('conserve la formule historique elle-même', () => {
     expect(historicalRiverX(0)).toBeCloseTo(4.0, 10);
     expect(historicalRiverX(-8)).toBeCloseTo(4.0 + Math.sin(-8 * 0.12) * 3.5, 10);
-    expect(PINNED_HALF_LENGTH).toBeGreaterThanOrEqual(WORLD_SIZE / 2);
+    // Le segment épinglé doit couvrir les deux points d'eau du village
+    // (z = 0 et z = -8), avec une marge confortable. Il n'a plus à couvrir la
+    // zone navigable entière, qui fait désormais dix fois sa longueur.
+    expect(PINNED_HALF_LENGTH).toBeGreaterThanOrEqual(32);
   });
 });
 

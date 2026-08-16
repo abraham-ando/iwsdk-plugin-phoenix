@@ -95,8 +95,10 @@ export class WolfSystem {
         }
         case 'roam': {
           if (this.stepToward(wolf.targetX, wolf.targetZ)) {
-            wolf.targetX = ctx.rng.int(-20, 21);
-            wolf.targetZ = ctx.rng.int(-20, 21);
+            // Le rôdage suivait la zone de 64 m ; à 400 m, un loup confiné à
+            // ±20 m ne serait plus qu'un décor du village.
+            wolf.targetX = ctx.rng.int(-60, 61);
+            wolf.targetZ = ctx.rng.int(-60, 61);
           }
           if (wolf.hunger < WOLF_HUNT_THRESHOLD) wolf.mode = 'hunt';
           break;
@@ -144,8 +146,8 @@ export class WolfSystem {
 
   private nearestGameGround(): { x: number; z: number; state: Record<string, number> } | null {
     const grounds = this.world
-      .objectsNear(0, 0, 1000)
-      .filter((o) => o.type === 'hunting_ground' && (o.state.gameLeft ?? 0) > 0)
+      .objectsOfType('hunting_ground')
+      .filter((o) => (o.state.gameLeft ?? 0) > 0)
       .sort(
         (a, b) =>
           Math.hypot(a.x - this.wolf.x, a.z - this.wolf.z) -

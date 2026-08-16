@@ -1,4 +1,6 @@
-# Relier le monde aux agents — conception
+# Écologie E1 — Le monde à portée — conception
+
+*Premier des quatre sous-projets d'« écologie & subsistance ». Les trois autres — populations animales, chaînes d'artisanat, démographie villageoise — reposent sur celui-ci : ils ont besoin respectivement d'espace, de matières premières et d'une subsistance qui tienne.*
 
 ## 1. Le constat qui motive tout
 
@@ -21,22 +23,27 @@ Le projet s'est engagé dès son origine sur la définition du modèle du monde 
 
 Le moteur possède déjà ce mécanisme : `BeliefState` tient des croyances datées sur les objets, et `learn()` accepte une rumeur *datée à l'instant où on l'entend, non au moment du fait*. La connaissance géographique s'y inscrit sans rien inventer — elle devient une nouvelle classe de faits dans un patron éprouvé.
 
-## 3. Le semis appartient à la vérité terrain
+## 3. Le semis engendre des objets exploitables
 
-`scatterAt(tileX, tileZ)` rend, de façon déterministe, les ressources d'une tuile de 32 m. Une grille perturbée propose des points ; chacun consulte `biomeAt`, `slopeAt` et une table d'espèces :
+`scatterAt(tileX, tileZ)` **existe depuis la phase 5** : il rend, de façon déterministe, les espèces et positions d'une tuile de 32 m, dérivées du biome, de la pente et d'un hachage. Le rendu le consomme déjà et en instancie les maillages.
 
-| Espèce | Condition |
-| :--- | :--- |
-| `berry_bush` | biome humide ou prairie, pente douce |
-| `flint_deposit` | biome rocheux, ou pente forte |
-| `oak_tree` | biome forestier |
-| `deadwood` | abords de la rivière |
+**Il lui manque son second consommateur.** Le moteur n'y instancie aucun smart object : la forêt se voit mais ne se coupe pas. C'est précisément le défaut que la spec environnement §8 annonçait — « les agents bûcheronneraient des arbres invisibles pendant que la forêt visible resterait inerte » — inversé : ici la forêt visible est inerte.
 
-**La rareté devient une conséquence de la géographie** au lieu d'être un choix de contenu posé à la main dans `DEFAULT_VILLAGE`.
+Le moteur instancie donc, pour chaque tuile de la zone simulée, les smart objects que `scatterAt` y sème :
 
-Le moteur et le rendu appellent **la même fonction** : le moteur y instancie des smart objects exploitables, le rendu y instancie des maillages. Sans cette discipline, les agents bûcheronneraient des arbres invisibles pendant que la forêt visible resterait inerte.
+| Espèce semée | Smart object | Verbes déjà disponibles |
+| :--- | :--- | :--- |
+| `oak` | `oak_tree` | `gather_wood` |
+| `bush` | `berry_bush` | `gather_berries` |
+| `aspen` | `oak_tree` | `gather_wood` |
 
-**Réserve du village.** `scatterAt` ne sème rien dans le plateau. Les 23 objets calibrés de `DEFAULT_VILLAGE` restent seuls maîtres chez eux : c'est ce qui protège le garde-fou d'habitabilité, les tests du loup et ceux du joueur, tous calés sur des coordonnées à la main.
+**Aucun verbe nouveau n'est nécessaire.** Le moteur porte déjà `hunt`, `fish`, `knap_flint`, `build`, `gather_*` — quinze affordances, cinq besoins, un inventaire générique et une régénération déclarée. Ce qui manquait n'était pas la capacité d'agir, mais le monde sur lequel agir.
+
+**Réserve du village.** `scatterAt` observe déjà une réserve de 14 m autour du plateau : les 23 objets calibrés de `DEFAULT_VILLAGE` y restent seuls, et le garde-fou d'habitabilité continue d'en répondre.
+
+**Le semis est instancié d'emblée, pas à la demande.** Sur 400 m de côté, `scatterAt` sème **2 143 plantes** — mesuré, non estimé : 1 554 chênes, 586 buissons, 3 trembles. Avec les 23 objets du village, la vérité terrain passe donc de **23 à 2 166 objets**, un facteur 94. Les instancier tous au démarrage coûte quelques centaines de kilo-octets et garantit des identifiants stables : une instanciation paresseuse ferait dépendre l'identité d'un arbre de l'ordre dans lequel les agents s'en approchent, et le déterminisme du moteur n'y survivrait pas.
+
+Ce facteur 94 est la véritable difficulté de cette phase, et le §7 en tire les conséquences.
 
 ## 4. La perception gagne le sol
 
@@ -75,16 +82,19 @@ Sans espace, la rareté géographique n'a nulle part où s'exprimer : les agents
 
 ## 7. Surface de régression assumée
 
-Elle est large, et l'énoncer fait partie de la conception.
+Elle est large, et l'énoncer fait partie de la conception. Trois lignes de ce tableau ne sont pas des ajustements : ce sont des **défauts préexistants que le facteur 94 rend intenables**. Ils sont mesurés ci-dessous, et corrigés dans cette phase.
 
 | Ce qui bouge | Conséquence |
 | :--- | :--- |
-| `WORLD_SIZE` 64 → 400 | Clamp de navigation, et toute assertion de position qui en dérive |
+| `WORLD_SIZE` 64 → 400 | Clamp de navigation seulement. **Vérifié** : `WORLD_SIZE` n'a qu'un consommateur, `navigation.ts`. Le champ de hauteur est défini sur le plan infini et ne s'en trouve pas modifié — le relief, la rivière et l'habitabilité du village restent bit pour bit identiques. |
+| `Mode1.selectAction` | **Le vrai obstacle, et il est préexistant.** Il note *toutes* les croyances de l'agent, à chaque décision de chaque agent. Mesuré : **0,015–0,058 ms à 23 croyances, 0,80 ms à 2 166** — le coût croît linéairement avec la mémoire. À onze agents et 10 Hz, cela passe de 4 à **88 ms de calcul par seconde simulée**, sur le fil principal d'une application dont le budget d'image est de 11 ms. Pire, `SimKernel` autorise des rattrapages de 1 000 ticks : une telle rafale bloquerait près de neuf secondes. |
+| `BeliefState` sans borne | C'est la cause de la ligne précédente, et sa correction. Un agent qui parcourt 400 m finirait par croire à des milliers d'arbres, dont il n'utilisera jamais que les plus proches. **Une mémoire bornée par récence est fidèle au modèle** — une mémoire qui décline est une mémoire faillible — avant d'être un expédient. La borne est fixée à **128 objets**, mesurée : 0,051–0,131 ms par décision, soit au pire 14 ms par seconde simulée, contre 88 sans borne. Les lieux, eux, tiennent la mémoire longue : une centaine de tuiles au lieu de milliers d'arbres. |
+| `BeliefState.known()` | **Défaut préexistant.** Copie et trie la carte entière à chaque appel, avec `localeCompare` — 0,003 ms à 23 croyances, 0,165 ms à 2 166. La borne ci-dessus en absorbe l'essentiel ; une mémoïsation invalidée à l'écriture, qui préserve exactement l'ordre trié dont dépend le déterminisme, achève de l'effacer. |
 | `WolfSystem` | Rayon de rôdage codé en dur à ±20 m, à élargir |
-| `objectsNear(0, 0, 1000)` | **Défaut préexistant** : balaie 250 000 cellules par appel, à chaque tick en mode chasse. Avec dix fois plus d'objets il devient intenable ; il est borné dans cette phase. |
-| `scenario.test` | Fige 23 objets ; le compte change |
+| `scenario.test` | Fige 23 objets ; le compte devient 2 166 |
 | Instantanés déterministes | Le déterminisme tient — tout reste déterministe — mais les références enregistrées changent |
-| Coût par tick | `biomeAt` coûte 3,2 µs ; onze agents à 10 Hz, soit 35 µs par seconde. Négligeable. |
+| Coût de perception | Rayon de vision de 12 m le jour : à la densité du semis, une dizaine d'objets par observation. Sans effet. |
+| Coût du sol | `biomeAt` coûte 3,2 µs ; onze agents à 10 Hz, soit 35 µs par seconde. Négligeable. |
 
 ## 8. Ce que cela donne à l'entraînement
 
@@ -94,16 +104,19 @@ Les observations portent enfin la géographie, donc les décisions et les jeux d
 
 ## 9. Tests
 
-- **`scatterAt`** : déterminisme, raccord aux frontières de tuile, densité conforme au biome, aucun semis dans le village, aucun sur pente forte.
+- **Instanciation du semis** : chaque tuile de la zone simulée porte autant de smart objects que `scatterAt` y sème ; aucun dans le village ; le compte total reste borné.
 - **Perception** : l'observation porte les trois faits du sol, et ils s'accordent avec le moteur.
 - **`PlaceBelief`** : acquise en marchant et pas autrement, datée, transmissible par rumeur, `placesOf` ordonné par distance.
 - **Zone élargie** : le clamp de navigation tient à la nouvelle borne ; le garde-fou d'habitabilité du village reste vert **sans modification** ; le loup trouve encore ses proies.
+- **Tenue en charge** : à 2 166 objets, un tick de onze agents reste sous son budget, et `known()` ne se dégrade plus avec le nombre de croyances. Chaque correctif du §7 porte le test qui l'établit — un banc qui échouerait si la copie triée revenait.
+- **Déterminisme préservé** : deux exécutions du même scénario rendent le même instantané, mémoïsation et index par type compris.
 - **Divergence croyance/vérité** : une métrique existante du moteur, étendue aux lieux.
 
 ## 10. Hors périmètre
 
 - **Pas d'exploration délibérée.** Les agents n'ont pas de pulsion à découvrir ; ils enregistrent ce qu'ils traversent en vaquant à leurs besoins.
 - **Pas de carte partagée.** La rumeur transmet un lieu à la fois, par le dialogue existant.
-- **Pas de régénération des ressources.** Une baie cueillie ne repousse pas ; cela relève du sous-projet *écologie & subsistance*.
-- **Pas de pêche ni de chasse nouvelles.** Le loup reste le seul animal de vérité terrain.
+- **Pas de population animale.** Le loup reste le seul animal de vérité terrain ; les troupeaux relèvent d'E2.
+- **Pas de recettes d'artisanat.** `knap_flint` existe et fonctionne ; les chaînes de fabrication relèvent d'E3.
+- **Pas de démographie.** Ni naissance, ni âge, ni mort : c'est E4.
 - **Pas de navigation par le relief.** `Mode1` estime toujours les déplacements en distance planaire, sans tenir compte du dénivelé.
