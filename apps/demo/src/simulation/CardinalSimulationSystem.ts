@@ -4,7 +4,7 @@
  * republishes engine events as French narrative lines for the HUD. Rendering
  * projection (avatars, sky, fires) subscribes to this system.
  */
-import { createSystem } from '@iwsdk/core';
+import { createSystem, type Group } from '@iwsdk/core';
 import {
   SimKernel,
   GroundTruthWorld,
@@ -17,6 +17,9 @@ import {
   type ActionEvent,
 } from '@iwsdk/cardinal-simulation';
 import { VILLAGE_LAYOUT } from './layout';
+import { applyAvatarPose } from './AgentAvatarFactory';
+import { PrehistoricEnvironment3D, type PrehistoricSceneResult } from './PrehistoricEnvironment3D';
+import { CelestialVisuals } from './CelestialVisuals';
 
 export interface SimEvent {
   tick: number;
@@ -64,6 +67,25 @@ export class CardinalSimulationSystem extends createSystem({}) {
 
   private listeners: Array<(e: SimEvent) => void> = [];
   private lastDay = 0;
+  private sceneData: PrehistoricSceneResult | null = null;
+  private elapsed = 0;
+  private campfireBindings: Array<{ group: Group; objectId: string }> = [];
+  private celestial: CelestialVisuals | null = null;
+
+  /** Bind the rendered scene once; per-frame projection targets it. */
+  attachScene(sceneData: PrehistoricSceneResult): void {
+    this.sceneData = sceneData;
+    this.celestial = new CelestialVisuals(sceneData.root);
+    this.campfireBindings = [];
+    for (const [, group] of sceneData.campfires) {
+      const worldX = group.position.x + (group.parent?.position.x ?? 0);
+      const worldZ = group.position.z + (group.parent?.position.z ?? 0);
+      const near = this.simWorld
+        .objectsNear(worldX, worldZ, 3)
+        .find((o) => o.type === 'campfire');
+      if (near) this.campfireBindings.push({ group, objectId: near.id });
+    }
+  }
 
   init(): void {
     this.registry = new SmartObjectRegistry();
@@ -115,6 +137,28 @@ export class CardinalSimulationSystem extends createSystem({}) {
     for (const event of this.runtime.drainEvents()) {
       const narrated = this.narrate(event);
       if (narrated !== null) this.emit(narrated);
+    }
+
+    // Per-frame projection of engine views onto the rendered scene.
+    this.elapsed += delta;
+    if (this.sceneData !== null) {
+      for (const view of this.runtime.views()) {
+        const avatar = this.sceneData.agentAvatars.get(view.id);
+        if (avatar === undefined) continue;
+        avatar.position.set(view.x, view.y, view.z);
+        avatar.rotation.y = view.heading;
+        applyAvatarPose(avatar, view.animation, this.elapsed);
+      }
+      for (const binding of this.campfireBindings) {
+        const fire = this.simWorld.get(binding.objectId);
+        if (fire) {
+          PrehistoricEnvironment3D.setCampfireLit(binding.group, (fire.state.lit ?? 0) === 1);
+        }
+      }
+      // Scenery animation (wind, water) lives with rendering, not simulation.
+      this.sceneData.grassField.updateWind(this.elapsed);
+      this.sceneData.river.updateWater(this.elapsed);
+      this.celestial?.update(this.hourOfDaySim(), this.weather.current, this.elapsed);
     }
   }
 
