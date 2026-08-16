@@ -4,6 +4,11 @@ import { CelestialTime, SkyModel, StarField } from './atmosphere/components';
 import { CelestialTimeSystem } from './atmosphere/CelestialTimeSystem';
 import { SkyRenderSystem } from './atmosphere/SkyRenderSystem';
 import { StarFieldSystem } from './atmosphere/StarFieldSystem';
+import { MaterialLibrary } from './materials/MaterialLibrary';
+import { ProceduralMaterial } from './materials/components';
+import { MaterialSystem } from './materials/MaterialSystem';
+import { ExposureSystem } from './atmosphere/ExposureSystem';
+import { applyColorManagement } from './core/colorManagement';
 
 export interface CardinalWorldOptions {
   quality?: QualityTier;
@@ -38,17 +43,23 @@ export function withLevelRoot(world: World, callback: (root: Entity) => void): v
 export function installCardinalWorld(
   world: World,
   options: CardinalWorldOptions = {},
-): { quality: QualityTier } {
+): { quality: QualityTier; materials: MaterialLibrary } {
   const quality = options.quality ?? detectQuality();
+  const materials = new MaterialLibrary(quality);
 
   world
     .registerComponent(CelestialTime)
     .registerComponent(SkyModel)
-    .registerComponent(StarField);
+    .registerComponent(StarField)
+    .registerComponent(ProceduralMaterial);
 
   world.registerSystem(CelestialTimeSystem);
   world.registerSystem(SkyRenderSystem, { configData: { quality } });
   world.registerSystem(StarFieldSystem);
+  world.registerSystem(ExposureSystem);
+  world.registerSystem(MaterialSystem, { configData: { library: materials } });
+
+  applyColorManagement((world as unknown as { renderer?: unknown }).renderer);
 
   withLevelRoot(world, (root) => {
     if (!root.hasComponent(CelestialTime)) {
@@ -69,5 +80,5 @@ export function installCardinalWorld(
     if (!root.hasComponent(IBLGradient)) root.addComponent(IBLGradient, {});
   });
 
-  return { quality };
+  return { quality, materials };
 }

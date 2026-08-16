@@ -34,3 +34,7 @@ export {
   generateNormal,
 } from './materials/textureData';
 export { MaterialLibrary, TEXTURE_SIZE } from './materials/MaterialLibrary';
+export { ProceduralMaterial } from './materials/components';
+export { MaterialSystem } from './materials/MaterialSystem';
+export { ExposureSystem } from './atmosphere/ExposureSystem';
+export { applyColorManagement } from './core/colorManagement';
