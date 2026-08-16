@@ -10,6 +10,8 @@ import { executeActionTick, type ActionEvent } from './actions';
 import { selectAction } from './Mode1';
 import { buildPlanRequest, parsePlanSteps, type PlanRequest, type PlanRequestReason } from './Mode2';
 import { defaultIntrinsics, type IntrinsicActionDef } from './intrinsics';
+import type { WolfSystem } from '../world/WolfSystem';
+import { clampNeed } from './needs';
 
 export interface AgentView {
   id: string;
@@ -36,6 +38,11 @@ export const SPEECH_DISPLAY_TICKS = 50;
 export const PLAYER_ID = 'player';
 export const PLAYER_SIGHTING_COOLDOWN = 600;
 export const PLAYER_SPEAK_RADIUS = 6;
+export const WOLF_ID = 'wolf';
+export const WOLF_FEAR_RADIUS = 8;
+export const WOLF_PANIC_RADIUS = 5;
+export const WOLF_FEAR_COOLDOWN = 300;
+export const SAFE_FIRE_RADIUS = 4;
 
 interface PlayerPresence {
   x: number;
@@ -62,6 +69,8 @@ export class AgentRuntime {
   private eventSubscribers: Array<(e: ActionEvent) => void> = [];
   private planRequestSubscribers: Array<(r: PlanRequest) => void> = [];
   private player: PlayerPresence | null = null;
+  private wolf: WolfSystem | null = null;
+  private wolfFearAt = new Map<string, number>();
 
   constructor(
     private world: GroundTruthWorld,
@@ -233,6 +242,11 @@ export class AgentRuntime {
     return this.player === null ? null : { x: this.player.x, z: this.player.z };
   }
 
+  /** Register the wolf so agents can fear it (spec §10.4). */
+  attachWolf(wolf: WolfSystem): void {
+    this.wolf = wolf;
+  }
+
   private handlePlayerEvent(event: ExternalEvent, tick: number): boolean {
     if (this.player === null) return event.type.startsWith('player_');
     const payload = event.payload as Record<string, unknown> | null;
@@ -375,6 +389,10 @@ export class AgentRuntime {
       if (this.player !== null) {
         others.push({ id: PLAYER_ID, x: this.player.x, z: this.player.z, verb: null, distance: 0 });
       }
+      if (this.wolf !== null) {
+        const wolfState = this.wolf.state();
+        others.push({ id: WOLF_ID, x: wolfState.x, z: wolfState.z, verb: wolfState.mode, distance: 0 });
+      }
       const observation = perceive(
         this.world,
         { id: agent.profile.id, x: agent.x, z: agent.z },
@@ -430,6 +448,55 @@ export class AgentRuntime {
           other.mode2.dialogueCooldownUntilTick = ctx.tick + DIALOGUE_COOLDOWN_TICKS;
         }
         break;
+      }
+    }
+
+    // Wolf fear (spec §10.4): stress + memory when close, panic retreat to a
+    // lit fire when very close and unprotected.
+    if (this.wolf !== null) {
+      const wolfState = this.wolf.state();
+      const wolfDistance = Math.hypot(wolfState.x - agent.x, wolfState.z - agent.z);
+      if (wolfDistance <= WOLF_FEAR_RADIUS) {
+        const lastFear = this.wolfFearAt.get(agent.profile.id) ?? -Infinity;
+        if (ctx.tick - lastFear >= WOLF_FEAR_COOLDOWN) {
+          this.wolfFearAt.set(agent.profile.id, ctx.tick);
+          agent.needs.stress = clampNeed(agent.needs.stress + 25);
+          agent.memories.add({
+            tick: ctx.tick,
+            text: 'Le loup rôde tout près, je dois rester prudent !',
+            importance: 7,
+            kind: 'event',
+          });
+        }
+        const protectedByFire = this.world
+          .objectsNear(agent.x, agent.z, SAFE_FIRE_RADIUS)
+          .some((o) => o.type === 'campfire' && (o.state.lit ?? 0) === 1);
+        if (wolfDistance <= WOLF_PANIC_RADIUS && !protectedByFire) {
+          const refuge = agent.beliefs
+            .byType('campfire')
+            .sort(
+              (a, b) =>
+                Math.hypot(a.x - agent.x, a.z - agent.z) - Math.hypot(b.x - agent.x, b.z - agent.z)
+            )[0];
+          if (refuge !== undefined && agent.currentAction?.verb !== 'rest_nearby') {
+            agent.currentAction = {
+              kind: 'world',
+              objectId: refuge.objectId,
+              verb: 'rest_nearby',
+              phase: 'goto',
+              targetX: refuge.x,
+              targetZ: refuge.z,
+              remainingTicks: 0,
+            };
+            this.pushEvent({
+              tick: ctx.tick,
+              agentId: agent.profile.id,
+              type: 'started',
+              verb: 'rest_nearby',
+              source: 'reflex',
+            });
+          }
+        }
       }
     }
 

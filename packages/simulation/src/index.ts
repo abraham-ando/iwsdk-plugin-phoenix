@@ -102,6 +102,7 @@ export {
 } from './agents/Mode2';
 export { AgentRuntime, type AgentView } from './agents/AgentRuntime';
 export { WeatherMachine, WEATHER_CHECK_PERIOD, type WeatherState } from './world/WeatherMachine';
+export { WolfSystem, type WolfState, type WolfMode } from './world/WolfSystem';
 export {
   MemoryStream,
   MEMORY_CAPACITY,
