@@ -18,6 +18,15 @@ export { createGenome, defaultGenome, centeredDraw } from './genome/create';
 export { breed } from './genome/breed';
 export { GENOME_FORMAT_VERSION, packGenome, unpackGenome } from './genome/serialize';
 
+export type {
+  Vec3,
+  BoneRest,
+  RigBinding,
+  CompiledBone,
+  CompiledCharacter,
+} from './compile/types';
+export { compile } from './compile/compile';
+
 import { HUMANOID } from './family/humanoid';
 import { registerFamily } from './family/registry';
 
