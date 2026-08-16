@@ -31,9 +31,20 @@ describe('TrajectoryRecorder', () => {
     expect(batch.predictions.length).toBeGreaterThan(0);
     expect(batch.episodes.length).toBeGreaterThan(2400 / 50 - 1);
     // decisions are tool-calling shaped
-    const d = batch.decisions[0] as { messages: Array<{ role: string }>; tools: unknown[] };
+    const d = batch.decisions[0] as {
+      messages: Array<{ role: string; content?: string }>;
+      tools: unknown[];
+    };
     expect(d.messages.map((m) => m.role)).toEqual(['system', 'user', 'assistant']);
     expect(d.tools.length).toBeGreaterThan(0);
+    // The user message must mirror EXACTLY what the BFF sends at inference
+    // time (the whole PlanRequest, tools included) — otherwise a model
+    // fine-tuned on this data meets a different input shape in production.
+    const userPayload = JSON.parse(d.messages[1]!.content!) as Record<string, unknown>;
+    expect(userPayload).toHaveProperty('tools');
+    expect(userPayload).toHaveProperty('beliefs');
+    expect(userPayload).toHaveProperty('needs');
+    expect(userPayload.requestId).toBe((d as unknown as { meta: { requestId: string } }).meta.requestId);
     // predictions carry the LeCun quadruplet fields
     const p = batch.predictions[0] as Record<string, unknown>;
     for (const key of ['verb', 'predicted', 'outcome', 'needsDelta', 'inventoryDelta', 'surprise']) {

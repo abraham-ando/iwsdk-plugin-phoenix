@@ -201,15 +201,11 @@ export class TrajectoryRecorder {
           content: `Tu es ${request.persona} (${request.role}, tribu ${request.tribe}).`,
         },
         {
+          // Exactly what the BFF sends upstream at inference time — the whole
+          // PlanRequest. Training input and serving input must be the same
+          // shape, or a fine-tuned model meets a distribution it never saw.
           role: 'user',
-          content: JSON.stringify({
-            needs: request.needs,
-            hour: request.hour,
-            place: request.place,
-            beliefs: request.beliefs,
-            memories: request.memories,
-            currentPlan: request.currentPlan,
-          }),
+          content: JSON.stringify(request),
         },
         assistant,
       ],
