@@ -1,6 +1,8 @@
 import type { GroundTruthWorld } from '../world/GroundTruthWorld';
 import { hourOfDay } from '../kernel/SimKernel';
 import { isNightHour } from './needs';
+import { slopeAt, heightAt } from '../world/terrain';
+import { biomeAt, type BiomeId } from '../world/biomes';
 
 /**
  * Perception is the ONLY door between an agent and ground truth (spec §6.1).
@@ -34,6 +36,13 @@ export interface Observation {
   night: boolean;
   place: string | null;
   visionRadius: number;
+  /**
+   * Le sol sous les pieds de l'agent, et rien d'autre. Perceptuel et local :
+   * un agent sait ce qu'il foule, pas ce qu'il y a derrière la colline.
+   */
+  groundBiome: BiomeId;
+  groundSlope: number;
+  groundHeight: number;
   objects: ObservedObject[];
   agents: PerceivedAgent[];
   heard: PerceivedAgent[];
@@ -77,6 +86,11 @@ export function perceive(
     night,
     place: world.placeAt(self.x, self.z),
     visionRadius,
+    // `.primary` : biomeAt rend un mélange pondéré ; l'agent retient le
+    // biome dominant, comme le rendu.
+    groundBiome: biomeAt(self.x, self.z).primary,
+    groundSlope: slopeAt(self.x, self.z),
+    groundHeight: heightAt(self.x, self.z),
     objects,
     agents,
     heard,
