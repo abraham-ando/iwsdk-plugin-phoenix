@@ -52,7 +52,7 @@ export class WeatherMachine {
     this.sinceTick = tick;
     const isWet = state === 'rain' || state === 'storm';
     if (isWet && !wasWet) {
-      for (const fire of world.objectsNear(0, 0, 1000).filter((o) => o.type === 'campfire')) {
+      for (const fire of world.objectsOfType('campfire')) {
         fire.state.lit = 0;
       }
     }

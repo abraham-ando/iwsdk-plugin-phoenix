@@ -29,6 +29,8 @@ export class GroundTruthWorld {
   readonly grid = new SpatialGrid();
   private objects = new Map<string, SmartObjectInstance>();
   private places = new Map<string, NamedPlace>();
+  /** Index par type : `objectsNear(0, 0, 1000)` balayait 251 001 cellules. */
+  private typeIndex = new Map<string, Set<string>>();
   private counter = 0;
 
   constructor(private registry: SmartObjectRegistry) {}
@@ -45,6 +47,7 @@ export class GroundTruthWorld {
     };
     this.objects.set(instance.id, instance);
     this.grid.insert(instance.id, x, z);
+    this.indexByType(instance);
     return instance;
   }
 
@@ -59,6 +62,27 @@ export class GroundTruthWorld {
       if (obj !== undefined) result.push(obj);
     }
     return result;
+  }
+
+  private indexByType(instance: SmartObjectInstance): void {
+    let bucket = this.typeIndex.get(instance.type);
+    if (bucket === undefined) {
+      bucket = new Set();
+      this.typeIndex.set(instance.type, bucket);
+    }
+    bucket.add(instance.id);
+  }
+
+  /** Tous les objets d'un type, où qu'ils soient, triés par identifiant. */
+  objectsOfType(type: string): SmartObjectInstance[] {
+    const bucket = this.typeIndex.get(type);
+    if (bucket === undefined) return [];
+    const result: SmartObjectInstance[] = [];
+    for (const id of bucket) {
+      const obj = this.objects.get(id);
+      if (obj !== undefined) result.push(obj);
+    }
+    return result.sort((a, b) => a.id.localeCompare(b.id));
   }
 
   /** All affordances near the actor whose preconditions currently pass. */
@@ -136,6 +160,7 @@ export class GroundTruthWorld {
       const instance: SmartObjectInstance = { ...obj, state: { ...obj.state } };
       world.objects.set(instance.id, instance);
       world.grid.insert(instance.id, instance.x, instance.z);
+      world.indexByType(instance);
     }
     for (const place of snapshot.places) {
       world.places.set(place.name, { ...place });

@@ -140,8 +140,6 @@ export function buildVillageSim(seed: number, replayLog?: EventLog): VillageSim 
     );
   }
   // Day one starts with the fires lit, as the village always did.
-  for (const fire of world.objectsNear(0, 0, 1000)) {
-    if (fire.type === 'campfire') fire.state.lit = 1;
-  }
+  for (const fire of world.objectsOfType('campfire')) fire.state.lit = 1;
   return { kernel, world, runtime, weather, registry };
 }

@@ -144,8 +144,8 @@ export class WolfSystem {
 
   private nearestGameGround(): { x: number; z: number; state: Record<string, number> } | null {
     const grounds = this.world
-      .objectsNear(0, 0, 1000)
-      .filter((o) => o.type === 'hunting_ground' && (o.state.gameLeft ?? 0) > 0)
+      .objectsOfType('hunting_ground')
+      .filter((o) => (o.state.gameLeft ?? 0) > 0)
       .sort(
         (a, b) =>
           Math.hypot(a.x - this.wolf.x, a.z - this.wolf.z) -
