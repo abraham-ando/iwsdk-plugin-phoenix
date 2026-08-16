@@ -15,6 +15,7 @@ export { registerFamily, getFamily, validateDescriptor } from './family/registry
 export type { Genome, RngLike } from './genome/types';
 export { clamp01 } from './genome/types';
 export { createGenome, defaultGenome, centeredDraw } from './genome/create';
+export { breed } from './genome/breed';
 
 import { HUMANOID } from './family/humanoid';
 import { registerFamily } from './family/registry';
