@@ -127,8 +127,8 @@ describe('/agents/plan (mock mode, server-side jsonl logging)', () => {
   }
 
   beforeAll(async () => {
-    // Force mock mode even if real API keys leak from the shell.
-    for (const key of ['GROQ_API_KEY', 'OPENAI_API_KEY']) {
+    // Force mock mode even if real API keys/endpoints leak from the shell.
+    for (const key of ['GROQ_API_KEY', 'OPENAI_API_KEY', 'LLM_BASE_URL', 'LLM_MODEL', 'LLM_API_KEY']) {
       savedEnv[key] = process.env[key];
       delete process.env[key];
     }
@@ -261,5 +261,80 @@ describe('/agents/plan (mock mode, server-side jsonl logging)', () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { insights: string[] };
     expect(body.insights.length).toBeGreaterThan(0);
+  });
+
+  describe('custom OpenAI-compatible upstream (local MLX/exo-style server)', () => {
+    let llmServer: CardinalBFFServer;
+    let fakeUpstream: import('node:http').Server;
+    let capturedBody: Record<string, unknown> | null = null;
+    let capturedAuth: string | undefined;
+    const llmPort = 3096;
+    const upstreamPort = 3097;
+    const llmBase = `http://localhost:${llmPort}`;
+
+    beforeAll(async () => {
+      const http = await import('node:http');
+      fakeUpstream = http.createServer((req, res) => {
+        let data = '';
+        req.on('data', (c) => (data += c));
+        req.on('end', () => {
+          capturedBody = JSON.parse(data);
+          capturedAuth = req.headers.authorization;
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          // Small local models often wrap JSON in markdown fences — the BFF
+          // must parse leniently.
+          res.end(
+            JSON.stringify({
+              choices: [
+                {
+                  message: {
+                    content:
+                      '```json\n{"steps":[{"goal":"cueillir","verb":"gather_berries","objectId":"berry_bush_1","predicted":"+2 baies"}]}\n```',
+                  },
+                },
+              ],
+            })
+          );
+        });
+      });
+      await new Promise<void>((r) => fakeUpstream.listen(upstreamPort, r));
+      llmServer = new CardinalBFFServer({
+        port: llmPort,
+        jwtSecret: 'test_jwt_secret_key_123',
+        rateLimitMax: 100,
+        datasetDir: null,
+        llmBaseUrl: `http://127.0.0.1:${upstreamPort}/v1`,
+        llmModel: 'mlx-community/Llama-3.2-1B-Instruct-4bit',
+        llmApiKey: 'x',
+      });
+      await llmServer.start();
+    });
+
+    afterAll(async () => {
+      await llmServer.stop();
+      await new Promise<void>((r) => fakeUpstream.close(() => r()));
+    });
+
+    it('routes /agents/plan to the custom endpoint with model, key, and lenient JSON parsing', async () => {
+      const sessionRes = await fetch(`${llmBase}/api/auth/session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId: 'llm_test' }),
+      });
+      const { token } = (await sessionRes.json()) as { token: string };
+
+      const res = await fetch(`${llmBase}/agents/plan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ request: dawnRequest() }),
+      });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { steps: Array<{ verb: string }> };
+      expect(body.steps[0]?.verb).toBe('gather_berries');
+
+      expect(capturedBody?.model).toBe('mlx-community/Llama-3.2-1B-Instruct-4bit');
+      expect(capturedBody).not.toHaveProperty('response_format'); // local servers often reject it
+      expect(capturedAuth).toBe('Bearer x');
+    });
   });
 });

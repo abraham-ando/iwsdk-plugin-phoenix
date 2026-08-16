@@ -14,6 +14,19 @@ export interface BFFServerConfig {
   /** Directory for server-side JSONL logging of /agents/plan (spec §9.2).
    * null disables logging. */
   datasetDir?: string | null;
+  /** Custom OpenAI-compatible endpoint (e.g. a local MLX/exo/ollama server:
+   * http://127.0.0.1:52415/v1). Takes precedence over Groq/OpenAI keys.
+   * Also read from env: LLM_BASE_URL, LLM_MODEL, LLM_API_KEY. */
+  llmBaseUrl?: string;
+  llmModel?: string;
+  llmApiKey?: string;
+}
+
+interface ResolvedLlm {
+  baseUrl: string;
+  model: string;
+  apiKey: string;
+  isCustom: boolean;
 }
 
 /** Structural mirror of the engine's PlanRequest — the BFF never imports the
@@ -131,19 +144,10 @@ export class CardinalBFFServer {
         const bodyText = await this.readBody(req);
         const chatPayload = JSON.parse(bodyText);
 
-        // Resolve upstream provider (Default: Groq for fast VR responses)
-        const apiKey =
-          this.config.groqApiKey ||
-          this.config.openaiApiKey ||
-          this.config.deepseekApiKey ||
-          process.env.GROQ_API_KEY ||
-          process.env.OPENAI_API_KEY ||
-          'mock_secret_key';
-
-        const upstreamURL =
-          this.config.openaiApiKey
-            ? 'https://api.openai.com/v1/chat/completions'
-            : 'https://api.groq.com/openai/v1/chat/completions';
+        // Resolve upstream provider (custom local endpoint > OpenAI > Groq)
+        const llm = this.resolveLlm();
+        const apiKey = llm?.apiKey ?? 'mock_secret_key';
+        const upstreamURL = `${llm?.baseUrl ?? 'https://api.groq.com/openai/v1'}/chat/completions`;
 
         // Upstream fetch
         const upstreamResponse = await fetch(upstreamURL, {
@@ -218,20 +222,14 @@ export class CardinalBFFServer {
       return;
     }
 
-    const realKey =
-      this.config.groqApiKey ||
-      this.config.openaiApiKey ||
-      this.config.deepseekApiKey ||
-      process.env.GROQ_API_KEY ||
-      process.env.OPENAI_API_KEY ||
-      null;
+    const llm = this.resolveLlm();
 
     let response: Record<string, unknown>;
-    if (realKey === null) {
+    if (llm === null) {
       response = this.mockPlan(request);
     } else {
       try {
-        response = await this.llmPlan(request, realKey);
+        response = await this.llmPlan(request, llm);
       } catch (err) {
         res.writeHead(502, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: `invalid llm output: ${String(err)}` }));
@@ -307,21 +305,59 @@ export class CardinalBFFServer {
     return { ...base, steps };
   }
 
-  private async llmPlan(request: AgentPlanRequest, apiKey: string): Promise<Record<string, unknown>> {
-    const isOpenAI = Boolean(this.config.openaiApiKey || process.env.OPENAI_API_KEY);
-    const upstreamURL = isOpenAI
-      ? 'https://api.openai.com/v1/chat/completions'
-      : 'https://api.groq.com/openai/v1/chat/completions';
-    const model = isOpenAI ? 'gpt-4o-mini' : 'llama-3.1-8b-instant';
+  /** Resolve the upstream LLM: custom OpenAI-compatible endpoint first
+   * (local MLX/exo/ollama), then OpenAI, then Groq; null = mock mode. */
+  private resolveLlm(): ResolvedLlm | null {
+    const customBase = this.config.llmBaseUrl || process.env.LLM_BASE_URL;
+    if (customBase) {
+      return {
+        baseUrl: customBase.replace(/\/$/, ''),
+        model: this.config.llmModel || process.env.LLM_MODEL || 'default',
+        apiKey: this.config.llmApiKey || process.env.LLM_API_KEY || 'x',
+        isCustom: true,
+      };
+    }
+    const openaiKey = this.config.openaiApiKey || process.env.OPENAI_API_KEY;
+    if (openaiKey) {
+      return {
+        baseUrl: 'https://api.openai.com/v1',
+        model: this.config.llmModel || process.env.LLM_MODEL || 'gpt-4o-mini',
+        apiKey: openaiKey,
+        isCustom: false,
+      };
+    }
+    const groqKey = this.config.groqApiKey || this.config.deepseekApiKey || process.env.GROQ_API_KEY;
+    if (groqKey) {
+      return {
+        baseUrl: 'https://api.groq.com/openai/v1',
+        model: this.config.llmModel || process.env.LLM_MODEL || 'llama-3.1-8b-instant',
+        apiKey: groqKey,
+        isCustom: false,
+      };
+    }
+    return null;
+  }
 
+  /** Small local models wrap JSON in prose or markdown fences — extract the
+   * outermost object leniently. */
+  private static extractJson(content: string): Record<string, unknown> {
+    const trimmed = content.trim();
+    const start = trimmed.indexOf('{');
+    const end = trimmed.lastIndexOf('}');
+    if (start < 0 || end <= start) throw new Error('no json object in completion');
+    return JSON.parse(trimmed.slice(start, end + 1)) as Record<string, unknown>;
+  }
+
+  private async llmPlan(request: AgentPlanRequest, llm: ResolvedLlm): Promise<Record<string, unknown>> {
     const system = this.buildSystemPrompt(request);
-    const upstream = await fetch(upstreamURL, {
+    const upstream = await fetch(`${llm.baseUrl}/chat/completions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${llm.apiKey}` },
       body: JSON.stringify({
-        model,
+        model: llm.model,
         temperature: 0.6,
-        response_format: { type: 'json_object' },
+        // Local OpenAI-compatible servers often reject response_format.
+        ...(llm.isCustom ? {} : { response_format: { type: 'json_object' } }),
         messages: [
           { role: 'system', content: system },
           { role: 'user', content: JSON.stringify(request) },
@@ -334,7 +370,7 @@ export class CardinalBFFServer {
     };
     const content = data.choices?.[0]?.message?.content;
     if (typeof content !== 'string') throw new Error('empty completion');
-    const parsed = JSON.parse(content) as Record<string, unknown>;
+    const parsed = CardinalBFFServer.extractJson(content);
     return {
       requestId: request.requestId,
       reason: request.reason,
