@@ -53,7 +53,11 @@ function settlementObjects(s: Settlement): ScenarioObject[] {
     { type: 'shelter', x: s.x, z: s.z - 1.3 },
     { type: 'berry_bush', x: s.x + 1.5, z: s.z + 0.6 },
     { type: 'flint_deposit', x: s.x - 1.4, z: s.z + 0.8 },
-    { type: 'camp_storage', x: s.x + 0.9, z: s.z - 0.7 },
+    // Le cellier est passé à l'OUEST du foyer (-0,9 au lieu de +0,9) : à
+    // l'est, celui du camp Aube tombait sur la paroi du chenal, sous 17 cm
+    // d'eau et sur une pente de 47°. Les trois campements y gagnent, aucun
+    // n'y perd.
+    { type: 'camp_storage', x: s.x - 0.9, z: s.z - 0.7 },
   ];
 }
 
@@ -75,8 +79,8 @@ const AGENTS: ScenarioAgent[] = [
   // Tribu de l'Aube (famille)
   { id: 'haran', name: 'Haran', persona: "Protecteur pragmatique, pense d'abord à la sécurité des siens", tribe: 'Aube', role: 'Père & Éclaireur', gender: 'masculine', x: 1.0, z: -3.8 },
   { id: 'mira', name: 'Mira', persona: "Douce et prévoyante, partage toujours ce qu'elle cueille", tribe: 'Aube', role: 'Mère & Gardienne', gender: 'feminine', x: -1.0, z: -3.8 },
-  { id: 'lio', name: 'Lio', persona: 'Curieux et impatient, veut prouver sa valeur', tribe: 'Aube', role: 'Fils Aîné', gender: 'masculine', x: 0.8, z: -5.4 },
-  { id: 'aya', name: 'Aya', persona: 'Rêveuse espiègle, suit sa mère partout', tribe: 'Aube', role: 'Petite Fille', gender: 'feminine', x: -0.8, z: -5.4 },
+  { id: 'lio', name: 'Lio', persona: 'Curieux et impatient, veut prouver sa valeur', tribe: 'Aube', role: 'Fils Aîné', gender: 'masculine', x: -0.2, z: -5.4 },
+  { id: 'aya', name: 'Aya', persona: 'Rêveuse espiègle, suit sa mère partout', tribe: 'Aube', role: 'Petite Fille', gender: 'feminine', x: -1.8, z: -5.4 },
   // Tribu de la Rive (chasseurs-artisans)
   { id: 'dagan', name: 'Dagan', persona: 'Chef exigeant, respecte la force et la loyauté', tribe: 'Rive', role: 'Chef & Chasseur', gender: 'masculine', x: 6.5, z: -2.4 },
   { id: 'sira', name: 'Sira', persona: 'Artisane méticuleuse, fière de ses outils', tribe: 'Rive', role: 'Artisane', gender: 'feminine', x: 4.6, z: -2.4 },

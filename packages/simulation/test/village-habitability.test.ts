@@ -74,11 +74,9 @@ describe('habitabilité du village sur le nouveau relief', () => {
   });
 
   it('garde chaque site sur une pente franchissable', () => {
-    // Deux sites font exception, et c'est un conflit de CONTENU : le cellier
-    // du camp Aube et l'agent lio sont posés à 1,1 m de l'axe du cours, soit
-    // sur la paroi même du chenal. Aucune géométrie ne peut à la fois montrer
-    // de l'eau, les garder au sec et leur donner un sol doux — il faudrait les
-    // déplacer d'un mètre, ce qui relève du contenu du village.
+    // Un seul site reste en pente forte : l'abri du camp Aube, à 1,7 m de
+    // l'axe du cours. Il est au sec, sur sa berge. Le cellier et l'agent lio,
+    // qui se tenaient sur la paroi du chenal, ont été déplacés d'un mètre.
     const steep: string[] = [];
     for (const s of sites) {
       const limit = atWaterEdge(s.x, s.z) ? BANK_SLOPE : WALKABLE_SLOPE;
@@ -86,7 +84,7 @@ describe('habitabilité du village sur le nouveau relief', () => {
       // Aucun site, même au bord de l'eau, ne doit se retrouver sur une falaise.
       expect(slopeAt(s.x, s.z), `${s.label} sur une falaise`).toBeLessThan(1.0);
     }
-    expect(steep.length, `sites en pente forte : ${steep.join(', ')}`).toBeLessThanOrEqual(2);
+    expect(steep.length, `sites en pente forte : ${steep.join(', ')}`).toBeLessThanOrEqual(1);
   });
 
   it('garde chaque site à une altitude plausible', () => {
@@ -133,20 +131,17 @@ describe('habitabilité du village sur le nouveau relief', () => {
 
 describe('le village garde les pieds au sec', () => {
   it("NE SUBMERGE PAS les bâtiments sous la nappe", () => {
-    // La vallée creusait le sol SOUS les abris et les foyers, que
-    // DEFAULT_VILLAGE place à un ou deux mètres de l'axe : onze sites sur
-    // trente-quatre se retrouvaient sous l'eau. Resserrer le chenal au village
-    // les remet au sec sans déplacer un seul objet.
-    const submerged = sites.filter((s) => heightAt(s.x, s.z) < riverSurfaceAt(s.x, s.z) - 0.05);
-    const names = submerged.map((s) => s.label);
-    // Seuls les points d'eau ont vocation à être mouillés ; on tolère les deux
-    // sites que DEFAULT_VILLAGE pose à 1,1 m de l'axe, sous 20 cm d'eau.
-    expect(submerged.length, `sites sous la nappe : ${names.join(', ')}`).toBeLessThanOrEqual(4);
-    for (const s of submerged) {
-      // Les points d'eau et le lieu « rivière » ont vocation à être mouillés.
-      if (s.label === 'object river_bank' || s.label === 'place riviere') continue;
-      const depth = riverSurfaceAt(s.x, s.z) - heightAt(s.x, s.z);
-      expect(depth, `${s.label} sous ${depth.toFixed(2)} m d'eau`).toBeLessThan(0.5);
-    }
+    // La vallée creusait le sol SOUS les abris et les foyers : onze sites sur
+    // trente-quatre se retrouvaient sous l'eau. Resserrer le chenal, puis
+    // déplacer d'un mètre le cellier et l'agent posés sur sa paroi, a ramené
+    // ce compte à ZÉRO — hors les points d'eau, qui ont vocation à être
+    // mouillés.
+    const submerged = sites
+      .filter((s) => heightAt(s.x, s.z) < riverSurfaceAt(s.x, s.z) - 0.05)
+      .filter((s) => s.label !== 'object river_bank' && s.label !== 'place riviere');
+    expect(
+      submerged.map((s) => s.label),
+      'aucun bâtiment ni agent ne doit avoir les pieds sous la nappe',
+    ).toEqual([]);
   });
 });
