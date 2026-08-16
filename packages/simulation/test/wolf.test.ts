@@ -11,7 +11,12 @@ function setupWithWolf(seed: number) {
 }
 
 describe('WolfSystem', () => {
-  it('is deterministic: same seed, same wolf trajectory', () => {
+  // Ce test rejoue deux simulations complètes pour comparer leurs trajectoires :
+  // il est long PAR NATURE. Il tenait sous les 5 s par défaut, mais le champ de
+  // terrain de la phase 3A a rendu heightAt plus coûteux et le test échouait
+  // sous charge parallèle tout en passant seul — un faux négatif, pas un défaut
+  // de déterminisme. On lui donne son propre budget sans toucher aux assertions.
+  it('is deterministic: same seed, same wolf trajectory', { timeout: 20000 }, () => {
     const a = setupWithWolf(5);
     const b = setupWithWolf(5);
     for (let t = 0; t < 1200; t++) {

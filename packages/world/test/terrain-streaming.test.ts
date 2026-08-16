@@ -69,23 +69,15 @@ describe('TerrainStreamingSystem', () => {
     expect(rig.streaming.pendingCount).toBe(side * side);
   });
 
-  it('ne rend MARCHABLE que le proche anneau', () => {
-    // Le locomoteur parcourt tous les environnements enregistrés à chaque
-    // image, sans tri spatial : en donner 49 lui imposerait 49 requêtes BVH
-    // par frame.
+  it("NE REND AUCUNE tuile marchable avant que sa géométrie existe", () => {
+    // Le locomoteur qualifie l'entité dès l'ajout du composant et fusionne
+    // aussitôt sa géométrie. Sur un maillage vide il échoue, et le joueur
+    // tombe à travers le monde — vu en session réelle avant cette correction.
     const rig = makeRig();
     rig.streaming.update(0.016, 0);
-    let walkable = 0;
-    let total = 0;
     for (const entity of rig.mesh.queries.tiles.entities) {
-      total++;
-      if (entity.hasComponent(LocomotionEnvironment)) {
-        walkable++;
-        expect(entity.getValue(TerrainTile, 'lod')).toBe(0);
-      }
+      expect(entity.hasComponent(LocomotionEnvironment)).toBe(false);
     }
-    expect(total).toBe((2 * MAX_RING + 1) ** 2);
-    expect(walkable).toBe(9); // les anneaux 0 et 1
   });
 });
 
@@ -97,6 +89,39 @@ describe('TerrainMeshSystem', () => {
     rig.mesh.update(0.016, 0);
     expect(rig.mesh.builtCount).toBeLessThanOrEqual(rig.mesh.TILES_PER_FRAME);
     expect(rig.mesh.builtCount).toBeGreaterThan(0);
+  });
+
+  it('CONSTRUIT LA TUILE SOUS LES PIEDS EN PREMIER', () => {
+    // L'ordre de la requête commence au coin de la zone streamée : la tuile du
+    // joueur serait la 25e. Pendant ces 25 images il n'a aucun sol, la gravité
+    // l'emporte, il passe SOUS le terrain, et le rayon de détection du sol ne
+    // le rattrape plus. Observé en session réelle : une chute de 5191 m.
+    const rig = makeRig();
+    rig.streaming.update(0.016, 0);
+    rig.mesh.update(0.016, 0);
+    const built = [...rig.mesh.queries.tiles.entities].filter(
+      (e) => e.getValue(TerrainTile, '_needsBuild') === false,
+    );
+    expect(built).toHaveLength(1);
+    // Le joueur est en (0, 0) : la tuile la plus proche est celle dont le
+    // centre en est le moins éloigné, parmi les quatre qui touchent l'origine.
+    const tx = built[0]!.getValue(TerrainTile, 'tx')!;
+    const tz = built[0]!.getValue(TerrainTile, 'tz')!;
+    expect(Math.abs(tx)).toBeLessThanOrEqual(1);
+    expect(Math.abs(tz)).toBeLessThanOrEqual(1);
+    expect(built[0]!.getValue(TerrainTile, 'lod')).toBe(0);
+  });
+
+  it('rend le sol marchable dès la PREMIÈRE image', () => {
+    // Corollaire du précédent : il ne suffit pas de construire la bonne tuile,
+    // il faut qu'elle porte immédiatement de quoi soutenir le joueur.
+    const rig = makeRig();
+    rig.streaming.update(0.016, 0);
+    rig.mesh.update(0.016, 0);
+    const walkable = [...rig.mesh.queries.tiles.entities].filter((e) =>
+      e.hasComponent(LocomotionEnvironment),
+    );
+    expect(walkable).toHaveLength(1);
   });
 
   it('finit par tout construire, image après image', () => {
@@ -114,6 +139,29 @@ describe('TerrainMeshSystem', () => {
     for (const entity of rig.mesh.queries.tiles.entities) {
       expect(entity.getValue(TerrainTile, '_needsBuild')).toBe(false);
     }
+  });
+
+  it('ne rend MARCHABLE que le proche anneau, et seulement une fois construit', () => {
+    // Le locomoteur parcourt tous les environnements enregistrés à chaque
+    // image, sans tri spatial : en donner 49 lui imposerait 49 requêtes BVH
+    // par frame.
+    const rig = makeRig();
+    rig.streaming.update(0.016, 0);
+    for (let frame = 0; frame < 60; frame++) rig.mesh.update(0.016, frame * 0.016);
+    let walkable = 0;
+    let total = 0;
+    for (const entity of rig.mesh.queries.tiles.entities) {
+      total++;
+      if (!entity.hasComponent(LocomotionEnvironment)) continue;
+      walkable++;
+      expect(entity.getValue(TerrainTile, 'lod')).toBe(0);
+      // Et sa géométrie est bel et bien remplie.
+      const object = (entity as unknown as { object3D: { geometry: unknown } }).object3D;
+      const geom = object.geometry as { getAttribute: (n: string) => { count: number } };
+      expect(geom.getAttribute('position').count).toBeGreaterThan(0);
+    }
+    expect(total).toBe((2 * MAX_RING + 1) ** 2);
+    expect(walkable).toBe(9); // les anneaux 0 et 1
   });
 
   it('donne à chaque tuile une géométrie non vide', () => {

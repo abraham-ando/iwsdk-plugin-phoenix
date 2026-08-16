@@ -9,3 +9,4 @@ export * from './NPCBanter';
 export * from './SpatialDialogueUI';
 export * from './AILOD';
 export * from './NPCPerception';
+export * from './AvatarAnimation';

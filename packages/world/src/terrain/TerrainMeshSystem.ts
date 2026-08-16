@@ -1,4 +1,4 @@
-import { createSystem } from '@iwsdk/core';
+import { createSystem, LocomotionEnvironment, type Entity } from '@iwsdk/core';
 import { TerrainTile } from './components';
 import { LOD_SEGMENTS, TILE_SIZE, tileOriginX, tileOriginZ } from './tiling';
 import { sampleTile } from './sampling';
@@ -18,10 +18,30 @@ export class TerrainMeshSystem extends createSystem({
   public builtCount = 0;
 
   public override update(_delta: number, _time: number): void {
-    let budget = this.TILES_PER_FRAME;
-    for (const entity of this.queries.tiles.entities) {
-      if (budget <= 0) return;
-      if (entity.getValue(TerrainTile, '_needsBuild') !== true) continue;
+    const player = this.player as unknown as { position: { x: number; z: number } } | undefined;
+    const px = player?.position.x ?? 0;
+    const pz = player?.position.z ?? 0;
+
+    for (let built = 0; built < this.TILES_PER_FRAME; built++) {
+      // LA TUILE LA PLUS PROCHE D'ABORD, jamais l'ordre de la requête.
+      //
+      // Celui-ci commence au coin de la zone streamée : la tuile sous les pieds
+      // du joueur serait la 25ᵉ construite. Pendant ces 25 images il n'a aucun
+      // sol, la gravité l'emporte, il passe SOUS le terrain — et le rayon de
+      // détection du sol, dirigé vers le bas, ne le rattrape plus jamais.
+      // Observé en session réelle : une chute de 5191 m.
+      let entity: Entity | undefined;
+      let bestDistance = Infinity;
+      for (const candidate of this.queries.tiles.entities) {
+        if (candidate.getValue(TerrainTile, '_needsBuild') !== true) continue;
+        const cx = tileOriginX(candidate.getValue(TerrainTile, 'tx')!) + TILE_SIZE / 2;
+        const cz = tileOriginZ(candidate.getValue(TerrainTile, 'tz')!) + TILE_SIZE / 2;
+        const distance = (cx - px) * (cx - px) + (cz - pz) * (cz - pz);
+        if (distance >= bestDistance) continue;
+        bestDistance = distance;
+        entity = candidate;
+      }
+      if (entity === undefined) return;
 
       const tx = entity.getValue(TerrainTile, 'tx')!;
       const tz = entity.getValue(TerrainTile, 'tz')!;
@@ -40,9 +60,17 @@ export class TerrainMeshSystem extends createSystem({
         object.geometry = geometry;
       }
 
+      // SEULES les tuiles de niveau 0 sont marchables : le locomoteur parcourt
+      // tous les environnements enregistrés à chaque image, sans tri spatial,
+      // donc en donner 49 lui imposerait 49 requêtes BVH par frame.
+      // Et le composant n'arrive qu'ICI, la géométrie étant désormais remplie :
+      // le poser plus tôt faisait échouer la fusion sur un maillage vide.
+      if (lod === 0 && !entity.hasComponent(LocomotionEnvironment)) {
+        entity.addComponent(LocomotionEnvironment);
+      }
+
       entity.setValue(TerrainTile, '_needsBuild', false);
       this.builtCount++;
-      budget--;
     }
   }
 }

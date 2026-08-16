@@ -45,24 +45,6 @@
   },
   "nodes": [
     {
-      "components": {
-        "LocomotionEnvironment": {}
-      },
-      "content": {
-        "asset": "environment-ground",
-        "type": "asset"
-      },
-      "id": "environment",
-      "name": "Environment",
-      "transform": {
-        "position": [
-          0,
-          0,
-          0
-        ]
-      }
-    },
-    {
       "content": {
         "asset": "primitive-sphere",
         "type": "asset"

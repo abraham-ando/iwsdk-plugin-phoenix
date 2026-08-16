@@ -42,8 +42,21 @@ World.create(container, projectOptions)
     setupCardinalVillage(world);
 
     // 2a. Mount the procedural environment package (sky rig, quality tiers)
-    const { quality, materials, colorManaged } = installCardinalWorld(world, { latitudeDeg: 45 });
+    const { quality, materials, colorManaged, terrain } = installCardinalWorld(world, {
+      latitudeDeg: 45,
+    });
     console.log(`[demo] environment quality tier: ${quality}, colour managed: ${colorManaged}`);
+    // Le sol n'est plus un maillage de 64 m posé dans la scène : il est streamé
+    // en tuiles autour du joueur. Le compte est lu APRÈS la première frame —
+    // au moment de l'installation il vaut forcément zéro, ce qui n'apprend rien.
+    queueMicrotask(() => {
+      setTimeout(() => {
+        console.log(
+          `[demo] terrain: ${terrain.streaming.pendingCount} tiles streamed, ` +
+            `${terrain.mesh.builtCount} built`,
+        );
+      }, 2000);
+    });
 
     // 2. Mount the Cardinal simulation engine + its VR projection & HUD
     world.registerSystem(CardinalSimulationSystem);

@@ -22,7 +22,7 @@ export class VoiceInputSystem extends createSystem(
   public override init(): void {
     if (typeof Worker !== 'undefined') {
       try {
-        this.worker = new Worker(new URL('../workers/stt.worker.js', import.meta.url), {
+        this.worker = new Worker(new URL('./stt.worker.js', import.meta.url), {
           type: 'module',
         });
         this.worker.onmessage = (e) => {

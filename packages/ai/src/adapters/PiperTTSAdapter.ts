@@ -25,7 +25,7 @@ export class PiperTTSAdapter implements ITTSAdapter {
         if (this.workerFactory) {
           this.worker = this.workerFactory();
         } else if (typeof Worker !== 'undefined') {
-          this.worker = new Worker(new URL('../workers/tts.worker.js', import.meta.url), {
+          this.worker = new Worker(new URL('./tts.worker.js', import.meta.url), {
             type: 'module',
           });
         } else {

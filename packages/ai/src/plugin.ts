@@ -14,6 +14,7 @@ import { NPCBanter } from './components/NPCBanter';
 import { SpatialDialogueUI } from './components/SpatialDialogueUI';
 import { AILOD } from './components/AILOD';
 import { NPCPerception } from './components/NPCPerception';
+import { AvatarAnimation } from './components/AvatarAnimation';
 
 import { CardinalIntelligenceSystem } from './systems/CardinalIntelligenceSystem';
 import { CardinalSpatialAudioSystem } from './systems/CardinalSpatialAudioSystem';
@@ -111,7 +112,8 @@ export function installCardinalAI(
     .registerComponent(NPCBanter)
     .registerComponent(SpatialDialogueUI)
     .registerComponent(AILOD)
-    .registerComponent(NPCPerception);
+    .registerComponent(NPCPerception)
+    .registerComponent(AvatarAnimation);
 
   // 3. Register ECS Systems
   world.registerSystem(AILODSystem, {

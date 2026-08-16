@@ -43,7 +43,8 @@ self.onmessage = async (event: MessageEvent) => {
 
         // Dynamic import or WebLLM initialization if available in environment
         try {
-          const webllm = await import('@mlc-ai/web-llm' as any);
+          const dynamicImport = new Function('m', 'return import(m)');
+          const webllm = await dynamicImport('@mlc-ai/web-llm');
           if (webllm && webllm.CreateMLCEngine) {
             const appConfig = payload?.appConfig;
             engine = await webllm.CreateMLCEngine(modelId, {

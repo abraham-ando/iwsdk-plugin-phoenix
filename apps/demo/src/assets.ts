@@ -6,7 +6,6 @@
  */
 
 import { AssetType, defineAssets } from '@iwsdk/core';
-import environmentGround from './scene-assets/environment-ground.scene-asset.js';
 
 const publicAssetUrl = (filePath: string): string =>
   `${import.meta.env.BASE_URL}${filePath.replace(/^\/+/u, '')}`;
@@ -24,7 +23,6 @@ function stockAssetUrl(assetId: string, fileName: string): string {
 
 export default defineAssets({
   // Procedural Environment Ground with Walkable Surface
-  'environment-ground': environmentGround,
   // Ready Player Me Real Humanoid Avatars
   'avatar-eldrin': {
     url: 'https://models.readyplayer.me/6460d3219d050a41d0ec2048.glb',

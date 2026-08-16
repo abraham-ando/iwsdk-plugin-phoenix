@@ -16,6 +16,7 @@ export * from './debug';
 export * from './gaze';
 export * from './social';
 export * from './audio';
+export * from './avatar';
 export * from './streaming';
 export * from './rag';
 export * from './acoustics';

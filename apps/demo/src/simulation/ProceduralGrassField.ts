@@ -12,7 +12,14 @@ import {
   Group,
   Float32BufferAttribute,
 } from '@iwsdk/core';
-import { ProceduralTerrain } from './ProceduralTerrain';
+import { getTerrainHeight, isRiverAt } from '@iwsdk/cardinal-simulation';
+
+/**
+ * L'herbe n'habille que les abords immédiats du joueur, pas tout le terrain.
+ * Elle dérivait de ProceduralTerrain.SIZE, ce qui n'avait plus de sens dès que
+ * le terrain est devenu infini : la même densité se serait diluée sur un km².
+ */
+const GRASS_SPREAD = 28.8;
 
 export class ProceduralGrassField {
   private instancedGrass: InstancedMesh | null = null;
@@ -60,7 +67,7 @@ export class ProceduralGrassField {
     this.basePositions = [];
 
     // Distribute grass across the meadow and rolling hills
-    const spread = ProceduralTerrain.SIZE * 0.45;
+    const spread = GRASS_SPREAD;
     let placed = 0;
     let attempts = 0;
 
@@ -70,9 +77,9 @@ export class ProceduralGrassField {
       const z = (Math.random() - 0.5) * spread * 2 - 4.0;
 
       // Skip inside the river channel
-      if (ProceduralTerrain.isRiver(x, z)) continue;
+      if (isRiverAt(x, z)) continue;
 
-      const y = ProceduralTerrain.getHeight(x, z);
+      const y = getTerrainHeight(x, z);
 
       // Grass density is higher on sunny meadows and hills
       const scale = 0.75 + Math.random() * 0.55;

@@ -22,7 +22,14 @@ import {
   PhysicsShapeType,
   PhysicsState,
 } from '@iwsdk/core';
-import { ProceduralTerrain, type TerrainData } from './ProceduralTerrain';
+import { getTerrainHeight, isRiverAt } from '@iwsdk/cardinal-simulation';
+
+/** Ce dont la scène a besoin du terrain : poser des objets, pas le mailler. */
+export interface TerrainData {
+  getHeight: (x: number, z: number) => number;
+  isRiver: (x: number, z: number) => boolean;
+  size: number;
+}
 import { ProceduralGrassField } from './ProceduralGrassField';
 import { ProceduralVegetation } from './ProceduralVegetation';
 import { ProceduralRiver } from './ProceduralRiver';
@@ -52,8 +59,16 @@ export class PrehistoricEnvironment3D {
     const agentAvatars = new Map<string, Group>();
     const entities: Entity[] = [];
 
-    // 1. Procedural Terrain Height & River Reference
-    const terrain = ProceduralTerrain.createTerrain(materials);
+    // 1. Le terrain est désormais streamé en tuiles par @iwsdk/cardinal-world.
+    // Cette scène n'a besoin que de POSER des objets dessus, donc de la
+    // fonction de hauteur — pas d'un maillage. L'ancien appel construisait
+    // 9409 sommets et 42 ms de classification de biomes pour un mesh qui
+    // n'était JAMAIS ajouté à la scène.
+    const terrain: TerrainData = {
+      getHeight: getTerrainHeight,
+      isRiver: isRiverAt,
+      size: 64,
+    };
     const river = new ProceduralRiver();
     const riverMesh = river.createRiver();
     root.add(riverMesh);

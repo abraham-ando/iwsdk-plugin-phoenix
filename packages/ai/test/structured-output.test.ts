@@ -9,8 +9,8 @@ describe('StructuredOutputParser & FunctionCallingSchema', () => {
 
     expect(result.hasToolCalls).toBe(true);
     expect(result.toolCalls).toHaveLength(1);
-    expect(result.toolCalls[0].tool).toBe('give_item');
-    expect(result.toolCalls[0].args).toEqual({ itemId: 'potion_01', quantity: 1 });
+    expect(result.toolCalls[0]?.tool).toBe('give_item');
+    expect(result.toolCalls[0]?.args).toEqual({ itemId: 'potion_01', quantity: 1 });
     expect(result.cleanText.replace(/\s+/g, ' ')).toBe('Prenez cette fiole de santé avec vous. Que la lumière vous guide.');
   });
 
@@ -20,8 +20,8 @@ describe('StructuredOutputParser & FunctionCallingSchema', () => {
 
     expect(result.hasToolCalls).toBe(true);
     expect(result.toolCalls).toHaveLength(1);
-    expect(result.toolCalls[0].tool).toBe('attack');
-    expect(result.toolCalls[0].args).toEqual({ target: 'player', weapon: 'sword' });
+    expect(result.toolCalls[0]?.tool).toBe('attack');
+    expect(result.toolCalls[0]?.args).toEqual({ target: 'player', weapon: 'sword' });
     expect(result.cleanText.replace(/\s+/g, ' ')).toBe('Halte là ! Défendez-vous !');
   });
 

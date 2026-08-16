@@ -9,6 +9,9 @@ import { ProceduralMaterial } from './materials/components';
 import { MaterialSystem } from './materials/MaterialSystem';
 import { ExposureSystem } from './atmosphere/ExposureSystem';
 import { applyColorManagement } from './core/colorManagement';
+import { TerrainTile } from './terrain/components';
+import { TerrainStreamingSystem } from './terrain/TerrainStreamingSystem';
+import { TerrainMeshSystem } from './terrain/TerrainMeshSystem';
 
 export interface CardinalWorldOptions {
   quality?: QualityTier;
@@ -43,7 +46,12 @@ export function withLevelRoot(world: World, callback: (root: Entity) => void): v
 export function installCardinalWorld(
   world: World,
   options: CardinalWorldOptions = {},
-): { quality: QualityTier; materials: MaterialLibrary; colorManaged: boolean } {
+): {
+  quality: QualityTier;
+  materials: MaterialLibrary;
+  colorManaged: boolean;
+  terrain: { streaming: TerrainStreamingSystem; mesh: TerrainMeshSystem };
+} {
   const quality = options.quality ?? detectQuality();
   const materials = new MaterialLibrary(quality);
 
@@ -51,13 +59,22 @@ export function installCardinalWorld(
     .registerComponent(CelestialTime)
     .registerComponent(SkyModel)
     .registerComponent(StarField)
-    .registerComponent(ProceduralMaterial);
+    .registerComponent(ProceduralMaterial)
+    .registerComponent(TerrainTile);
 
   world.registerSystem(CelestialTimeSystem);
   world.registerSystem(SkyRenderSystem, { configData: { quality } });
   world.registerSystem(StarFieldSystem);
   world.registerSystem(ExposureSystem);
   world.registerSystem(MaterialSystem, { configData: { library: materials } });
+
+  // Le matériau du terrain est un CLONE de `grass` : les tuiles ont besoin de
+  // vertexColors, ce que les autres usagers de `grass` ne veulent pas. Le
+  // clone partage les mêmes textures — seul l'objet matériau est neuf.
+  const terrainMaterial = materials.get('grass').clone();
+  terrainMaterial.vertexColors = true;
+  world.registerSystem(TerrainStreamingSystem, { configData: { material: terrainMaterial } });
+  world.registerSystem(TerrainMeshSystem);
 
   const colorManaged = applyColorManagement((world as unknown as { renderer?: unknown }).renderer);
 
@@ -80,5 +97,13 @@ export function installCardinalWorld(
     if (!root.hasComponent(IBLGradient)) root.addComponent(IBLGradient, {});
   });
 
-  return { quality, materials, colorManaged };
+  return {
+    quality,
+    materials,
+    colorManaged,
+    terrain: {
+      streaming: world.getSystem(TerrainStreamingSystem) as TerrainStreamingSystem,
+      mesh: world.getSystem(TerrainMeshSystem) as TerrainMeshSystem,
+    },
+  };
 }

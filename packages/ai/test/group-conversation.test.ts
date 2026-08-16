@@ -20,15 +20,15 @@ describe('GroupConversationSystem', () => {
     groupSystem = world.getSystem(GroupConversationSystem)!;
 
     npc1 = world.createEntity();
-    npc1.addComponent(SmartNPC, { name: 'Eldrin', role: 'Mage' });
+    npc1.addComponent(SmartNPC, { personalityId: 1 });
     npc1.addComponent(NPCBanter);
 
     npc2 = world.createEntity();
-    npc2.addComponent(SmartNPC, { name: 'Garrick', role: 'Guard' });
+    npc2.addComponent(SmartNPC, { personalityId: 2 });
     npc2.addComponent(NPCBanter);
 
     npc3 = world.createEntity();
-    npc3.addComponent(SmartNPC, { name: 'Sylvia', role: 'Merchant' });
+    npc3.addComponent(SmartNPC, { personalityId: 3 });
     npc3.addComponent(NPCBanter);
   });
 
@@ -51,7 +51,7 @@ describe('GroupConversationSystem', () => {
 
     const circle = groupSystem.getCircle(circleId);
     expect(circle?.turns).toHaveLength(1);
-    expect(circle?.turns[0].text).toContain('dragon');
+    expect(circle?.turns[0]?.text).toContain('dragon');
   });
 
   it('should inject player speech and notify participants', () => {
@@ -60,7 +60,7 @@ describe('GroupConversationSystem', () => {
 
     const circle = groupSystem.getCircle(circleId);
     expect(circle?.turns).toHaveLength(1);
-    expect(circle?.turns[0].speakerEntityIndex).toBe(-1);
+    expect(circle?.turns[0]?.speakerEntityIndex).toBe(-1);
     expect(circle?.turnQueue).toEqual([npc1.index, npc2.index]);
   });
 });

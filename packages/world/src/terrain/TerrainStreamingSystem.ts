@@ -3,7 +3,6 @@ import {
   Types,
   Mesh,
   BufferGeometry,
-  LocomotionEnvironment,
   type Entity,
 } from '@iwsdk/core';
 import { TerrainTile } from './components';
@@ -90,10 +89,11 @@ export class TerrainStreamingSystem extends createSystem(
         _needsBuild: true,
       });
 
-      // SEULES les tuiles de niveau 0 sont marchables. Le locomoteur parcourt
-      // tous les environnements enregistrés à chaque image, sans tri spatial :
-      // en donner 49 lui imposerait 49 requêtes BVH par frame.
-      if (spec.lod === 0) entity.addComponent(LocomotionEnvironment);
+      // LocomotionEnvironment n'est PAS posé ici : la tuile naît avec une
+      // géométrie vide, et le locomoteur qualifie l'entité dès l'ajout du
+      // composant. Il tenterait alors de fusionner une géométrie sans attribut
+      // `position` et échouerait — le joueur tomberait à travers le monde.
+      // C'est TerrainMeshSystem qui le pose, une fois la géométrie remplie.
 
       this.current.set(tileKey(spec.tx, spec.tz), spec);
     }
