@@ -50,6 +50,8 @@ export class AgentRuntime {
   private planRequests: PlanRequest[] = [];
   private intrinsics: IntrinsicActionDef[];
   private currentTick = 0;
+  private eventSubscribers: Array<(e: ActionEvent) => void> = [];
+  private planRequestSubscribers: Array<(r: PlanRequest) => void> = [];
 
   constructor(
     private world: GroundTruthWorld,
@@ -215,7 +217,7 @@ export class AgentRuntime {
       this.world.placeAt(agent.x, agent.z),
       participantIds
     );
-    this.planRequests.push(request);
+    this.pushPlanRequest(request);
     agent.mode2.pendingRequestId = request.requestId;
     if (consumesBudget) agent.mode2.budgetUsed++;
   }
@@ -224,6 +226,32 @@ export class AgentRuntime {
     const out = this.planRequests;
     this.planRequests = [];
     return out;
+  }
+
+  /** Observe every action event without consuming the drain queue (telemetry). */
+  subscribeEvents(cb: (e: ActionEvent) => void): () => void {
+    this.eventSubscribers.push(cb);
+    return () => {
+      this.eventSubscribers = this.eventSubscribers.filter((s) => s !== cb);
+    };
+  }
+
+  /** Observe every plan request without consuming the outbox (telemetry). */
+  subscribePlanRequests(cb: (r: PlanRequest) => void): () => void {
+    this.planRequestSubscribers.push(cb);
+    return () => {
+      this.planRequestSubscribers = this.planRequestSubscribers.filter((s) => s !== cb);
+    };
+  }
+
+  private pushEvent(event: ActionEvent): void {
+    this.events.push(event);
+    for (const subscriber of [...this.eventSubscribers]) subscriber(event);
+  }
+
+  private pushPlanRequest(request: PlanRequest): void {
+    this.planRequests.push(request);
+    for (const subscriber of [...this.planRequestSubscribers]) subscriber(request);
   }
 
   // --- Per-tick agent lifecycle ---
@@ -293,7 +321,7 @@ export class AgentRuntime {
 
     const event = executeActionTick(agent, this.world, this.intrinsics, ctx.tick);
     if (event !== null) {
-      this.events.push(event);
+      this.pushEvent(event);
       if (event.type === 'completed') {
         agent.memories.add({
           tick: ctx.tick,
@@ -323,11 +351,12 @@ export class AgentRuntime {
         const next = selectAction(agent, this.registry, this.intrinsics);
         if (next !== null) {
           agent.currentAction = next;
-          this.events.push({
+          this.pushEvent({
             tick: ctx.tick,
             agentId: agent.profile.id,
             type: 'started',
             verb: next.verb,
+            source: 'reflex',
           });
         }
       }
@@ -345,7 +374,14 @@ export class AgentRuntime {
           verb: step.verb,
           remainingTicks: intrinsic.durationTicks,
         };
-        this.events.push({ tick, agentId: agent.profile.id, type: 'started', verb: step.verb });
+        this.pushEvent({
+          tick,
+          agentId: agent.profile.id,
+          type: 'started',
+          verb: step.verb,
+          source: 'plan',
+          predicted: step.predicted,
+        });
         return true;
       }
       const belief = step.objectId !== undefined ? agent.beliefs.get(step.objectId) : undefined;
@@ -367,7 +403,15 @@ export class AgentRuntime {
         targetZ: belief.z,
         remainingTicks: 0,
       };
-      this.events.push({ tick, agentId: agent.profile.id, type: 'started', verb: step.verb });
+      this.pushEvent({
+        tick,
+        agentId: agent.profile.id,
+        type: 'started',
+        verb: step.verb,
+        source: 'plan',
+        predicted: step.predicted,
+        objectId: belief.objectId,
+      });
       return true;
     }
     return false;

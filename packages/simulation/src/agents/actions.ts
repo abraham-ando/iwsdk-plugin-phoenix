@@ -10,6 +10,11 @@ export interface ActionEvent {
   type: 'started' | 'completed' | 'failed';
   verb: string;
   reason?: string;
+  /** Provenance, set by the runtime on `started` events only. */
+  source?: 'plan' | 'reflex';
+  /** The LLM's expected outcome, present on plan-sourced starts (spec §9.1). */
+  predicted?: string;
+  objectId?: string;
 }
 
 const RESTFUL_VERBS = new Set(['rest_nearby', 'sleep_inside', 'nap']);
