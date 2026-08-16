@@ -23,6 +23,7 @@ import { applyAvatarPose } from './AgentAvatarFactory';
 import { PrehistoricEnvironment3D, type PrehistoricSceneResult } from './PrehistoricEnvironment3D';
 import { CelestialVisuals } from './CelestialVisuals';
 import { WolfVisual } from './WolfVisual';
+import { VillagerVoices } from './VillagerVoices';
 
 export interface SimEvent {
   tick: number;
@@ -71,6 +72,7 @@ export class CardinalSimulationSystem extends createSystem({}) {
   public wolf!: WolfSystem;
 
   private wolfVisual: WolfVisual | null = null;
+  private voices: VillagerVoices | null = null;
   private playerFeedAccumulator = 0;
   private lastPlayerX = 0;
   private lastPlayerZ = 2;
@@ -144,6 +146,11 @@ export class CardinalSimulationSystem extends createSystem({}) {
 
     // The human player is a living being of the world (spec §10.5)…
     this.runtime.registerPlayer(0, 2);
+    // …and the villagers get spatial Piper voices (étape 7).
+    this.voices = new VillagerVoices(this.world);
+    for (const agent of VILLAGE_LAYOUT.agents) {
+      this.voices.register(agent.id, agent.gender);
+    }
     // …and the wolf prowls the valley (spec §10.4).
     this.wolf = new WolfSystem(this.simWorld, this.runtime);
     this.runtime.attachWolf(this.wolf);
@@ -205,7 +212,8 @@ export class CardinalSimulationSystem extends createSystem({}) {
       avatar.position.set(view.x, view.y, view.z);
       avatar.rotation.y = view.heading;
       applyAvatarPose(avatar, view.animation, this.elapsed);
-      // Surface fresh dialogue lines to the HUD chronicle.
+      this.voices?.updatePosition(view.id, view.x, view.y, view.z);
+      // Surface fresh dialogue lines to the HUD chronicle and speak them.
       if (view.dialogue !== null && this.lastSpeech.get(view.id) !== view.dialogue) {
         this.lastSpeech.set(view.id, view.dialogue);
         this.emit({
@@ -214,6 +222,7 @@ export class CardinalSimulationSystem extends createSystem({}) {
           agentName: view.name,
           text: `💬 ${view.name} : « ${view.dialogue} »`,
         });
+        this.voices?.speak(view.id, view.dialogue);
       }
     }
     for (const binding of this.campfireBindings) {
