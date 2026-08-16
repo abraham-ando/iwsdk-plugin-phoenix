@@ -20,6 +20,35 @@
 - **`noUncheckedIndexedAccess` est actif** via `tsconfig.base.json` : tout accès indexé doit être gardé ou suffixé de `!` avec une raison.
 - Node local mesuré : **22.12**. Ne pas écrire de script qui importe un `.ts` à l'exécution (le type-stripping natif n'existe qu'à partir de 22.18) — les scripts importent `dist/`.
 
+## Amendements décidés en cours d'exécution
+
+Trois décisions prises pendant l'exécution, qui priment sur le corps du plan là où
+il n'a pas été réécrit. Les tâches 8 à 12 doivent les appliquer.
+
+1. **La liaison de test est partagée, pas dupliquée.** Les tâches 7, 8, 9 et 12
+   écrivaient chacune leur propre `function binding(): RigBinding`. Elle vit
+   désormais une seule fois dans `packages/character/test/fixtures/humanoid-binding.ts`,
+   exportée comme **fonction** `humanoidBinding()` — une fonction et non une
+   constante, car plusieurs tests mutent la liaison et doivent partir d'un
+   exemplaire neuf. Les autres tests l'importent avec
+   `import { humanoidBinding as binding } from './fixtures/humanoid-binding';`,
+   ce qui laisse tous les appels identiques. Le générateur de vecteurs
+   (`scripts/generate-character-vectors.mjs`) garde sa propre copie : c'est du
+   `.mjs` important `dist/`, il ne peut pas lire un module TypeScript de test.
+
+2. **`stats.heightMeters` s'appelle `nominalHeightMeters`.** Le champ ne rend
+   compte que de l'âge et de la stature ; il ignore la longueur des jambes, celle
+   du tronc, le rapport membres/tronc et l'os racine jamais mis à l'échelle. Mesuré
+   sur la pose réelle, l'écart atteint 0,43 m entre deux génomes pour lesquels
+   l'ancien champ ne bougeait pas. La vraie hauteur debout exige de savoir quelle
+   chaîne touche le sol — un fait de rig, donc le travail du pont à l'étape 2.
+
+3. **`ChainDef.limb` est un booléen requis.** Le compilateur identifiait le tronc
+   par la chaîne de caractères `'torso'` ; une famille nommant la sienne autrement
+   passait la validation puis voyait son tronc rétréci en silence à tous les âges
+   non adultes. Le fait est désormais porté par la donnée, et son caractère requis
+   rend l'oubli impossible plutôt que détectable.
+
 ## Résultat de sonde déjà acquis
 
 La spec §13 posait la question « les clips écrasent-ils la morphologie ? ». **Elle est tranchée**, par inspection du conteneur glTF de quatre clips réels de `readyplayerme/animation-library` :
@@ -371,6 +400,14 @@ export interface ChainDef {
   to: string;
   /** Gène qui pilote la longueur de cette chaîne. */
   gene: string;
+  /**
+   * Vrai pour un membre, faux pour le tronc. Requis et non optionnel : le
+   * compilateur applique le rapport membres/tronc selon ce champ, et un défaut
+   * implicite ferait exactement l'erreur qu'on veut rendre impossible — une
+   * famille nommant son tronc autrement que « torso » verrait celui-ci rétréci
+   * en silence à tous les âges non adultes.
+   */
+  limb: boolean;
   /** Couple (départ, terminal) du côté opposé, mis à l'échelle à l'identique. */
   mirror?: readonly [string, string];
 }
@@ -582,9 +619,9 @@ export const HUMANOID: FamilyDescriptor = {
   },
 
   chains: {
-    arm: { from: 'shoulderL', to: 'handL', gene: 'armLength', mirror: ['shoulderR', 'handR'] },
-    leg: { from: 'upLegL', to: 'footL', gene: 'legLength', mirror: ['upLegR', 'footR'] },
-    torso: { from: 'root', to: 'neck', gene: 'torsoLength' },
+    arm: { from: 'shoulderL', to: 'handL', gene: 'armLength', limb: true, mirror: ['shoulderR', 'handR'] },
+    leg: { from: 'upLegL', to: 'footL', gene: 'legLength', limb: true, mirror: ['upLegR', 'footR'] },
+    torso: { from: 'root', to: 'neck', gene: 'torsoLength', limb: false },
   },
 
   morphs: {
@@ -1413,7 +1450,7 @@ git commit -m "feat(character): one byte per gene, stable ordering, loud on layo
   - `interface BoneRest { role: string; position: Vec3; parentRole: string | null }`
   - `interface RigBinding { family: string; bones: Record<string, BoneRest>; morphIndex: Record<string, number>; restHeightMeters: number }`
   - `interface CompiledBone { role: string; position: Vec3; scale: number }`
-  - `interface CompiledCharacter { family: string; restPose: CompiledBone[]; rebindSkeleton: boolean; morphs: Record<string, number>; surface: { skinTone: number; hairTone: number; hairStyle: number }; stats: { heightMeters: number } }`
+  - `interface CompiledCharacter { family: string; restPose: CompiledBone[]; rebindSkeleton: boolean; morphs: Record<string, number>; surface: { skinTone: number; hairTone: number; hairStyle: number }; stats: { nominalHeightMeters: number } }`
   - `compile(family: FamilyDescriptor, genome: Genome, age: number, binding: RigBinding): CompiledCharacter`
 
 **Deux précisions par rapport à la spec §7.1**, décidées ici et à reporter dans la spec :
@@ -1483,7 +1520,7 @@ describe('compile — génome neutre', () => {
 
   it('rend la hauteur du rig de repos', () => {
     const c = compile(HUMANOID, defaultGenome(HUMANOID), 18, binding());
-    expect(c.stats.heightMeters).toBeCloseTo(1.75, 3);
+    expect(c.stats.nominalHeightMeters).toBeCloseTo(1.75, 3);
   });
 
   it('demande toujours un recalcul des matrices inverses', () => {
@@ -1546,7 +1583,7 @@ describe('compile — l âge', () => {
     const g = defaultGenome(HUMANOID);
     const bébé = compile(HUMANOID, g, 0, binding());
     const adulte = compile(HUMANOID, g, 18, binding());
-    expect(bébé.stats.heightMeters).toBeLessThan(adulte.stats.heightMeters * 0.35);
+    expect(bébé.stats.nominalHeightMeters).toBeLessThan(adulte.stats.nominalHeightMeters * 0.35);
   });
 
   it('la tête d un nourrisson est proportionnellement bien plus grosse', () => {
@@ -1562,7 +1599,7 @@ describe('compile — l âge', () => {
     const g = defaultGenome(HUMANOID);
     let précédente = 0;
     for (let age = 0; age <= 18; age += 1) {
-      const h = compile(HUMANOID, g, age, binding()).stats.heightMeters;
+      const h = compile(HUMANOID, g, age, binding()).stats.nominalHeightMeters;
       expect(h).toBeGreaterThanOrEqual(précédente);
       précédente = h;
     }
@@ -1659,7 +1696,15 @@ export interface CompiledCharacter {
   morphs: Record<string, number>;
   /** Scalaires normalisés. La conversion en couleur appartient au pont. */
   surface: { skinTone: number; hairTone: number; hairStyle: number };
-  stats: { heightMeters: number };
+  /**
+   * Hauteur NOMINALE : `restHeightMeters × bodyScale × stature`. Elle rend
+   * compte de l'âge et de la stature, et de rien d'autre — ni la longueur des
+   * jambes, ni celle du tronc, ni le rapport membres/tronc, ni l'os racine qui
+   * n'est jamais mis à l'échelle. La hauteur réellement debout se mesure sur la
+   * pose composée, ce qui exige de savoir quelle chaîne touche le sol : un fait
+   * de rig que seul le pont possède, à l'étape 2.
+   */
+  stats: { nominalHeightMeters: number };
 }
 ```
 
@@ -1669,8 +1714,9 @@ export interface CompiledCharacter {
 
 ```ts
 import { evalCurve } from '../family/proportions';
-import type { ChainDef, FamilyDescriptor } from '../family/types';
-import type { Genome } from '../genome/types';
+import type { FamilyDescriptor } from '../family/types';
+import { clamp01 } from '../genome/types';
+import { clamp01, type Genome } from '../genome/types';
 import type { CompiledBone, CompiledCharacter, RigBinding, Vec3 } from './types';
 
 /** Plage d'action d'un gène de longueur : ±25 % autour du rig source. */
@@ -1725,7 +1771,10 @@ export function compile(
     );
   }
 
-  const gene = (key: string): number => genome.genes[key] ?? 0.5;
+  // Borné ici et pas seulement à la création : `compile` est publique et reçoit
+  // un objet nu. Un gène hors plage donnerait un facteur négatif, donc une
+  // réflexion — la même catastrophe que le cisaillement, par une autre porte.
+  const gene = (key: string): number => clamp01(genome.genes[key] ?? 0.5);
 
   const adult = family.adultAge;
   const bodyScale = evalCurve(family.proportions.bodyScale, age);
@@ -1741,11 +1790,12 @@ export function compile(
   const stature = lengthFactor(gene('stature'));
 
   const factors = new Map<string, number>();
-  for (const [label, chain] of Object.entries(family.chains) as Array<[string, ChainDef]>) {
+  for (const [label, chain] of Object.entries(family.chains)) {
     const own = lengthFactor(gene(chain.gene));
     // Un enfant a les membres courts par rapport au tronc : le rapport ne
-    // s'applique qu'aux chaînes de membres, jamais au tronc lui-même.
-    const ageFactor = label === 'torso' ? 1 : limbRatio;
+    // s'applique qu'aux chaînes de membres, jamais au tronc lui-même. Le fait
+    // est porté par la donnée et non par le nom de la chaîne.
+    const ageFactor = chain.limb ? limbRatio : 1;
     const factor = stature * own * ageFactor;
 
     for (const role of chainRoles(binding, chain.from, chain.to, label)) {
@@ -1786,7 +1836,7 @@ export function compile(
       hairTone: gene('hairTone'),
       hairStyle: gene('hairStyle'),
     },
-    stats: { heightMeters: binding.restHeightMeters * bodyScale * stature },
+    stats: { nominalHeightMeters: binding.restHeightMeters * bodyScale * stature },
   };
 }
 ```
@@ -1917,8 +1967,8 @@ describe('dix mille génomes tirés au hasard', () => {
         expect(Math.abs(influence)).toBeLessThanOrEqual(1);
       }
 
-      expect(c.stats.heightMeters).toBeGreaterThan(0.3);
-      expect(c.stats.heightMeters).toBeLessThan(2.6);
+      expect(c.stats.nominalHeightMeters).toBeGreaterThan(0.3);
+      expect(c.stats.nominalHeightMeters).toBeLessThan(2.6);
     }
   });
 
@@ -1927,8 +1977,8 @@ describe('dix mille génomes tirés au hasard', () => {
     const rig = binding();
     for (let i = 0; i < 500; i++) {
       const genome = createGenome(HUMANOID, rng);
-      expect(compile(HUMANOID, genome, 0, rig).stats.heightMeters)
-        .toBeLessThan(compile(HUMANOID, genome, 18, rig).stats.heightMeters);
+      expect(compile(HUMANOID, genome, 0, rig).stats.nominalHeightMeters)
+        .toBeLessThan(compile(HUMANOID, genome, 18, rig).stats.nominalHeightMeters);
     }
   });
 });
@@ -2274,7 +2324,7 @@ const SEEDS = [1, 2, 3, 7, 11, 42, 1000, 20260817];
 const lines = [
   '# Character compiler golden vectors.',
   '# GENERATED by scripts/generate-character-vectors.mjs -- do not edit by hand.',
-  '# Tab-separated: seed, age, heightMeters, then role=x,y,z,scale per bone,',
+  '# Tab-separated: seed, age, nominalHeightMeters, then role=x,y,z,scale per bone,',
   '# then morph=value. Floats are fixed to 6 decimals.',
   ['seed', 'age', 'height', 'bones', 'morphs'].join('\t'),
 ];
@@ -2292,7 +2342,7 @@ for (const seed of SEEDS) {
       .sort()
       .map((k) => `${k}=${f(c.morphs[k])}`)
       .join(' ');
-    lines.push([seed, age, f(c.stats.heightMeters), bones, morphs].join('\t'));
+    lines.push([seed, age, f(c.stats.nominalHeightMeters), bones, morphs].join('\t'));
   }
 }
 
@@ -2383,7 +2433,7 @@ describe('vecteurs dorés', () => {
       const genome = createGenome(HUMANOID, rngFrom(Number(seed)));
       const c = compile(HUMANOID, genome, Number(age), BINDING);
 
-      expect(f(c.stats.heightMeters)).toBe(height);
+      expect(f(c.stats.nominalHeightMeters)).toBe(height);
 
       const actualBones = c.restPose
         .map(
@@ -2669,7 +2719,7 @@ describe('les archétypes restent ce qu ils prétendent être', () => {
   it('aucun métier ne produit un adulte hors de la stature humaine', () => {
     for (const id of MÉTIERS_ATTENDUS) {
       for (const age of [18, 40, 60]) {
-        const h = compileMétier(id, age).stats.heightMeters;
+        const h = compileMétier(id, age).stats.nominalHeightMeters;
         expect(h).toBeGreaterThan(1.4);
         expect(h).toBeLessThan(2.1);
       }
@@ -2679,7 +2729,7 @@ describe('les archétypes restent ce qu ils prétendent être', () => {
   it('un métier compilé à sept ans reste un enfant, pas un adulte réduit', () => {
     const enfant = compileMétier('ferronnier', 7);
     const adulte = compileMétier('ferronnier', 40);
-    expect(enfant.stats.heightMeters).toBeLessThan(adulte.stats.heightMeters * 0.8);
+    expect(enfant.stats.nominalHeightMeters).toBeLessThan(adulte.stats.nominalHeightMeters * 0.8);
     const têteEnfant = enfant.restPose.find((b) => b.role === 'head')!.scale;
     const têteAdulte = adulte.restPose.find((b) => b.role === 'head')!.scale;
     expect(têteEnfant).toBeGreaterThan(têteAdulte);
