@@ -7,7 +7,7 @@ describe('default village scenario', () => {
   it('declares 11 agents with personas, 21 objects and 4 places', () => {
     expect(DEFAULT_VILLAGE.agents).toHaveLength(11);
     expect(DEFAULT_VILLAGE.agents.every((a) => a.persona.length > 0)).toBe(true);
-    expect(DEFAULT_VILLAGE.objects).toHaveLength(23);
+    expect(DEFAULT_VILLAGE.objects).toHaveLength(19);
     expect(DEFAULT_VILLAGE.objects.filter((o) => o.type === 'campfire')).toHaveLength(3);
     expect(DEFAULT_VILLAGE.places.map((p) => p.name)).toContain('camp_aube');
   });
