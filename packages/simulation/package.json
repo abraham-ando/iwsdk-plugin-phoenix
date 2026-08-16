@@ -17,6 +17,10 @@
       "types": "./dist/headless.d.ts",
       "import": "./dist/headless.js"
     },
+    "./dataset": {
+      "types": "./dist/dataset-cli.d.ts",
+      "import": "./dist/dataset-cli.js"
+    },
     "./package.json": "./package.json"
   },
   "files": ["dist", "README.md"],

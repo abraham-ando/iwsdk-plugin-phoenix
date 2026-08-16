@@ -21,4 +21,13 @@ export default defineConfig([
     target: 'es2022',
     platform: 'node',
   },
+  {
+    entry: { 'dataset-cli': 'src/dataset-cli.ts' },
+    format: ['esm'],
+    dts: true,
+    sourcemap: true,
+    clean: false,
+    target: 'es2022',
+    platform: 'node',
+  },
 ]);
