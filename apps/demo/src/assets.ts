@@ -6,6 +6,7 @@
  */
 
 import { AssetType, defineAssets } from '@iwsdk/core';
+import environmentGround from './scene-assets/environment-ground.scene-asset.js';
 
 const publicAssetUrl = (filePath: string): string =>
   `${import.meta.env.BASE_URL}${filePath.replace(/^\/+/u, '')}`;
@@ -22,12 +23,41 @@ function stockAssetUrl(assetId: string, fileName: string): string {
 }
 
 export default defineAssets({
-  'environment-desk': {
-    url: stockAssetUrl('environment-desk', 'environmentDesk.gltf'),
+  // Procedural Environment Ground with Walkable Surface
+  'environment-ground': environmentGround,
+  // Ready Player Me Real Humanoid Avatars
+  'avatar-eldrin': {
+    url: 'https://models.readyplayer.me/6460d3219d050a41d0ec2048.glb',
     type: AssetType.GLTF,
-    name: 'Environment Desk',
+    name: 'Eldrin Mage Avatar (RPM)',
     priority: 'lazy',
   },
+  'avatar-garrick': {
+    url: 'https://models.readyplayer.me/6460d35a9d050a41d0ec2069.glb',
+    type: AssetType.GLTF,
+    name: 'Garrick Guard Avatar (RPM)',
+    priority: 'lazy',
+  },
+  'avatar-sylvia': {
+    url: 'https://models.readyplayer.me/64f0265b1db75f90dcfd9e2c.glb',
+    type: AssetType.GLTF,
+    name: 'Sylvia Merchant Avatar (RPM)',
+    priority: 'lazy',
+  },
+  'avatar-haran': {
+    url: 'https://models.readyplayer.me/6460d39e9d050a41d0ec209d.glb',
+    type: AssetType.GLTF,
+    name: 'Haran Father Avatar (RPM)',
+    priority: 'lazy',
+  },
+  'avatar-mira': {
+    url: 'https://models.readyplayer.me/6460d37e9d050a41d0ec2085.glb',
+    type: AssetType.GLTF,
+    name: 'Mira Mother Avatar (RPM)',
+    priority: 'lazy',
+  },
+
+  // Interactive Props & UI
   'plant-sansevieria': {
     url: stockAssetUrl('plant-sansevieria', 'plantSansevieria.gltf'),
     type: AssetType.GLTF,
@@ -45,10 +75,5 @@ export default defineAssets({
     type: AssetType.UIKitML,
     name: 'Welcome Panel',
   },
-  'webxr-banner': {
-    url: publicAssetUrl('gltf/webxr-banner/banner.gltf'),
-    type: AssetType.GLTF,
-    name: 'WebXR Banner',
-    priority: 'lazy',
-  },
 });
+

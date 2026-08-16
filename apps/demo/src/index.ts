@@ -13,6 +13,12 @@ import { MultiplayerSystem } from './multiplayer.js';
 import { describeConfig, readNetworkConfig } from './networking.js';
 import { PanelSystem } from './panel.js';
 import { RobotSystem } from './robot.js';
+import { setupCardinalVillage } from './ai-village.js';
+import { CardinalSimulationSystem } from './simulation/CardinalSimulationSystem.js';
+import { PrehistoricEnvironment3D } from './simulation/PrehistoricEnvironment3D.js';
+import { VILLAGE_LAYOUT } from './simulation/layout.js';
+import { SimulationHud } from './simulation/simulation-hud.js';
+import { PhysicsSimulationSystem } from './simulation/PhysicsSimulationSystem.js';
 
 const container = document.getElementById('scene-container') as HTMLDivElement;
 const network = readNetworkConfig(import.meta.env);
@@ -26,6 +32,20 @@ World.create(container, projectOptions)
   .then((world) => {
     world.registerSystem(RobotSystem);
     world.registerSystem(PanelSystem);
+    world.registerSystem(PhysicsSimulationSystem);
+
+    // 1. Mount Cardinal AI Engine, NPCs & Interactive HUD
+    setupCardinalVillage(world);
+
+    // 2. Mount the Cardinal simulation engine + its VR projection & HUD
+    world.registerSystem(CardinalSimulationSystem);
+    const simSystem = world.getSystem(CardinalSimulationSystem);
+    if (simSystem) {
+      const sceneData = PrehistoricEnvironment3D.createWorldScene(world, VILLAGE_LAYOUT);
+      (world as any).scene?.add?.(sceneData.root);
+      simSystem.attachScene(sceneData);
+      new SimulationHud(document.body, simSystem);
+    }
 
     // Registers the plugin's components and its four systems, and starts
     // connecting. Offline is a real adapter rather than a flag, so every system
