@@ -21,3 +21,15 @@ export {
   type CardinalWorldOptions,
 } from './install';
 export { valueNoise2D, fbm2D, ridged2D } from './materials/noise';
+export {
+  MATERIAL_DEFINITIONS,
+  MATERIAL_IDS,
+  type MaterialId,
+  type MaterialDefinition,
+} from './materials/definitions';
+export {
+  generateHeightField,
+  generateAlbedo,
+  generateORM,
+  generateNormal,
+} from './materials/textureData';
