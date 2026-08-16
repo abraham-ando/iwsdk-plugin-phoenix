@@ -6,6 +6,8 @@ import { getTerrainHeight } from '../world/terrain';
 import { createAgent, type AgentProfile, type AgentState } from './AgentState';
 import { decayNeeds, maxUrgency } from './needs';
 import { perceive, type PerceivedAgent } from './Perception';
+import { placeKey, tileOf } from './PlaceMemory';
+import type { BiomeId } from '../world/biomes';
 import { executeActionTick, type ActionEvent } from './actions';
 import { selectAction } from './Mode1';
 import { buildPlanRequest, parsePlanSteps, type PlanRequest, type PlanRequestReason } from './Mode2';
@@ -122,6 +124,8 @@ export class AgentRuntime {
           participantIds?: unknown;
           lines?: unknown;
           sharedFacts?: unknown;
+          /** Lieux partagés dans le dialogue : `{ biome, x, z }`. */
+          sharedPlaces?: unknown;
         }
       | null
       | undefined;
@@ -190,6 +194,26 @@ export class AgentRuntime {
                 x: fact.x,
                 z: fact.z,
                 state: fact.state as Record<string, number>,
+                lastSeenTick: tick,
+              });
+            }
+          }
+        }
+        // Les lieux se transmettent comme les objets, et sont datés de
+        // l'audition : celui qui écoute croit désormais, sans avoir vu.
+        if (Array.isArray(payload.sharedPlaces)) {
+          for (const place of payload.sharedPlaces as Array<Record<string, unknown>>) {
+            if (
+              typeof place?.biome === 'string' &&
+              typeof place?.x === 'number' &&
+              typeof place?.z === 'number'
+            ) {
+              const biome = place.biome as BiomeId;
+              participant.places.learnPlace({
+                key: placeKey(biome, tileOf(place.x), tileOf(place.z)),
+                biome,
+                x: place.x,
+                z: place.z,
                 lastSeenTick: tick,
               });
             }
@@ -400,6 +424,9 @@ export class AgentRuntime {
         ctx.tick
       );
       agent.beliefs.update(observation);
+      // Le lieu foulé entre en mémoire du seul fait d'y passer : les agents
+      // n'explorent pas délibérément, ils retiennent ce qu'ils traversent.
+      agent.places.record(observation, agent.x, agent.z);
 
       // Meeting the stranger is memorable (spec §10.5), with a cooldown so
       // standing nearby does not flood the memory stream.

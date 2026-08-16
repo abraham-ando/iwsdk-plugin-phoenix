@@ -1,5 +1,6 @@
 import { createDefaultNeeds, type AgentNeeds } from './needs';
 import { BeliefState } from './BeliefState';
+import { PlaceMemory } from './PlaceMemory';
 import { MemoryStream } from './MemoryStream';
 
 export interface AgentProfile {
@@ -47,6 +48,7 @@ export interface AgentState {
   needs: AgentNeeds;
   inventory: Record<string, number>;
   beliefs: BeliefState;
+  places: PlaceMemory;
   memories: MemoryStream;
   plan: PlannedStep[];
   mode2: Mode2State;
@@ -64,6 +66,7 @@ export function createAgent(profile: AgentProfile, x: number, z: number): AgentS
     needs: createDefaultNeeds(),
     inventory: {},
     beliefs: new BeliefState(),
+    places: new PlaceMemory(),
     memories: new MemoryStream(),
     plan: [],
     mode2: {
