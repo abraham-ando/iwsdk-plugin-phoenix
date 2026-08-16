@@ -149,3 +149,10 @@ export {
   type MemoryEntry,
   type MemoryKind,
 } from './agents/MemoryStream';
+export {
+  scatterAt,
+  SCATTER_TILE,
+  FLORA_SPECIES,
+  type FloraSpecies,
+  type ScatterItem,
+} from './world/scatter';
