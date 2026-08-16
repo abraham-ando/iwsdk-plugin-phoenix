@@ -44,7 +44,7 @@ export function executeActionTick(
     if (def === undefined) {
       return { tick, agentId, type: 'failed', verb: action.verb, reason: 'unknown intrinsic' };
     }
-    const check = checkIntrinsic(def, agent.inventory);
+    const check = checkIntrinsic(def, agent.inventory, agent.needs);
     if (!check.ok) {
       return { tick, agentId, type: 'failed', verb: action.verb, reason: check.reason };
     }

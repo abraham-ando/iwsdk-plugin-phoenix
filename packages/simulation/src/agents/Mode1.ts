@@ -89,7 +89,7 @@ function scoreIntrinsic(
   if (gain <= 0) return;
   const score = gain / timePenalty(0, def.durationTicks);
 
-  const check = checkIntrinsic(def, agent.inventory);
+  const check = checkIntrinsic(def, agent.inventory, agent.needs);
   if (check.ok) {
     out.push({
       action: { kind: 'intrinsic', verb: def.verb, remainingTicks: def.durationTicks },
@@ -137,12 +137,28 @@ function scoreWorld(
     }
   }
 
+  // Conditions sur les besoins : vérifiées contre les besoins RÉELS, qu'un
+  // agent connaît toujours sans médiation. Elles ne se chaînent pas — aucune
+  // action ne rend quelqu'un fatigué — donc un candidat bloqué là est
+  // simplement écarté.
+  for (const [need, expr] of Object.entries(def.preconditions?.actorNeeds ?? {})) {
+    if (!compare(agent.needs[need as keyof typeof agent.needs] ?? 0, expr)) return;
+  }
+
   // Inventory preconditions checked against the REAL inventory.
+  //
+  // TOUS les objets manquants sont poursuivis, non le premier seulement.
+  // `light_fire` exige bois ET silex : tant qu'on s'arrêtait au premier, on ne
+  // chaînait que vers le bois — que `build` consommait avant qu'aucun silex
+  // n'ait jamais été cherché. Mesuré : `gather_flint` zéro fois en six jours,
+  // les foyers éteints au tick 600 et jamais rallumés, la chaleur bloquée à 61.
+  const missing: Record<string, string> = {};
   for (const [item, expr] of Object.entries(def.preconditions?.actorInventory ?? {})) {
-    if (!compare(agent.inventory[item] ?? 0, expr)) {
-      chainInventoryProviders({ [item]: expr }, score, agent, beliefs, registry, intrinsics, depth, visited, out);
-      return;
-    }
+    if (!compare(agent.inventory[item] ?? 0, expr)) missing[item] = expr;
+  }
+  if (Object.keys(missing).length > 0) {
+    chainInventoryProviders(missing, score, agent, beliefs, registry, intrinsics, depth, visited, out);
+    return;
   }
 
   out.push({

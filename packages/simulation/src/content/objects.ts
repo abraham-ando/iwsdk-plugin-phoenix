@@ -113,7 +113,11 @@ export function registerDefaultContent(registry: SmartObjectRegistry): void {
       {
         verb: 'sleep_inside',
         durationTicks: 200,
-        preconditions: { objectState: { progress: '>=5' }, actorDistance: '<2.5' },
+        // On ne dort pas quand on n'a pas sommeil. Sans cette condition,
+        // `sleep_inside` — sans coût, à distance nulle, +60 énergie et
+        // +15 chaleur — battait toute chaîne de trois étapes : mesuré, il
+        // l'emportait jusqu'à chaleur 1 avec tous les autres besoins comblés.
+        preconditions: { objectState: { progress: '>=5' }, actorDistance: '<2.5', actorNeeds: { energy: '<60' } },
         effects: { actorNeeds: { energy: 60, warmth: 15 } },
       },
     ],

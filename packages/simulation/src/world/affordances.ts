@@ -72,6 +72,13 @@ export function checkAffordance(
     if (!res.ok) return res;
   }
 
+  if (pre.actorNeeds !== undefined) {
+    // Un acteur sans besoins déclarés (le loup, un script de test) ne peut pas
+    // satisfaire une condition de besoin : on refuse plutôt que de supposer.
+    const res = checkFields('actorNeeds', actor.needs ?? {}, pre.actorNeeds);
+    if (!res.ok) return res;
+  }
+
   return { ok: true };
 }
 

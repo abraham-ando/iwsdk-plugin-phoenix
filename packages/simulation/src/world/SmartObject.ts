@@ -12,6 +12,13 @@ export interface AffordanceDef {
     objectState?: Record<string, Comparison>;
     actorDistance?: Comparison;
     actorInventory?: Record<string, Comparison>;
+    /**
+     * Conditions sur les besoins de l'acteur. Les EFFETS portaient déjà
+     * `actorNeeds` ; les préconditions ne le pouvaient pas, si bien que « on
+     * ne dort pas quand on n'a pas sommeil » n'était pas exprimable. Faute de
+     * quoi `sleep_inside` l'emportait à toute heure et le village dormait.
+     */
+    actorNeeds?: Record<string, Comparison>;
   };
   effects: {
     object?: Record<string, number>;
