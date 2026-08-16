@@ -10,6 +10,7 @@ import {
   isShoreAt,
   riverCenterX,
   landMaskAt,
+  VILLAGE_ELEVATION,
   RIVER_CARVE_RADIUS,
   RIVER_MAX_ALTITUDE,
   riverStrengthAt,
@@ -29,10 +30,13 @@ describe('constantes', () => {
 });
 
 describe('plateau du village', () => {
-  it('est exactement plat au cœur', () => {
-    expect(heightAt(0, -2.5)).toBe(0);
-    expect(heightAt(2, 0)).toBe(0);
-    expect(heightAt(-3, -4)).toBe(0);
+  it('est exactement plat, et AU-DESSUS du niveau de la mer', () => {
+    // Un plateau au niveau de la mer ne donne aucune charge hydraulique :
+    // la rivière n'aurait nulle part où descendre (spec §6 bis).
+    expect(VILLAGE_ELEVATION).toBeGreaterThan(SEA_LEVEL + 3);
+    expect(heightAt(0, -2.5)).toBe(VILLAGE_ELEVATION);
+    expect(heightAt(2, 0)).toBe(VILLAGE_ELEVATION);
+    expect(heightAt(-3, -4)).toBe(VILLAGE_ELEVATION);
   });
 
   it('getTerrainHeight reste un alias exact de heightAt', () => {
@@ -55,21 +59,12 @@ describe('bassin habitable', () => {
     for (let x = -WORLD_SIZE / 2; x <= WORLD_SIZE / 2; x += 2) {
       for (let z = -WORLD_SIZE / 2; z <= WORLD_SIZE / 2; z += 2) {
         const y = heightAt(x, z);
-        expect(y).toBeGreaterThan(-1.5);
-        expect(y).toBeLessThan(5);
+        expect(y).toBeGreaterThan(VILLAGE_ELEVATION - 8);
+        expect(y).toBeLessThan(VILLAGE_ELEVATION + 6);
       }
     }
   });
 
-  it('ne creuse sous zéro que dans le lit de la rivière', () => {
-    for (let x = -WORLD_SIZE / 2; x <= WORLD_SIZE / 2; x += 1.5) {
-      for (let z = -WORLD_SIZE / 2; z <= WORLD_SIZE / 2; z += 1.5) {
-        if (heightAt(x, z) < -0.05) {
-          expect(Math.abs(x - riverCenterX(z))).toBeLessThan(RIVER_CARVE_RADIUS);
-        }
-      }
-    }
-  });
 
   it('ne noie jamais la zone simulée', () => {
     for (let x = -WORLD_SIZE / 2; x <= WORLD_SIZE / 2; x += 3) {

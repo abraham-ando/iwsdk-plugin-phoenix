@@ -8,6 +8,7 @@ import {
   isRiverAt,
   landMaskAt,
   riverCenterX,
+  VILLAGE_ELEVATION,
 } from '../src/world/terrain';
 import { biomeAt } from '../src/world/biomes';
 
@@ -62,8 +63,8 @@ describe('habitabilité du village sur le nouveau relief', () => {
   it('garde chaque site à une altitude plausible', () => {
     for (const s of sites) {
       const y = heightAt(s.x, s.z);
-      expect(y, s.label).toBeGreaterThan(-1.5);
-      expect(y, s.label).toBeLessThan(5);
+      expect(y, s.label).toBeGreaterThan(VILLAGE_ELEVATION - 8);
+      expect(y, s.label).toBeLessThan(VILLAGE_ELEVATION + 6);
     }
   });
 

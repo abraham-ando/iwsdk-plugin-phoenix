@@ -13,7 +13,25 @@ export const SEA_LEVEL = 0;
 
 /** Cœur du village : rigoureusement plat, pour poser abris et foyer. */
 export const PLATEAU_RADIUS = 5;
-const PLATEAU_FALLOFF = 4;
+/**
+ * Largeur de la transition entre le plateau et le terrain environnant.
+ *
+ * Elle valait 4 m quand le plateau était au niveau du sol. En l'élevant à 6 m,
+ * cette même transition devenait une falaise de 43° ceinturant le village —
+ * le garde-fou d'habitabilité l'a relevée dès le premier lancement. Sur 26 m,
+ * la pente maximale retombe à 1,5 x 6 / 26, soit 19°.
+ */
+const PLATEAU_FALLOFF = 26;
+
+/**
+ * Altitude du plateau du village.
+ *
+ * Il valait 0, c'est-à-dire le niveau de la mer : une rivière qui en part n'a
+ * aucune charge hydraulique et ne peut descendre nulle part (spec §6 bis).
+ * Six mètres sur les 800 qui séparent le village de la mer donnent une pente
+ * de 0,75 %, celle d'une rivière de plaine.
+ */
+export const VILLAGE_ELEVATION = 6;
 
 /** Bassin habitable : le relief y reste doux, couvrant toute la zone simulée. */
 export const BASIN_RADIUS = 38;
@@ -173,10 +191,10 @@ export function heightAt(x: number, z: number): number {
   const strength = 1 - smoothstep(RIVER_FADE_ALTITUDE, RIVER_MAX_ALTITUDE, dry);
   const height = dry - riverCarveAt(x, z) * land * strength;
 
-  // Aplatissement exact du cœur : multiplier garantit 0, une interpolation non.
+  // Aplatissement exact du cœur, désormais à VILLAGE_ELEVATION et non à zéro.
   const d = distanceToVillage(x, z);
   const plateau = 1 - smoothstep(PLATEAU_RADIUS, PLATEAU_RADIUS + PLATEAU_FALLOFF, d);
-  return height * (1 - plateau);
+  return lerp(height, VILLAGE_ELEVATION, plateau);
 }
 
 /** Alias historique : consommé par apps/demo, WolfSystem et AgentRuntime. */
