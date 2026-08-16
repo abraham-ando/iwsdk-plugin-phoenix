@@ -10,3 +10,4 @@ export {
   declinationForDayOfYear,
   type SolarPosition,
 } from './atmosphere/solar';
+export { skyAppearance, type SkyAppearance, type WeatherKind } from './atmosphere/skyColors';
