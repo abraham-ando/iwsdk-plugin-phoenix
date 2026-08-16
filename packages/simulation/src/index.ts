@@ -11,7 +11,23 @@ export {
   type TickHandler,
 } from './kernel/SimKernel';
 export { SpatialGrid } from './world/SpatialGrid';
-export { WORLD_SIZE, getTerrainHeight, isRiverAt, isShoreAt } from './world/terrain';
+export {
+  WORLD_SIZE,
+  SEA_LEVEL,
+  PLATEAU_RADIUS,
+  BASIN_RADIUS,
+  RIVER_CARVE_RADIUS,
+  heightAt,
+  getTerrainHeight,
+  slopeAt,
+  isWaterAt,
+  depthAt,
+  isRiverAt,
+  isShoreAt,
+  riverCenterX,
+  landMaskAt,
+} from './world/terrain';
+export { BIOME_IDS, biomeAt, humidityAt, type BiomeId, type BiomeSample } from './world/biomes';
 export {
   SmartObjectRegistry,
   type Comparison,
@@ -29,7 +45,9 @@ export {
 export { registerDefaultContent } from './content/objects';
 export {
   DEFAULT_VILLAGE,
+  SETTLEMENTS,
   buildVillageSim,
+  type Settlement,
   type ScenarioObject,
   type ScenarioAgent,
   type ScenarioPlace,

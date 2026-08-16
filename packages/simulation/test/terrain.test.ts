@@ -10,6 +10,7 @@ import {
   isShoreAt,
   riverCenterX,
   landMaskAt,
+  RIVER_CARVE_RADIUS,
   slopeAt,
   isWaterAt,
   depthAt,
@@ -62,7 +63,7 @@ describe('bassin habitable', () => {
     for (let x = -WORLD_SIZE / 2; x <= WORLD_SIZE / 2; x += 1.5) {
       for (let z = -WORLD_SIZE / 2; z <= WORLD_SIZE / 2; z += 1.5) {
         if (heightAt(x, z) < -0.05) {
-          expect(Math.abs(x - riverCenterX(z))).toBeLessThan(4.0);
+          expect(Math.abs(x - riverCenterX(z))).toBeLessThan(RIVER_CARVE_RADIUS);
         }
       }
     }

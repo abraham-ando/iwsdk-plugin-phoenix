@@ -82,10 +82,23 @@ export function isShoreAt(x: number, z: number): boolean {
   return d >= 2.2 && d < 4.5;
 }
 
+/** Demi-largeur de la vallée creusée. Plus large que le lit et que la berge. */
+export const RIVER_CARVE_RADIUS = 6.0;
+const RIVER_CARVE_DEPTH = 1.2;
+
+/**
+ * Entaille de la vallée. Le profil en quart de cosinus du terrain d'origine
+ * atteignait bien zéro au bord, mais avec une dérivée de -0,47 : la rivière
+ * rejoignait le sol en formant une ARÊTE VIVE, et les objets du village posés
+ * sur cette arête se retrouvaient sur une pente de 24°. `smoothstep` a une
+ * dérivée nulle à ses DEUX bords, donc la berge rejoint le plat tangentiellement.
+ *
+ * La largeur suit : 1,2 m de dénivelé étalés sur 6 m plafonnent la pente à
+ * 1,5 × 1,2 / 6 ≈ 0,30 rad (17°), une berge que l'on descend sans escalader.
+ */
 function riverCarveAt(x: number, z: number): number {
   const d = Math.abs(x - riverCenterX(z));
-  if (d >= 4.0) return 0;
-  return Math.cos((d / 4.0) * (Math.PI / 2)) * 1.2;
+  return RIVER_CARVE_DEPTH * (1 - smoothstep(0, RIVER_CARVE_RADIUS, d));
 }
 
 export function heightAt(x: number, z: number): number {

@@ -35,13 +35,13 @@ export interface ScenarioPlace {
   radius: number;
 }
 
-interface Settlement {
+export interface Settlement {
   tribe: string;
   x: number;
   z: number;
 }
 
-const SETTLEMENTS: Settlement[] = [
+export const SETTLEMENTS: readonly Settlement[] = [
   { tribe: 'Aube', x: 0, z: -4.5 },
   { tribe: 'Rive', x: 5.5, z: -3.0 },
   { tribe: 'Pic', x: -5.5, z: -3.0 },

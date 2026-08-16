@@ -4,7 +4,12 @@
  * headless batch runner uses, so simulation and rendering can never diverge
  * (spec §3, §13.3). Only the visual settlement metadata (colors) lives here.
  */
-import { DEFAULT_VILLAGE, type ScenarioAgent, type ScenarioObject } from '@iwsdk/cardinal-simulation';
+import {
+  DEFAULT_VILLAGE,
+  SETTLEMENTS as ENGINE_SETTLEMENTS,
+  type ScenarioAgent,
+  type ScenarioObject,
+} from '@iwsdk/cardinal-simulation';
 
 export type LayoutAgent = ScenarioAgent;
 export type LayoutObject = ScenarioObject;
@@ -16,11 +21,23 @@ export interface SettlementLayout {
   color: number;
 }
 
-const SETTLEMENTS: SettlementLayout[] = [
-  { tribe: 'Aube', x: 0, z: -4.5, color: 0x3b82f6 },
-  { tribe: 'Rive', x: 5.5, z: -3.0, color: 0xef4444 },
-  { tribe: 'Pic', x: -5.5, z: -3.0, color: 0x10b981 },
-];
+/**
+ * Seule la couleur appartient au rendu. Les coordonnées étaient recopiées ici,
+ * ce que l'en-tête ci-dessus affirmait déjà ne pas être le cas : déplacer un
+ * campement côté moteur laissait la démo dessiner les feux à l'ancien endroit.
+ */
+const TRIBE_COLORS: Record<string, number> = {
+  Aube: 0x3b82f6,
+  Rive: 0xef4444,
+  Pic: 0x10b981,
+};
+
+const SETTLEMENTS: SettlementLayout[] = ENGINE_SETTLEMENTS.map((s) => ({
+  tribe: s.tribe,
+  x: s.x,
+  z: s.z,
+  color: TRIBE_COLORS[s.tribe] ?? 0xffffff,
+}));
 
 export const VILLAGE_LAYOUT = {
   settlements: SETTLEMENTS,
