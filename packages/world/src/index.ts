@@ -33,3 +33,4 @@ export {
   generateORM,
   generateNormal,
 } from './materials/textureData';
+export { MaterialLibrary, TEXTURE_SIZE } from './materials/MaterialLibrary';
