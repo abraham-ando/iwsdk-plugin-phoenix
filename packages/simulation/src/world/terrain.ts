@@ -32,6 +32,16 @@ export {
  */
 export const VALLEY_RATIO = 2.2;
 
+/**
+ * Recul horizontal des berges par mètre de profondeur entaillée.
+ *
+ * Sans ce terme, la largeur de vallée ignorait la profondeur : une entaille de
+ * 41 m dans un couloir de 9 m donnait des parois à 73°, et la rivière coulait
+ * au fond d'un canyon sur la majorité de son cours. 2,14 correspond à des
+ * berges d'au plus 25° — une pente que l'on descend, et non que l'on escalade.
+ */
+const BANK_RUN = 2.14;
+
 /** Profondeur du lit sous la nappe. */
 const BED_DEPTH = 1.1;
 
@@ -58,7 +68,10 @@ export function heightAt(x: number, z: number): number {
   const ground = dryReliefAt(x, z);
 
   const river = riverProximityAt(x, z);
-  const reach = river.width * VALLEY_RATIO;
+  // La vallée s'élargit AVEC sa profondeur : c'est ce qui borne la pente des
+  // berges, quelle que soit l'épaisseur de relief que le cours doit traverser.
+  const depth = Math.max(0, ground - river.elevation);
+  const reach = river.width * VALLEY_RATIO + depth * BANK_RUN;
   if (river.distance >= reach) return ground;
 
   // Profil de vallée : le fond du lit au centre, le sol intact au bord.

@@ -17,6 +17,7 @@ import {
   depthAt,
 } from '../src/world/terrain';
 import { getRiverCourse, riverProximityAt, historicalRiverX } from '../src/world/flow';
+import { biomeAt } from '../src/world/biomes';
 
 describe('constantes', () => {
   it('garde la zone simulée à 64 m et la mer à zéro', () => {
@@ -159,7 +160,8 @@ describe("l'entaille ne remonte jamais le sol", () => {
     let untouched = 0;
     for (let x = -600; x <= 600; x += 37) {
       for (let z = -600; z <= 600; z += 37) {
-        if (riverProximityAt(x, z).distance < 40) continue;
+        // La vallée s'élargit avec sa profondeur : 150 m dépasse toute portée.
+        if (riverProximityAt(x, z).distance < 150) continue;
         if (Math.hypot(x, z + 2.5) < 40) continue;
         untouched++;
         expect(heightAt(x, z)).toBeCloseTo(dryReliefAt(x, z), 6);
@@ -268,3 +270,34 @@ describe('géographie', () => {
   });
 });
 
+
+describe('les berges de la vallée restent franchissables', () => {
+  it("NE CREUSE PLUS DE GORGE : la pente du corridor reste modérée", () => {
+    // Avant que la largeur de vallée ne suive sa profondeur, la rivière coulait
+    // au fond d'un canyon : pente médiane 1,28 rad (73°), 90e centile 1,40
+    // (80°), et 74 % du corridor classé « roche ». Ce test tient l'acquis.
+    const slopes: number[] = [];
+    for (const p of getRiverCourse().points) {
+      for (let d = -20; d <= 20; d += 2) slopes.push(slopeAt(p.x + d, p.z));
+    }
+    slopes.sort((a, b) => a - b);
+    const median = slopes[Math.floor(slopes.length * 0.5)]!;
+    const ninetieth = slopes[Math.floor(slopes.length * 0.9)]!;
+    expect(median, 'pente médiane du corridor').toBeLessThan(0.35);
+    expect(ninetieth, 'pente au 90e centile').toBeLessThan(0.5);
+  });
+
+  it("garde le corridor hors du biome rocheux", () => {
+    // Corollaire visible : des parois verticales se peignent en gris. 74 % du
+    // corridor l'était.
+    let rock = 0;
+    let total = 0;
+    for (const p of getRiverCourse().points) {
+      for (let d = -20; d <= 20; d += 4) {
+        total++;
+        if (biomeAt(p.x + d, p.z).primary === 'rock') rock++;
+      }
+    }
+    expect(rock / total, 'proportion de roche dans le corridor').toBeLessThan(0.1);
+  });
+});

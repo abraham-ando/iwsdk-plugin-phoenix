@@ -32,9 +32,14 @@ export interface RiverProximity {
 export const PINNED_HALF_LENGTH = 60;
 
 const STEP = 6;
-const MAX_POINTS = 400;
+const MAX_POINTS = 700;
 const WIDTH_SOURCE = 2.6;
 const WIDTH_MOUTH = 8;
+
+function smoothstepLocal(edge0: number, edge1: number, x: number): number {
+  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
 
 /** La formule d'origine, à laquelle les points d'eau du village sont calés. */
 export function historicalRiverX(z: number): number {
@@ -69,56 +74,45 @@ function findSeaOutlet(): { x: number; z: number } {
 }
 
 /**
- * Direction de plus forte descente, tempérée par l'inertie et l'exutoire.
+ * Décalage latéral qui minimise le sol dans un couloir autour du cap.
  *
- * Le pur gradient s'enlise dans le moindre creux ; l'inertie donne au cours
- * l'élan qu'a une rivière réelle, et l'attrait de l'exutoire lui donne un cap
- * quand la plaine ne descend plus. `sign` vaut -1 pour remonter vers la source,
- * où l'exutoire ne doit évidemment pas peser.
+ * On ne fait PAS d'accumulation d'écoulement : ce terrain n'a pas de réseau de
+ * drainage, c'est du bruit fractal avec une cuvette au milieu. Toute marche
+ * locale y finit dans un puits — mesuré : 650 pas d'oscillation dans un creux
+ * à 0,56 m. Le remplissage de dépressions, la méthode correcte, est un
+ * algorithme sur grille à l'échelle du kilomètre carré, hors de propos ici.
+ *
+ * Le modèle retenu est plus modeste et honnête : le cours va du village à la
+ * mer et, chemin faisant, cherche le sol le plus bas dans un couloir autour de
+ * son cap. La terminaison est garantie par construction, et la vallée — dont
+ * la largeur suit la profondeur — garde des berges douces là où il faut
+ * malgré tout entailler.
  */
-function bestDirection(
-  x: number,
-  z: number,
-  dirX: number,
-  dirZ: number,
-  sign: number,
-  outlet: { x: number; z: number } | null,
-): [number, number] {
-  let bestX = dirX;
-  let bestZ = dirZ;
-  let bestScore = -Infinity;
-  const here = dryReliefAt(x, z);
-  let gx = 0;
-  let gz = 0;
-  if (outlet !== null) {
-    const dx = outlet.x - x;
-    const dz = outlet.z - z;
-    const len = Math.hypot(dx, dz);
-    if (len > 1e-6) {
-      gx = dx / len;
-      gz = dz / len;
-    }
+const CORRIDOR = 420;
+const CORRIDOR_SAMPLES = 43;
+// Le décalage ne bouge que de tant par pas. Au-delà, deux points du cours
+// s'espacent trop : `riverProximityAt` mesure la distance aux POINTS et non
+// aux segments, et un écart de 20 m fausse la proximité de 10 m en son milieu.
+const OFFSET_SLEW = 5;
+
+function lowestOffset(
+  baseX: number,
+  baseZ: number,
+  perpX: number,
+  perpZ: number,
+  previous: number,
+): number {
+  let best = previous;
+  let bestRelief = Infinity;
+  for (let k = 0; k < CORRIDOR_SAMPLES; k++) {
+    const offset = -CORRIDOR + (2 * CORRIDOR * k) / (CORRIDOR_SAMPLES - 1);
+    if (Math.abs(offset - previous) > OFFSET_SLEW) continue;
+    const relief = dryReliefAt(baseX + perpX * offset, baseZ + perpZ * offset);
+    if (relief >= bestRelief) continue;
+    bestRelief = relief;
+    best = offset;
   }
-  for (let a = 0; a < 24; a++) {
-    const angle = (a / 24) * Math.PI * 2;
-    const cx = Math.cos(angle);
-    const cz = Math.sin(angle);
-    const inertia = cx * dirX + cz * dirZ;
-    if (inertia < -0.2) continue; // un cours ne se retourne pas sur lui-même
-    const raw = (here - dryReliefAt(x + cx * STEP, z + cz * STEP)) * sign;
-    // Le dénivelé local est BORNÉ. Le bruit de détail crée des creux de 1 à 2 m
-    // sur 6 m, qui écrasaient l'attrait de l'exutoire : le cours chassait les
-    // bosses et tournait en rond. Une rivière de plaine suit la pente
-    // RÉGIONALE, pas les accidents centimétriques.
-    const drop = Math.max(-1.5, Math.min(1.5, raw));
-    const goal = cx * gx + cz * gz;
-    const score = drop * 0.8 + inertia * 0.5 + goal * (outlet === null ? 0 : 3);
-    if (score <= bestScore) continue;
-    bestScore = score;
-    bestX = cx;
-    bestZ = cz;
-  }
-  return [bestX, bestZ];
+  return best;
 }
 
 function buildCourse(): RiverCourse {
@@ -132,21 +126,31 @@ function buildCourse(): RiverCourse {
     pinned.push({ x: historicalRiverX(z), z });
   }
 
-  // 3. Aval : descente libre jusqu'à la mer.
-  const downstream: { x: number; z: number }[] = [];
-  let dx = historicalRiverX(-PINNED_HALF_LENGTH);
-  let dz = -PINNED_HALF_LENGTH;
-  let ddx = -1;
-  let ddz = 0;
+  // 3. Aval : cheminement guidé du village vers l'exutoire.
   const outlet = findSeaOutlet();
-  while (downstream.length < MAX_POINTS) {
-    const [nx, nz] = bestDirection(dx, dz, ddx, ddz, 1, outlet);
-    dx += nx * STEP;
-    dz += nz * STEP;
-    ddx = nx;
-    ddz = nz;
-    downstream.push({ x: dx, z: dz });
-    if (landMaskAt(dx, dz) < 0.35) break; // la mer est atteinte
+  const startX = historicalRiverX(-PINNED_HALF_LENGTH);
+  const startZ = -PINNED_HALF_LENGTH;
+  const spanX = outlet.x - startX;
+  const spanZ = outlet.z - startZ;
+  const span = Math.hypot(spanX, spanZ);
+  const dirX = spanX / span;
+  const dirZ = spanZ / span;
+  // Perpendiculaire au cap : c'est dans cette direction que l'on cherche le bas.
+  const perpX = -dirZ;
+  const perpZ = dirX;
+
+  const downstream: { x: number; z: number }[] = [];
+  const steps = Math.min(MAX_POINTS, Math.ceil(span / STEP));
+  let offset = 0;
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    const baseX = startX + spanX * t;
+    const baseZ = startZ + spanZ * t;
+    offset = lowestOffset(baseX, baseZ, perpX, perpZ, offset);
+    // Le décalage se referme à l'approche de l'embouchure : la rivière doit
+    // finir DANS la mer, pas à côté.
+    const taper = 1 - smoothstepLocal(0.75, 1, t);
+    downstream.push({ x: baseX + perpX * offset * taper, z: baseZ + perpZ * offset * taper });
   }
 
   const all = [...pinned, ...downstream];

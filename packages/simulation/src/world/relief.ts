@@ -120,6 +120,17 @@ function reliefFromLand(x: number, z: number, land: number): number {
  * `flow.ts` doit lire le terrain SEC : lire le terrain creusé ferait dépendre
  * le tracé du cours de l'entaille que ce tracé produit.
  */
+/**
+ * Rayon de l'éminence qui porte le village.
+ *
+ * Une rampe courte faisait du plateau une butte ceinturée d'un FOSSÉ : le sol
+ * retombait à 0,5 m en 26 m. Le cours d'eau y perdait toute son altitude en
+ * quarante mètres et, ne pouvant plus remonter, entaillait ensuite chaque
+ * colline de quarante mètres. Sur 400 m, les six mètres se dissipent à 1,5 %
+ * de pente et la rivière descend avec le terrain au lieu de le percer.
+ */
+const DOME_RADIUS = 400;
+
 export function dryReliefAt(x: number, z: number): number {
   const raw = reliefFromLand(x, z, landMaskAt(x, z));
   // Le plateau du village fait partie du TERRAIN, pas de la rivière : il doit
@@ -127,6 +138,12 @@ export function dryReliefAt(x: number, z: number): number {
   // d'eau un village à 1 m pendant que le sol l'élevait à 6 — les deux ne
   // parlaient pas du même terrain, et la vallée creusait le village.
   const d = distanceToVillage(x, z);
-  const plateau = 1 - smoothstep(PLATEAU_RADIUS, PLATEAU_RADIUS + PLATEAU_FALLOFF, d);
-  return lerp(raw, VILLAGE_ELEVATION, plateau);
+  // Hors de portée de l'éminence, le relief est rendu TEL QUEL. Un `max` avec
+  // un dôme nul y écrêterait à zéro tout terrain négatif — c'est-à-dire le
+  // fond de la mer, sur toute la planète.
+  if (d >= DOME_RADIUS) return raw;
+  const dome = VILLAGE_ELEVATION * (1 - smoothstep(PLATEAU_RADIUS, DOME_RADIUS, d));
+  // `max` et non une interpolation : l'éminence soulève le sol sans jamais
+  // raboter un relief qui serait déjà plus haut.
+  return Math.max(raw, dome);
 }
