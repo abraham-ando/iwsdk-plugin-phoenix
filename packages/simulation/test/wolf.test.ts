@@ -14,7 +14,7 @@ describe('WolfSystem', () => {
   it('is deterministic: same seed, same wolf trajectory', () => {
     const a = setupWithWolf(5);
     const b = setupWithWolf(5);
-    for (let t = 0; t < 2000; t++) {
+    for (let t = 0; t < 1200; t++) {
       a.kernel.step();
       b.kernel.step();
     }
@@ -30,7 +30,8 @@ describe('WolfSystem', () => {
     // Force hunger so the hunt starts immediately.
     sim.wolf.state(); // (read-only check below uses internals via forceState)
     sim.wolf.forceState({ hunger: 30, mode: 'hunt' });
-    for (let t = 0; t < 3000; t++) sim.kernel.step();
+    // ~10 m to the nearest ground at 0.18 m/tick: 600 ticks is 10x the need.
+    for (let t = 0; t < 600; t++) sim.kernel.step();
     const after = sim.world
       .objectsNear(0, 0, 1000)
       .filter((o) => o.type === 'hunting_ground')

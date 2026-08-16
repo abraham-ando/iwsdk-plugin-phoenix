@@ -48,6 +48,17 @@ export {
 } from './telemetry/TrajectoryRecorder';
 export { mockPlanResponse } from './telemetry/MockPlanner';
 export {
+  toChatSft,
+  toWorldModelSft,
+  splitTrainValid,
+  datasetSummary,
+  WORLD_MODEL_SYSTEM_PROMPT,
+  type SftRecord,
+  type SftMessage,
+  type ExportOptions,
+  type DatasetSummary,
+} from './telemetry/datasetExport';
+export {
   GroundTruthWorld,
   type NamedPlace,
   type WorldSnapshot,
