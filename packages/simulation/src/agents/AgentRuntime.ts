@@ -1,12 +1,14 @@
-import { SimKernel, type TickContext } from '../kernel/SimKernel';
+import { SimKernel, TICKS_PER_DAY, type TickContext } from '../kernel/SimKernel';
+import type { ExternalEvent } from '../kernel/EventLog';
 import type { GroundTruthWorld } from '../world/GroundTruthWorld';
 import type { SmartObjectRegistry } from '../world/SmartObject';
 import { getTerrainHeight } from '../world/terrain';
 import { createAgent, type AgentProfile, type AgentState } from './AgentState';
-import { decayNeeds } from './needs';
+import { decayNeeds, maxUrgency } from './needs';
 import { perceive, type PerceivedAgent } from './Perception';
 import { executeActionTick, type ActionEvent } from './actions';
 import { selectAction } from './Mode1';
+import { buildPlanRequest, parsePlanSteps, type PlanRequest, type PlanRequestReason } from './Mode2';
 import { defaultIntrinsics, type IntrinsicActionDef } from './intrinsics';
 
 export interface AgentView {
@@ -24,19 +26,27 @@ export interface AgentView {
 const PERCEPTION_PERIOD = 10; // ticks (1 s simulated, spec §6.1)
 const FIRE_WARMTH_RADIUS = 3;
 
+export const MODE2_DAILY_BUDGET = 12;
+export const URGENCY_OVERRIDE = 0.55;
+export const DAWN_HOUR = 6;
+export const REFLECTION_HOUR = 21;
+
 const GATHER_VERBS = /^(gather_|eat_|fish$)/;
 const CRAFT_VERBS = /^(light_fire|add_wood|build|knap_flint|deposit_|take_)/;
 
 /**
- * Orchestrates embodied agents on kernel ticks (spec §6, §7.1): decay ->
- * perceive -> execute -> select. Deterministic: agents iterate in sorted id
- * order; Mode-1 is pure; the only randomness is the kernel's seeded rng
- * (unused here, reserved for étape 3+).
+ * Orchestrates embodied agents on kernel ticks (spec §6, §7): decay ->
+ * perceive -> execute -> select, plus the Mode-2 lifecycle — trigger-driven
+ * plan requests in an outbox, LLM responses consumed from the kernel's
+ * external-event journal (replay-exact, spec §8.3), and LeCun arbitration:
+ * an urgent need always preempts the deliberate plan.
  */
 export class AgentRuntime {
   readonly agents = new Map<string, AgentState>();
   private events: ActionEvent[] = [];
+  private planRequests: PlanRequest[] = [];
   private intrinsics: IntrinsicActionDef[];
+  private currentTick = 0;
 
   constructor(
     private world: GroundTruthWorld,
@@ -64,11 +74,101 @@ export class AgentRuntime {
   }
 
   private tickAll(ctx: TickContext): void {
+    this.currentTick = ctx.tick;
+    for (const event of ctx.events) this.handleExternalEvent(event, ctx.tick);
     const roster = this.sortedAgents();
     for (const agent of roster) {
       this.tickAgent(agent, ctx, roster);
     }
   }
+
+  // --- Mode-2: external LLM responses (journaled, replay-exact) ---
+
+  private handleExternalEvent(event: ExternalEvent, tick: number): void {
+    const payload = event.payload as
+      | {
+          requestId?: string;
+          agentId?: string;
+          steps?: unknown;
+          insights?: unknown;
+          participantIds?: unknown;
+          lines?: unknown;
+          sharedFacts?: unknown;
+        }
+      | null
+      | undefined;
+    if (payload === null || payload === undefined || typeof payload !== 'object') return;
+
+    if (event.type === 'llm_plan') {
+      const agent = this.agents.get(payload.agentId ?? '');
+      if (agent === undefined) return;
+      if (agent.mode2.pendingRequestId === payload.requestId) agent.mode2.pendingRequestId = null;
+      const steps = parsePlanSteps(payload, this.registry, this.intrinsics, agent);
+      agent.plan = steps;
+      if (steps.length > 0) {
+        agent.memories.add({
+          tick,
+          text: `J'ai un nouveau plan: ${steps.map((s) => s.goal).join(', ')}`,
+          importance: 3,
+          kind: 'event',
+        });
+      }
+      return;
+    }
+
+    if (event.type === 'llm_reflection') {
+      const agent = this.agents.get(payload.agentId ?? '');
+      if (agent === undefined) return;
+      if (agent.mode2.pendingRequestId === payload.requestId) agent.mode2.pendingRequestId = null;
+      if (Array.isArray(payload.insights)) {
+        for (const insight of payload.insights) {
+          if (typeof insight === 'string') {
+            agent.memories.add({ tick, text: insight, importance: 8, kind: 'reflection' });
+          }
+        }
+      }
+      return;
+    }
+  }
+
+  /** Transport layer failed to deliver a request: let the agent ask again. */
+  releasePendingRequest(agentId: string, requestId: string): void {
+    const agent = this.agents.get(agentId);
+    if (agent !== undefined && agent.mode2.pendingRequestId === requestId) {
+      agent.mode2.pendingRequestId = null;
+    }
+  }
+
+  private emitPlanRequest(
+    agent: AgentState,
+    reason: PlanRequestReason,
+    tick: number,
+    participantIds?: string[]
+  ): void {
+    if (agent.mode2.pendingRequestId !== null) return;
+    const consumesBudget = reason !== 'reflection';
+    if (consumesBudget && agent.mode2.budgetUsed >= MODE2_DAILY_BUDGET) return;
+    const request = buildPlanRequest(
+      agent,
+      this.registry,
+      this.intrinsics,
+      tick,
+      reason,
+      this.world.placeAt(agent.x, agent.z),
+      participantIds
+    );
+    this.planRequests.push(request);
+    agent.mode2.pendingRequestId = request.requestId;
+    if (consumesBudget) agent.mode2.budgetUsed++;
+  }
+
+  drainPlanRequests(): PlanRequest[] {
+    const out = this.planRequests;
+    this.planRequests = [];
+    return out;
+  }
+
+  // --- Per-tick agent lifecycle ---
 
   private tickAgent(agent: AgentState, ctx: TickContext, roster: AgentState[]): void {
     const nearLitFire = this.world
@@ -80,6 +180,10 @@ export class AgentRuntime {
       nearLitFire,
       isSleeping: agent.sleeping,
     });
+
+    if (agent.speech !== null && ctx.tick > agent.speech.untilTick) {
+      agent.speech = null;
+    }
 
     if (ctx.tick % PERCEPTION_PERIOD === 0) {
       const others: PerceivedAgent[] = roster
@@ -96,21 +200,98 @@ export class AgentRuntime {
       );
     }
 
-    const event = executeActionTick(agent, this.world, this.intrinsics, ctx.tick);
-    if (event !== null) this.events.push(event);
+    // Mode-2 clock triggers: dawn plan (budget reset), nightly reflection.
+    const day = Math.floor(ctx.tick / TICKS_PER_DAY);
+    if (ctx.hour >= DAWN_HOUR && agent.mode2.lastDawnDay < day) {
+      agent.mode2.lastDawnDay = day;
+      agent.mode2.budgetUsed = 0;
+      this.emitPlanRequest(agent, 'dawn', ctx.tick);
+    }
+    if (ctx.hour >= REFLECTION_HOUR && agent.mode2.lastReflectionDay < day) {
+      agent.mode2.lastReflectionDay = day;
+      this.emitPlanRequest(agent, 'reflection', ctx.tick);
+    }
 
-    if (agent.currentAction === null) {
-      const next = selectAction(agent, this.registry, this.intrinsics);
-      if (next !== null) {
-        agent.currentAction = next;
-        this.events.push({
+    const event = executeActionTick(agent, this.world, this.intrinsics, ctx.tick);
+    if (event !== null) {
+      this.events.push(event);
+      if (event.type === 'completed') {
+        agent.memories.add({
           tick: ctx.tick,
-          agentId: agent.profile.id,
-          type: 'started',
-          verb: next.verb,
+          text: `${event.verb} accompli`,
+          importance: 1,
+          kind: 'event',
         });
+      } else if (event.type === 'failed') {
+        agent.memories.add({
+          tick: ctx.tick,
+          text: `Échec: ${event.verb} — ${event.reason ?? 'raison inconnue'}`,
+          importance: 4,
+          kind: 'event',
+        });
+        this.emitPlanRequest(agent, 'surprise', ctx.tick);
       }
     }
+
+    if (agent.currentAction === null) {
+      // LeCun arbitration: the deliberate plan runs only while no drive is
+      // urgent; a pressing need hands control back to Mode-1 reflexes.
+      let planned = false;
+      if (maxUrgency(agent.needs) <= URGENCY_OVERRIDE && agent.plan.length > 0) {
+        planned = this.tryPlanStep(agent, ctx.tick);
+      }
+      if (!planned && agent.currentAction === null) {
+        const next = selectAction(agent, this.registry, this.intrinsics);
+        if (next !== null) {
+          agent.currentAction = next;
+          this.events.push({
+            tick: ctx.tick,
+            agentId: agent.profile.id,
+            type: 'started',
+            verb: next.verb,
+          });
+        }
+      }
+    }
+  }
+
+  /** Pop plan steps until one is executable; install it as the current action. */
+  private tryPlanStep(agent: AgentState, tick: number): boolean {
+    while (agent.plan.length > 0) {
+      const step = agent.plan.shift()!;
+      const intrinsic = this.intrinsics.find((i) => i.verb === step.verb);
+      if (intrinsic !== undefined) {
+        agent.currentAction = {
+          kind: 'intrinsic',
+          verb: step.verb,
+          remainingTicks: intrinsic.durationTicks,
+        };
+        this.events.push({ tick, agentId: agent.profile.id, type: 'started', verb: step.verb });
+        return true;
+      }
+      const belief = step.objectId !== undefined ? agent.beliefs.get(step.objectId) : undefined;
+      if (belief === undefined) {
+        agent.memories.add({
+          tick,
+          text: `Pas de plan abandonné: ${step.verb}`,
+          importance: 2,
+          kind: 'event',
+        });
+        continue;
+      }
+      agent.currentAction = {
+        kind: 'world',
+        objectId: belief.objectId,
+        verb: step.verb,
+        phase: 'goto',
+        targetX: belief.x,
+        targetZ: belief.z,
+        remainingTicks: 0,
+      };
+      this.events.push({ tick, agentId: agent.profile.id, type: 'started', verb: step.verb });
+      return true;
+    }
+    return false;
   }
 
   view(id: string): AgentView | undefined {
@@ -125,7 +306,10 @@ export class AgentRuntime {
       heading: agent.heading,
       animation: animationOf(agent),
       verb: agent.currentAction === null ? null : verbOf(agent),
-      dialogue: agent.speech !== null ? agent.speech.text : null,
+      dialogue:
+        agent.speech !== null && this.currentTick <= agent.speech.untilTick
+          ? agent.speech.text
+          : null,
     };
   }
 
