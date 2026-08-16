@@ -167,6 +167,16 @@ export class CardinalBFFServer {
         return;
       }
 
+      // 5. Trajectory ingestion + stats (spec §9.2)
+      if (url.pathname === '/trajectories/batch' && req.method === 'POST') {
+        await this.handleTrajectoriesBatch(req, res);
+        return;
+      }
+      if (url.pathname === '/trajectories/stats' && req.method === 'GET') {
+        await this.handleTrajectoriesStats(req, res);
+        return;
+      }
+
       // 404
       res.writeHead(404, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Not found' }));
@@ -176,22 +186,29 @@ export class CardinalBFFServer {
     }
   }
 
-  // --- /agents/plan -------------------------------------------------------
-
-  private async handleAgentsPlan(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  /** Shared JWT + rate-limit gate. Writes the error response and returns
+   * null when the caller must abort. */
+  private authorize(req: IncomingMessage, res: ServerResponse): string | null {
     const authHeader = req.headers.authorization || '';
     const token = authHeader.replace(/^Bearer\s+/i, '');
     const verification = this.jwt.verify(token);
     if (!verification.valid || !verification.payload) {
       res.writeHead(401, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: verification.error || 'Unauthorized' }));
-      return;
+      return null;
     }
     if (!this.rateLimiter.isAllowed(verification.payload.sub)) {
       res.writeHead(429, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Too many requests, rate limit exceeded' }));
-      return;
+      return null;
     }
+    return verification.payload.sub;
+  }
+
+  // --- /agents/plan -------------------------------------------------------
+
+  private async handleAgentsPlan(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    if (this.authorize(req, res) === null) return;
 
     const bodyText = await this.readBody(req);
     const request = (bodyText ? JSON.parse(bodyText) : {}).request as AgentPlanRequest | undefined;
@@ -352,6 +369,80 @@ export class CardinalBFFServer {
       `les verbes-monde). Pour chaque pas, "predicted" décrit le résultat concret attendu. ` +
       `Réponds UNIQUEMENT en JSON: {"steps":[{"goal":"...","verb":"...","objectId":"...","predicted":"..."}]}`
     );
+  }
+
+  // --- /trajectories ------------------------------------------------------
+
+  private static readonly RUN_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+
+  private trajectoriesDir(): string | null {
+    const dir = this.config.datasetDir === undefined ? './datasets/agents' : this.config.datasetDir;
+    return dir === null ? null : path.join(dir, 'trajectories');
+  }
+
+  private async handleTrajectoriesBatch(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    if (this.authorize(req, res) === null) return;
+    const bodyText = await this.readBody(req);
+    const body = (bodyText ? JSON.parse(bodyText) : {}) as {
+      runId?: string;
+      decisions?: unknown[];
+      predictions?: unknown[];
+      episodes?: unknown[];
+    };
+    if (typeof body.runId !== 'string' || !CardinalBFFServer.RUN_ID_RE.test(body.runId)) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'invalid runId' }));
+      return;
+    }
+
+    const streams: Array<['decisions' | 'predictions' | 'episodes', unknown[]]> = [
+      ['decisions', Array.isArray(body.decisions) ? body.decisions : []],
+      ['predictions', Array.isArray(body.predictions) ? body.predictions : []],
+      ['episodes', Array.isArray(body.episodes) ? body.episodes : []],
+    ];
+    const appended: Record<string, number> = { decisions: 0, predictions: 0, episodes: 0 };
+    const base = this.trajectoriesDir();
+    for (const [name, records] of streams) {
+      appended[name] = records.length;
+      if (base === null || records.length === 0) continue;
+      try {
+        const dir = path.join(base, body.runId);
+        await fs.mkdir(dir, { recursive: true });
+        const lines = records.map((r) => JSON.stringify(r)).join('\n') + '\n';
+        await fs.appendFile(path.join(dir, `${name}.jsonl`), lines);
+      } catch {
+        // Ingestion must never fail the caller for disk reasons.
+      }
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: true, appended }));
+  }
+
+  private async handleTrajectoriesStats(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    if (this.authorize(req, res) === null) return;
+    const base = this.trajectoriesDir();
+    const runs: Array<Record<string, unknown>> = [];
+    if (base !== null) {
+      try {
+        const entries = await fs.readdir(base, { withFileTypes: true });
+        for (const entry of entries.filter((e) => e.isDirectory())) {
+          const run: Record<string, unknown> = { runId: entry.name };
+          for (const stream of ['decisions', 'predictions', 'episodes'] as const) {
+            try {
+              const content = await fs.readFile(path.join(base, entry.name, `${stream}.jsonl`), 'utf8');
+              run[stream] = content.split('\n').filter((l) => l.length > 0).length;
+            } catch {
+              run[stream] = 0;
+            }
+          }
+          runs.push(run);
+        }
+      } catch {
+        // Missing directory -> empty listing.
+      }
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ runs }));
   }
 
   private datasetDirReady = false;

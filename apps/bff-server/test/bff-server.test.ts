@@ -216,6 +216,40 @@ describe('/agents/plan (mock mode, server-side jsonl logging)', () => {
     expect(body.sharedFacts[0]?.objectId).toBe('berry_bush_1');
   });
 
+  it('trajectories/batch appends jsonl per run and stats counts them', async () => {
+    const token = await getToken();
+    const post = await fetch(`${baseUrl}/trajectories/batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        runId: 'vr-test-1',
+        decisions: [{ a: 1 }],
+        episodes: [{ tick: 1 }, { tick: 2 }],
+      }),
+    });
+    expect(post.status).toBe(200);
+    const posted = (await post.json()) as { appended: Record<string, number> };
+    expect(posted.appended).toEqual({ decisions: 1, predictions: 0, episodes: 2 });
+
+    const stats = await fetch(`${baseUrl}/trajectories/stats`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(stats.status).toBe(200);
+    const body = (await stats.json()) as { runs: Array<Record<string, unknown>> };
+    const run = body.runs.find((r) => r.runId === 'vr-test-1');
+    expect(run).toMatchObject({ decisions: 1, predictions: 0, episodes: 2 });
+  });
+
+  it('rejects malicious runIds', async () => {
+    const token = await getToken();
+    const res = await fetch(`${baseUrl}/trajectories/batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ runId: '../../etc', episodes: [{}] }),
+    });
+    expect(res.status).toBe(400);
+  });
+
   it('mock reflection returns insights', async () => {
     const token = await getToken();
     const request = { ...dawnRequest(), requestId: 'mira:2100:reflection', reason: 'reflection' };
