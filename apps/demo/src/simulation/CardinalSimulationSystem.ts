@@ -21,7 +21,7 @@ import {
 import { VILLAGE_LAYOUT } from './layout';
 import { applyAvatarPose } from './AgentAvatarFactory';
 import { PrehistoricEnvironment3D, type PrehistoricSceneResult } from './PrehistoricEnvironment3D';
-import { CelestialVisuals } from './CelestialVisuals';
+import { CelestialTime, WEATHER_KINDS } from '@iwsdk/cardinal-world';
 import { WolfVisual } from './WolfVisual';
 import { VillagerVoices } from './VillagerVoices';
 
@@ -83,12 +83,10 @@ export class CardinalSimulationSystem extends createSystem({}) {
   private sceneData: PrehistoricSceneResult | null = null;
   private elapsed = 0;
   private readonly campfireBindings: Array<{ group: Group; objectId: string }> = [];
-  private celestial: CelestialVisuals | null = null;
 
   /** Bind the rendered scene once; per-frame projection targets it. */
   attachScene(sceneData: PrehistoricSceneResult): void {
     this.sceneData = sceneData;
-    this.celestial = new CelestialVisuals(sceneData.root);
     this.wolfVisual = new WolfVisual(sceneData.root);
     this.campfireBindings.length = 0;
     for (const [, group] of sceneData.campfires) {
@@ -179,9 +177,19 @@ export class CardinalSimulationSystem extends createSystem({}) {
     this.kernel.submitEvent('player_move', { x: position.x, z: position.z });
   }
 
+  /** Feed the simulation clock and weather into the environment package. */
+  private publishCelestialTime(): void {
+    const root = this.world.activeLevel.peek();
+    if (!root || !root.hasComponent(CelestialTime)) return;
+    root.setValue(CelestialTime, 'hour', this.hourOfDaySim());
+    const weatherIndex = WEATHER_KINDS.indexOf(this.weather.current);
+    root.setValue(CelestialTime, 'weather', weatherIndex >= 0 ? weatherIndex : 0);
+  }
+
   update(delta: number): void {
     this.feedPlayerPosition(delta);
     this.kernel.advance(Math.min(delta, 0.25));
+    this.publishCelestialTime();
 
     const day = Math.floor(this.kernel.tick / TICKS_PER_DAY);
     if (day !== this.lastDay) {
@@ -234,7 +242,6 @@ export class CardinalSimulationSystem extends createSystem({}) {
     // Scenery animation (wind, water) lives with rendering, not simulation.
     sceneData.grassField.updateWind(this.elapsed);
     sceneData.river.updateWater(this.elapsed);
-    this.celestial?.update(this.hourOfDaySim(), this.weather.current, this.elapsed);
     this.wolfVisual?.update(this.wolf.view());
   }
 

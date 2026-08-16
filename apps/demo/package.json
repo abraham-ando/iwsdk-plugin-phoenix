@@ -17,6 +17,7 @@
   "dependencies": {
     "@dgreenheck/ez-tree": "^1.1.0",
     "@iwsdk/cardinal-simulation": "workspace:*",
+    "@iwsdk/cardinal-world": "workspace:*",
     "@iwsdk/core": "0.5.3",
     "@iwsdk/plugin-cardinal-ai": "workspace:*",
     "@iwsdk/plugin-phoenix": "workspace:*",

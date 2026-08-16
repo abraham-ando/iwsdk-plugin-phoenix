@@ -14,6 +14,7 @@ import { describeConfig, readNetworkConfig } from './networking.js';
 import { PanelSystem } from './panel.js';
 import { RobotSystem } from './robot.js';
 import { setupCardinalVillage } from './ai-village.js';
+import { installCardinalWorld } from '@iwsdk/cardinal-world';
 import { CardinalSimulationSystem } from './simulation/CardinalSimulationSystem.js';
 import { PrehistoricEnvironment3D } from './simulation/PrehistoricEnvironment3D.js';
 import { VILLAGE_LAYOUT } from './simulation/layout.js';
@@ -39,6 +40,10 @@ World.create(container, projectOptions)
 
     // 1. Mount Cardinal AI Engine, NPCs & Interactive HUD
     setupCardinalVillage(world);
+
+    // 2a. Mount the procedural environment package (sky rig, quality tiers)
+    const { quality } = installCardinalWorld(world, { latitudeDeg: 45 });
+    console.log(`[demo] environment quality tier: ${quality}`);
 
     // 2. Mount the Cardinal simulation engine + its VR projection & HUD
     world.registerSystem(CardinalSimulationSystem);

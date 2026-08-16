@@ -15,3 +15,8 @@ export { CelestialTime, SkyModel, StarField, WEATHER_KINDS } from './atmosphere/
 export { CelestialTimeSystem } from './atmosphere/CelestialTimeSystem';
 export { SkyRenderSystem, IBL_REFRESH_ELEVATION_DEG } from './atmosphere/SkyRenderSystem';
 export { StarFieldSystem } from './atmosphere/StarFieldSystem';
+export {
+  installCardinalWorld,
+  withLevelRoot,
+  type CardinalWorldOptions,
+} from './install';
