@@ -461,14 +461,26 @@ const SPECIES = [
   { id: 'bush', preset: 'Bush 1' },
 ];
 
-/** `generateLODs()` n'existe pas dans ez-tree : on abaisse le branchage. */
-const LEVELS = [3, 2, 1];
+/**
+ * `generateLODs()` n'existe pas dans ez-tree : on abaisse le branchage.
+ *
+ * Et l'on part de 2, non de 3. À 6 806 triangles, le niveau le plus fin
+ * n'autoriserait que 67 arbres dans tout le champ de vision — 500 000
+ * triangles au budget, dont 42 000 pris par le terrain. Un bosquet, pas une
+ * forêt. Les trois niveaux livrés sont donc 2 / 1 / 1-sans-feuilles.
+ */
+const LEVELS = [
+  { branch: 2, leaves: 1 },
+  { branch: 1, leaves: 1 },
+  { branch: 1, leaves: 0 },
+];
 
-function buildTree(preset, levels, seed) {
+function buildTree(preset, level, seed) {
   const tree = new Tree();
   tree.loadPreset(preset);
   tree.options.seed = seed;
-  tree.options.branch.levels = levels;
+  tree.options.branch.levels = level.branch;
+  if (level.leaves === 0) tree.options.leaves.count = 0;
   tree.generate();
   return tree;
 }
@@ -514,11 +526,11 @@ function push(array, Ctor, bytes) {
 const species = [];
 for (const entry of SPECIES) {
   const lods = [];
-  for (const level of LEVELS) {
+  for (const [levelIndex, level] of LEVELS.entries()) {
     const tree = buildTree(entry.preset, level, 12345);
     const flat = flatten(tree);
     lods.push({
-      level: LEVELS.indexOf(level),
+      level: levelIndex,
       triangles: flat.indices.length / 3,
       position: push(flat.positions, Float32Array, 4),
       normal: push(flat.normals, Float32Array, 4),
@@ -552,7 +564,7 @@ Puis : `pnpm install`
 - [ ] **Step 5: Générer et vérifier**
 
 Run: `pnpm flora:generate`
-Expected: trois lignes de comptes décroissants, par exemple `oak triangles par niveau : 6806 / 2772 / 1108`.
+Expected: trois lignes de comptes décroissants, par exemple `oak triangles par niveau : 2772 / 1108 / 620`.
 
 Run: `node --test 'scripts/__tests__/flora-manifest.test.mjs'`
 Expected: PASS, 2 tests.
@@ -815,7 +827,7 @@ git commit -m "feat(world): read offline-generated flora geometry, ez-tree unkno
 - Consumes: `scatterAt`, `SCATTER_TILE`, `FLORA_SPECIES` du moteur ; `FloraAsset` de la tâche 3 ; `TerrainTile` de la phase 3B.
 - Produces:
   - `FloraTile` — composant elics, champs `tx`, `tz` (`Types.Int16`), `_needsPlant` (`Types.Boolean`)
-  - `FloraSystem` avec `plantedTiles: number` et `instanceCount: number`
+  - `FloraSystem` avec `plantedTiles: number`, `instanceCount: number`, `lastLevelNear: number`, `lastLevelFar: number`
   - `lodForRing(ring: number): number` réutilisé de `terrain/tiling`
 
 - [ ] **Step 1: Compléter le mock**
@@ -925,6 +937,18 @@ describe('FloraSystem', () => {
     expect(rig.system.plantedTiles).toBe(after);
   });
 
+  it('CHOISIT UN NIVEAU PLUS GROSSIER AU LOIN', () => {
+    // Sans cela, le budget de 500 000 triangles n'autoriserait que quelques
+    // dizaines d'arbres dans tout le champ de vision.
+    const rig = makeRig();
+    const near = rig.world.createEntity();
+    near.addComponent(FloraTile, { tx: 0, tz: 0, _needsPlant: true });
+    const far = rig.world.createEntity();
+    far.addComponent(FloraTile, { tx: 3, tz: 3, _needsPlant: true });
+    rig.system.update(0.016, 0);
+    expect(rig.system.lastLevelNear).toBeLessThan(rig.system.lastLevelFar);
+  });
+
   it('survit à une tuile vide sans rien planter', () => {
     const rig = makeRig();
     // Une tuile de haute montagne ne porte aucune flore.
@@ -970,7 +994,8 @@ Créer `packages/world/src/flora/FloraSystem.ts` :
 
 ```ts
 import { createSystem, Types, InstancedMesh, Matrix4, Object3D } from '@iwsdk/core';
-import { scatterAt, heightAt, type FloraSpecies } from '@iwsdk/cardinal-simulation';
+import { scatterAt, heightAt, SCATTER_TILE, type FloraSpecies } from '@iwsdk/cardinal-simulation';
+import { lodForRing } from '../terrain/tiling';
 import { FloraTile } from './components';
 import type { FloraAsset } from './floraAssets';
 
@@ -989,6 +1014,9 @@ export class FloraSystem extends createSystem(
 ) {
   public plantedTiles = 0;
   public instanceCount = 0;
+  /** Derniers niveaux choisis, pour que les tests puissent les constater. */
+  public lastLevelNear = 0;
+  public lastLevelFar = 0;
 
   /** Alloués une fois : la règle du dépôt traite toute allocation par image comme un défaut. */
   private readonly matrix = new Matrix4();
@@ -997,6 +1025,10 @@ export class FloraSystem extends createSystem(
   public override update(_delta: number, _time: number): void {
     const assets = this.config.assets.value as FloraAsset[] | null;
     if (assets === null) return;
+
+    const player = this.player as unknown as { position: { x: number; z: number } } | undefined;
+    const centreX = Math.floor((player?.position.x ?? 0) / SCATTER_TILE);
+    const centreZ = Math.floor((player?.position.z ?? 0) / SCATTER_TILE);
 
     for (const entity of this.queries.tiles.entities) {
       if (entity.getValue(FloraTile, '_needsPlant') !== true) continue;
@@ -1013,10 +1045,16 @@ export class FloraSystem extends createSystem(
         else (list as ReturnType<typeof scatterAt>[number][]).push(item);
       }
 
+      // Le niveau de détail suit l'anneau, comme le terrain. Ce n'est pas une
+      // optimisation différable : au niveau le plus fin, le budget de 500 000
+      // triangles n'autoriserait que quelques dizaines d'arbres en tout.
+      const ring = Math.max(Math.abs(tx - centreX), Math.abs(tz - centreZ));
+      const level = Math.min(Math.max(0, lodForRing(ring)), 2);
+
       for (const [species, group] of bySpecies) {
         const asset = assets.find((a) => a.id === species);
         if (asset === undefined || asset.lods.length === 0) continue;
-        const lod = asset.lods[0]!;
+        const lod = asset.lods[Math.min(level, asset.lods.length - 1)]!;
         const mesh = new InstancedMesh(lod.geometry, this.config.material.value, group.length);
         mesh.name = `Flora ${species} ${tx},${tz}`;
         mesh.castShadow = false; // la flore reçoit l'ombre, elle n'en projette pas
@@ -1034,6 +1072,9 @@ export class FloraSystem extends createSystem(
         this.world.createTransformEntity(mesh, undefined);
         this.instanceCount += group.length;
       }
+
+      if (ring <= 1) this.lastLevelNear = level;
+      else this.lastLevelFar = level;
 
       entity.setValue(FloraTile, '_needsPlant', false);
       this.plantedTiles++;
@@ -1126,7 +1167,7 @@ git commit -m "feat(world): instanced flora seeded by the engine, one mesh per s
 ## Ce que la phase 5 ne fait PAS
 
 - **Pas de smart objects semés.** `scatterAt` est la vérité partagée, mais le moteur n'y instancie pas encore d'objets exploitables : la zone simulée fait 64 m et les agents n'atteindraient pas la forêt. Cela vient avec l'écologie, qui élargit le domaine.
-- **Pas de niveaux de détail à l'exécution.** Les trois niveaux sont générés et livrés, mais le système plante toujours le niveau 0. Le choix par anneau viendra quand la mesure montrera qu'il le faut — et la mesure fait partie de l'étape 10.
+- **Pas de fondu entre niveaux.** Le passage d'un niveau au suivant est net au franchissement d'un anneau. Un fondu par transparence coûterait un tri par profondeur que le budget ne porte pas.
 - **Pas d'herbe ni de sous-bois.** `ProceduralGrassField` reste en place ; sa densité par biome relève d'un travail distinct.
 - **Pas de vent.** Les arbres ne bougent pas.
 - **Pas de collision.** On traverse les arbres, comme aujourd'hui.
