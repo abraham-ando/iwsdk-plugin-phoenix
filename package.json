@@ -20,9 +20,11 @@
     "fixtures": "node scripts/generate-fixtures.mjs",
     "demo": "pnpm build && pnpm --filter @iwsdk/plugin-phoenix-demo dev",
     "demo:build": "pnpm build && pnpm --filter @iwsdk/plugin-phoenix-demo build",
-    "demo:typecheck": "pnpm --filter @iwsdk/plugin-phoenix-demo typecheck"
+    "demo:typecheck": "pnpm --filter @iwsdk/plugin-phoenix-demo typecheck",
+    "flora:generate": "node scripts/generate-flora.mjs"
   },
   "devDependencies": {
+    "@dgreenheck/ez-tree": "^1.1.0",
     "@types/node": "^22.20.1",
     "typescript": "^5.9.2"
   },

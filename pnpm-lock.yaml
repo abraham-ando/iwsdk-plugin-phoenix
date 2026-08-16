@@ -11,6 +11,9 @@ importers:
 
   .:
     devDependencies:
+      '@dgreenheck/ez-tree':
+        specifier: ^1.1.0
+        version: 1.1.0(three@0.185.1)
       '@types/node':
         specifier: ^22.20.1
         version: 22.20.1
@@ -38,9 +41,6 @@ importers:
 
   apps/demo:
     dependencies:
-      '@dgreenheck/ez-tree':
-        specifier: ^1.1.0
-        version: 1.1.0(super-three@0.181.0)
       '@iwsdk/cardinal-simulation':
         specifier: workspace:*
         version: link:../../packages/simulation
@@ -2164,6 +2164,9 @@ packages:
     peerDependencies:
       three: '>=0.162.0 <1.0.0'
 
+  three@0.185.1:
+    resolution: {integrity: sha512-5aojFCXKwnjBRZvUnt3WFfEcvUJgkN5LlijRFN95hMy8WVkG4I0QNcJE+OuWvuJ0bOdStrbfXn0pkd6/QyiAlg==}
+
   tinybench@2.9.0:
     resolution: {integrity: sha512-0+DUvqWMValLmha6lr4kD8iAMK1HzV0/aKnCtWb9v9641TnP/MFb7Pc2bxoxQjTXAErryXVgUOfv2YqNllqGeg==}
 
@@ -2451,9 +2454,9 @@ snapshots:
 
   '@bufbuild/protobuf@2.14.0': {}
 
-  '@dgreenheck/ez-tree@1.1.0(super-three@0.181.0)':
+  '@dgreenheck/ez-tree@1.1.0(three@0.185.1)':
     dependencies:
-      three: super-three@0.181.0
+      three: 0.185.1
 
   '@dimforge/rapier3d-compat@0.12.0': {}
 
@@ -4277,6 +4280,8 @@ snapshots:
   three-viewport-gizmo@2.2.0(super-three@0.181.0):
     dependencies:
       three: super-three@0.181.0
+
+  three@0.185.1: {}
 
   tinybench@2.9.0: {}
 

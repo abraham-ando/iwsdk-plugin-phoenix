@@ -1,0 +1,236 @@
+{
+  "version": 1,
+  "species": [
+    {
+      "id": "oak",
+      "lods": [
+        {
+          "level": 0,
+          "triangles": 2232,
+          "position": {
+            "offset": 0,
+            "count": 5904,
+            "bytes": 4
+          },
+          "normal": {
+            "offset": 23616,
+            "count": 5904,
+            "bytes": 4
+          },
+          "uv": {
+            "offset": 47232,
+            "count": 3936,
+            "bytes": 4
+          },
+          "index": {
+            "offset": 62976,
+            "count": 6696,
+            "bytes": 4
+          }
+        },
+        {
+          "level": 1,
+          "triangles": 988,
+          "position": {
+            "offset": 89760,
+            "count": 2616,
+            "bytes": 4
+          },
+          "normal": {
+            "offset": 100224,
+            "count": 2616,
+            "bytes": 4
+          },
+          "uv": {
+            "offset": 110688,
+            "count": 1744,
+            "bytes": 4
+          },
+          "index": {
+            "offset": 117664,
+            "count": 2964,
+            "bytes": 4
+          }
+        },
+        {
+          "level": 2,
+          "triangles": 828,
+          "position": {
+            "offset": 129520,
+            "count": 1656,
+            "bytes": 4
+          },
+          "normal": {
+            "offset": 136144,
+            "count": 1656,
+            "bytes": 4
+          },
+          "uv": {
+            "offset": 142768,
+            "count": 1104,
+            "bytes": 4
+          },
+          "index": {
+            "offset": 147184,
+            "count": 2484,
+            "bytes": 4
+          }
+        }
+      ]
+    },
+    {
+      "id": "aspen",
+      "lods": [
+        {
+          "level": 0,
+          "triangles": 2976,
+          "position": {
+            "offset": 157120,
+            "count": 7806,
+            "bytes": 4
+          },
+          "normal": {
+            "offset": 188344,
+            "count": 7806,
+            "bytes": 4
+          },
+          "uv": {
+            "offset": 219568,
+            "count": 5204,
+            "bytes": 4
+          },
+          "index": {
+            "offset": 240384,
+            "count": 8928,
+            "bytes": 4
+          }
+        },
+        {
+          "level": 1,
+          "triangles": 1044,
+          "position": {
+            "offset": 276096,
+            "count": 2706,
+            "bytes": 4
+          },
+          "normal": {
+            "offset": 286920,
+            "count": 2706,
+            "bytes": 4
+          },
+          "uv": {
+            "offset": 297744,
+            "count": 1804,
+            "bytes": 4
+          },
+          "index": {
+            "offset": 304960,
+            "count": 3132,
+            "bytes": 4
+          }
+        },
+        {
+          "level": 2,
+          "triangles": 884,
+          "position": {
+            "offset": 317488,
+            "count": 1746,
+            "bytes": 4
+          },
+          "normal": {
+            "offset": 324472,
+            "count": 1746,
+            "bytes": 4
+          },
+          "uv": {
+            "offset": 331456,
+            "count": 1164,
+            "bytes": 4
+          },
+          "index": {
+            "offset": 336112,
+            "count": 2652,
+            "bytes": 4
+          }
+        }
+      ]
+    },
+    {
+      "id": "bush",
+      "lods": [
+        {
+          "level": 0,
+          "triangles": 848,
+          "position": {
+            "offset": 346720,
+            "count": 3441,
+            "bytes": 4
+          },
+          "normal": {
+            "offset": 360484,
+            "count": 3441,
+            "bytes": 4
+          },
+          "uv": {
+            "offset": 374248,
+            "count": 2294,
+            "bytes": 4
+          },
+          "index": {
+            "offset": 383424,
+            "count": 2544,
+            "bytes": 4
+          }
+        },
+        {
+          "level": 1,
+          "triangles": 624,
+          "position": {
+            "offset": 393600,
+            "count": 2097,
+            "bytes": 4
+          },
+          "normal": {
+            "offset": 401988,
+            "count": 2097,
+            "bytes": 4
+          },
+          "uv": {
+            "offset": 410376,
+            "count": 1398,
+            "bytes": 4
+          },
+          "index": {
+            "offset": 415968,
+            "count": 1872,
+            "bytes": 4
+          }
+        },
+        {
+          "level": 2,
+          "triangles": 464,
+          "position": {
+            "offset": 423456,
+            "count": 1137,
+            "bytes": 4
+          },
+          "normal": {
+            "offset": 428004,
+            "count": 1137,
+            "bytes": 4
+          },
+          "uv": {
+            "offset": 432552,
+            "count": 758,
+            "bytes": 4
+          },
+          "index": {
+            "offset": 435584,
+            "count": 1392,
+            "bytes": 4
+          }
+        }
+      ]
+    }
+  ]
+}
