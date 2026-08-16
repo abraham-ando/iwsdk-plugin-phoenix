@@ -2,7 +2,7 @@ import {
   heightAt,
   landMaskAt,
   humidityAt,
-  riverCenterX,
+  riverProximityAt,
   classifyBiome,
   BIOME_IDS,
   type BiomeId,
@@ -73,7 +73,7 @@ export function sampleTile(
         s,
         landMaskAt(x, z),
         humidityAt(x, z),
-        Math.abs(x - riverCenterX(z)),
+        riverProximityAt(x, z).distance,
       );
       let r = 0;
       let g = 0;

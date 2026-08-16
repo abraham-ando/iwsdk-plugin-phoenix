@@ -7,7 +7,7 @@
 import { Group, Mesh, PlaneGeometry, MeshStandardMaterial, Color } from '@iwsdk/core';
 // L'axe de la rivière vient du moteur : le ruban d'eau et le lit creusé dans le
 // terrain suivent la même courbe par construction, jamais par recopie.
-import { riverCenterX } from '@iwsdk/cardinal-simulation';
+import { getRiverCourse, riverSurfaceAt } from '@iwsdk/cardinal-simulation';
 
 export class ProceduralRiver {
   private riverMesh: Mesh | null = null;
@@ -24,12 +24,21 @@ export class ProceduralRiver {
     const geom = new PlaneGeometry(width, length, 4, segments);
     geom.rotateX(-Math.PI / 2);
 
+    // Le ruban suit le COURS et descend avec lui : la nappe n'est plus un plan
+    // posé à -0,05 m, elle a la pente que le moteur lui donne.
+    const course = getRiverCourse();
     const pos = geom.attributes.position;
     for (let i = 0; i < pos.count; i++) {
-      const z = pos.getZ(i);
-      const curX = pos.getX(i);
-      pos.setX(i, curX + riverCenterX(z));
-      pos.setY(i, -0.05);
+      const along = pos.getZ(i) / length + 0.5; // [0, 1] le long du plan
+      const idx = Math.min(
+        course.points.length - 1,
+        Math.max(0, Math.round(along * (course.points.length - 1))),
+      );
+      const p = course.points[idx]!;
+      const lateral = pos.getX(i);
+      pos.setX(i, p.x + lateral * ((p.width * 1.6) / width));
+      pos.setZ(i, p.z);
+      pos.setY(i, riverSurfaceAt(p.x, p.z) + 0.05);
     }
     geom.computeVertexNormals();
 

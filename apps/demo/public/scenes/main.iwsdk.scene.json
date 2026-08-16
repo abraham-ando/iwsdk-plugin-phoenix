@@ -67,5 +67,14 @@
   ],
   "resources": {},
   "units": "meters",
-  "version": "iwsdk.scene.v1"
+  "version": "iwsdk.scene.v1",
+  "player": {
+    "transform": {
+      "position": [
+        0,
+        6,
+        0
+      ]
+    }
+  }
 }
