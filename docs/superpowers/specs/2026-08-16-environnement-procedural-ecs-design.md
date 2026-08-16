@@ -34,7 +34,7 @@ Volume concerné : environ 1 300 lignes de code impératif dans `apps/demo/src/s
 
 ## 3. Architecture
 
-```
+```text
 packages/simulation  (existant, enrichi)   maths pures, zéro Three.js — VÉRITÉ TERRAIN
   └── terrain/       heightAt, slopeAt, isWaterAt, depthAt, biomeAt, scatterAt
 
