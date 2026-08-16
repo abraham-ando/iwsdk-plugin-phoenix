@@ -98,6 +98,34 @@ export class SimulationHud {
     godSection.appendChild(godGrid);
     this.root.appendChild(godSection);
 
+    // Talk to the villagers (text v1 — voice arrives later).
+    const chatRow = document.createElement('div');
+    chatRow.style.display = 'flex';
+    chatRow.style.gap = '6px';
+    const chatInput = document.createElement('input');
+    chatInput.type = 'text';
+    chatInput.placeholder = 'Parler aux villageois…';
+    Object.assign(chatInput.style, {
+      flex: '1',
+      padding: '7px 8px',
+      borderRadius: '8px',
+      border: '1px solid rgba(255,255,255,0.15)',
+      background: 'rgba(255,255,255,0.06)',
+      color: '#f0f6fc',
+      fontSize: '11px',
+    });
+    const sendSpeech = () => {
+      this.system.playerSpeak(chatInput.value);
+      chatInput.value = '';
+    };
+    chatInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') sendSpeech();
+      e.stopPropagation(); // keep WASD locomotion from stealing keystrokes
+    });
+    chatRow.appendChild(chatInput);
+    chatRow.appendChild(this.createButton('🗣️ Parler', '#2563eb', sendSpeech));
+    this.root.appendChild(chatRow);
+
     // Live Emergent Story Feed
     const feedHeader = document.createElement('div');
     feedHeader.innerHTML = `<span style="color:#94a3b8;font-size:10px;font-weight:600;">📜 CHRONIQUES ÉMERGENTES DU MONDE :</span>`;

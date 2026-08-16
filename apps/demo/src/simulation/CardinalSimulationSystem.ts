@@ -11,6 +11,7 @@ import {
   SmartObjectRegistry,
   AgentRuntime,
   WeatherMachine,
+  WolfSystem,
   TrajectoryRecorder,
   registerDefaultContent,
   hourOfDay,
@@ -21,6 +22,7 @@ import { VILLAGE_LAYOUT } from './layout';
 import { applyAvatarPose } from './AgentAvatarFactory';
 import { PrehistoricEnvironment3D, type PrehistoricSceneResult } from './PrehistoricEnvironment3D';
 import { CelestialVisuals } from './CelestialVisuals';
+import { WolfVisual } from './WolfVisual';
 
 export interface SimEvent {
   tick: number;
@@ -66,6 +68,12 @@ export class CardinalSimulationSystem extends createSystem({}) {
   public weather!: WeatherMachine;
   public registry!: SmartObjectRegistry;
   public recorder!: TrajectoryRecorder;
+  public wolf!: WolfSystem;
+
+  private wolfVisual: WolfVisual | null = null;
+  private playerFeedAccumulator = 0;
+  private lastPlayerX = 0;
+  private lastPlayerZ = 2;
 
   private readonly listeners: Array<(e: SimEvent) => void> = [];
   private lastDay = 0;
@@ -79,6 +87,7 @@ export class CardinalSimulationSystem extends createSystem({}) {
   attachScene(sceneData: PrehistoricSceneResult): void {
     this.sceneData = sceneData;
     this.celestial = new CelestialVisuals(sceneData.root);
+    this.wolfVisual = new WolfVisual(sceneData.root);
     this.campfireBindings.length = 0;
     for (const [, group] of sceneData.campfires) {
       const worldX = group.position.x + (group.parent?.position.x ?? 0);
@@ -132,9 +141,39 @@ export class CardinalSimulationSystem extends createSystem({}) {
     // Dataset capture (spec §9.1) — drained periodically by TrajectoryUploader.
     this.recorder = new TrajectoryRecorder(this.runtime, SIM_SEED, this.weather);
     this.recorder.attachTo(this.kernel);
+
+    // The human player is a living being of the world (spec §10.5)…
+    this.runtime.registerPlayer(0, 2);
+    // …and the wolf prowls the valley (spec §10.4).
+    this.wolf = new WolfSystem(this.simWorld, this.runtime);
+    this.runtime.attachWolf(this.wolf);
+    this.wolf.attachTo(this.kernel);
+  }
+
+  /** Speak to the villagers (text v1 — voice STT arrives with étape 7). */
+  playerSpeak(text: string): void {
+    const trimmed = text.trim();
+    if (trimmed.length === 0) return;
+    this.kernel.submitEvent('player_speak', { text: trimmed });
+    this.emit({ tick: this.kernel.tick, kind: 'action', text: `🗣️ Vous : « ${trimmed} »` });
+  }
+
+  private feedPlayerPosition(delta: number): void {
+    this.playerFeedAccumulator += delta;
+    if (this.playerFeedAccumulator < 1) return;
+    this.playerFeedAccumulator = 0;
+    const camera = (this.world as unknown as { camera?: { position?: { x: number; z: number } } })
+      .camera;
+    const position = camera?.position;
+    if (position === undefined) return;
+    if (Math.hypot(position.x - this.lastPlayerX, position.z - this.lastPlayerZ) < 0.5) return;
+    this.lastPlayerX = position.x;
+    this.lastPlayerZ = position.z;
+    this.kernel.submitEvent('player_move', { x: position.x, z: position.z });
   }
 
   update(delta: number): void {
+    this.feedPlayerPosition(delta);
     this.kernel.advance(Math.min(delta, 0.25));
 
     const day = Math.floor(this.kernel.tick / TICKS_PER_DAY);
@@ -187,6 +226,7 @@ export class CardinalSimulationSystem extends createSystem({}) {
     sceneData.grassField.updateWind(this.elapsed);
     sceneData.river.updateWater(this.elapsed);
     this.celestial?.update(this.hourOfDaySim(), this.weather.current, this.elapsed);
+    this.wolfVisual?.update(this.wolf.view());
   }
 
   private narrate(event: ActionEvent): SimEvent | null {

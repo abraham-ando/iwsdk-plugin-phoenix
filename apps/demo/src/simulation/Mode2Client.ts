@@ -12,6 +12,7 @@ const EVENT_BY_REASON: Record<string, string> = {
   surprise: 'llm_plan',
   dialogue: 'llm_dialogue',
   reflection: 'llm_reflection',
+  player_dialogue: 'llm_player_reply',
 };
 
 const MAX_IN_FLIGHT = 3;
