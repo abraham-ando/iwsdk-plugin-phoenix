@@ -36,6 +36,12 @@ export {
   type VillageSim,
 } from './content/scenario';
 export {
+  MetricsCollector,
+  METRICS_SAMPLE_PERIOD,
+  type RunMetrics,
+  type AgentMetrics,
+} from './telemetry/MetricsCollector';
+export {
   GroundTruthWorld,
   type NamedPlace,
   type WorldSnapshot,
