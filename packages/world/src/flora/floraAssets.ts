@@ -9,7 +9,7 @@ import type { FloraSpecies } from '@iwsdk/cardinal-simulation';
  * générateur sans y toucher.
  */
 
-const SUPPORTED_VERSION = 1;
+const SUPPORTED_VERSION = 2;
 
 interface Range {
   readonly offset: number;
@@ -17,8 +17,7 @@ interface Range {
   readonly bytes: number;
 }
 
-interface LodEntry {
-  readonly level: number;
+interface PartEntry {
   readonly triangles: number;
   readonly position: Range;
   readonly normal: Range;
@@ -26,10 +25,25 @@ interface LodEntry {
   readonly index: Range;
 }
 
+interface LodEntry {
+  readonly level: number;
+  readonly triangles: number;
+  readonly bark: PartEntry | null;
+  readonly leaves: PartEntry | null;
+}
+
+/**
+ * Un niveau porte DEUX géométries.
+ *
+ * Fusionnées, écorce et feuillage partageaient un matériau et les arbres
+ * sortaient monochromes. Le feuillage vaut `null` au niveau le plus grossier,
+ * où il est délibérément supprimé.
+ */
 export interface FloraLod {
   readonly level: number;
   readonly triangles: number;
-  readonly geometry: BufferGeometry;
+  readonly bark: BufferGeometry;
+  readonly leaves: BufferGeometry | null;
 }
 
 export interface FloraAsset {
@@ -45,6 +59,27 @@ function bytesOf(binary: ArrayBuffer, range: Range, label: string): ArrayBuffer 
   return binary.slice(range.offset, end);
 }
 
+function buildGeometry(binary: ArrayBuffer, part: PartEntry, label: string): BufferGeometry {
+  const geometry = new BufferGeometry();
+  geometry.setAttribute(
+    'position',
+    new Float32BufferAttribute(new Float32Array(bytesOf(binary, part.position, `${label}.position`)), 3),
+  );
+  geometry.setAttribute(
+    'normal',
+    new Float32BufferAttribute(new Float32Array(bytesOf(binary, part.normal, `${label}.normal`)), 3),
+  );
+  geometry.setAttribute(
+    'uv',
+    new Float32BufferAttribute(new Float32Array(bytesOf(binary, part.uv, `${label}.uv`)), 2),
+  );
+  geometry.setIndex(
+    new Uint32BufferAttribute(new Uint32Array(bytesOf(binary, part.index, `${label}.index`)), 1),
+  );
+  geometry.computeBoundingSphere();
+  return geometry;
+}
+
 export function parseFloraManifest(manifest: unknown, binary: ArrayBuffer): FloraAsset[] {
   const doc = manifest as { version?: number; species?: unknown[] };
   if (doc.version !== SUPPORTED_VERSION) {
@@ -58,33 +93,16 @@ export function parseFloraManifest(manifest: unknown, binary: ArrayBuffer): Flor
     const entry = raw as { id: FloraSpecies; lods: LodEntry[] };
     const lods: FloraLod[] = [];
     for (const lod of entry.lods) {
-      const geometry = new BufferGeometry();
-      geometry.setAttribute(
-        'position',
-        new Float32BufferAttribute(
-          new Float32Array(bytesOf(binary, lod.position, `${entry.id}.position`)),
-          3,
-        ),
-      );
-      geometry.setAttribute(
-        'normal',
-        new Float32BufferAttribute(
-          new Float32Array(bytesOf(binary, lod.normal, `${entry.id}.normal`)),
-          3,
-        ),
-      );
-      geometry.setAttribute(
-        'uv',
-        new Float32BufferAttribute(new Float32Array(bytesOf(binary, lod.uv, `${entry.id}.uv`)), 2),
-      );
-      geometry.setIndex(
-        new Uint32BufferAttribute(
-          new Uint32Array(bytesOf(binary, lod.index, `${entry.id}.index`)),
-          1,
-        ),
-      );
-      geometry.computeBoundingSphere();
-      lods.push({ level: lod.level, triangles: lod.triangles, geometry });
+      if (lod.bark === null) {
+        throw new Error(`flore : ${entry.id} niveau ${lod.level} sans écorce`);
+      }
+      lods.push({
+        level: lod.level,
+        triangles: lod.triangles,
+        bark: buildGeometry(binary, lod.bark, `${entry.id}.bark`),
+        leaves:
+          lod.leaves === null ? null : buildGeometry(binary, lod.leaves, `${entry.id}.leaves`),
+      });
     }
     assets.push({ id: entry.id, lods });
   }

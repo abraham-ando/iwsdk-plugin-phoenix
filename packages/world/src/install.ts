@@ -91,7 +91,11 @@ export function installCardinalWorld(
   // La flore partage le matériau de feuillage : une seule instance pour tout
   // le monde, comme la bibliothèque le prévoit.
   world.registerSystem(FloraSystem, {
-    configData: { assets: null, material: materials.get('foliage') },
+    configData: {
+      assets: null,
+      barkMaterial: materials.get('bark'),
+      leafMaterial: materials.get('foliage'),
+    },
   });
   // Les géométries arrivent du réseau. Le système reste inerte jusque-là, ce
   // qui est correct : une tuile non plantée le sera au passage suivant.

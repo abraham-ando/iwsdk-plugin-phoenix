@@ -84,13 +84,19 @@ function buildTree(preset, level, seed) {
   return tree;
 }
 
-/** Fusionne les maillages d'un arbre en un seul jeu d'attributs. */
-function flatten(tree) {
-  const positions = [];
-  const normals = [];
-  const uvs = [];
-  const indices = [];
-  let base = 0;
+/**
+ * Sépare les maillages d'un arbre PAR PARTIE.
+ *
+ * ez-tree en produit deux, distingués par le nom de leur matériau :
+ * « branches » et « leaves ». Les fusionner obligeait à leur donner un seul
+ * matériau, et les arbres sortaient monochromes. Séparés, l'écorce prend le
+ * matériau d'écorce et le feuillage le sien.
+ */
+function splitParts(tree) {
+  const parts = {
+    bark: { positions: [], normals: [], uvs: [], indices: [], base: 0 },
+    leaves: { positions: [], normals: [], uvs: [], indices: [], base: 0 },
+  };
   tree.traverse((object) => {
     const geometry = object.isMesh ? object.geometry : null;
     if (!geometry) return;
@@ -99,15 +105,29 @@ function flatten(tree) {
     const u = geometry.attributes.uv;
     const idx = geometry.index;
     if (!p || !idx) return;
+    const name = object.material?.name ?? '';
+    const part = name === 'leaves' ? parts.leaves : parts.bark;
     for (let i = 0; i < p.count; i++) {
-      positions.push(p.getX(i), p.getY(i), p.getZ(i));
-      normals.push(n ? n.getX(i) : 0, n ? n.getY(i) : 1, n ? n.getZ(i) : 0);
-      uvs.push(u ? u.getX(i) : 0, u ? u.getY(i) : 0);
+      part.positions.push(p.getX(i), p.getY(i), p.getZ(i));
+      part.normals.push(n ? n.getX(i) : 0, n ? n.getY(i) : 1, n ? n.getZ(i) : 0);
+      part.uvs.push(u ? u.getX(i) : 0, u ? u.getY(i) : 0);
     }
-    for (let i = 0; i < idx.count; i++) indices.push(idx.getX(i) + base);
-    base += p.count;
+    for (let i = 0; i < idx.count; i++) part.indices.push(idx.getX(i) + part.base);
+    part.base += p.count;
   });
-  return { positions, normals, uvs, indices };
+  return parts;
+}
+
+/** Sérialise une partie, ou `null` si elle est vide (feuillage supprimé). */
+function serialisePart(part) {
+  if (part.indices.length === 0) return null;
+  return {
+    triangles: part.indices.length / 3,
+    position: push(part.positions, Float32Array, 4),
+    normal: push(part.normals, Float32Array, 4),
+    uv: push(part.uvs, Float32Array, 4),
+    index: push(part.indices, Uint32Array, 4),
+  };
 }
 
 const chunks = [];
@@ -127,14 +147,14 @@ for (const entry of SPECIES) {
   const lods = [];
   for (const [levelIndex, level] of entry.levels.entries()) {
     const tree = buildTree(entry.preset, level, 12345);
-    const flat = flatten(tree);
+    const parts = splitParts(tree);
+    const bark = serialisePart(parts.bark);
+    const leaves = serialisePart(parts.leaves);
     lods.push({
       level: levelIndex,
-      triangles: flat.indices.length / 3,
-      position: push(flat.positions, Float32Array, 4),
-      normal: push(flat.normals, Float32Array, 4),
-      uv: push(flat.uvs, Float32Array, 4),
-      index: push(flat.indices, Uint32Array, 4),
+      triangles: (bark?.triangles ?? 0) + (leaves?.triangles ?? 0),
+      bark,
+      leaves,
     });
   }
   species.push({ id: entry.id, lods });
@@ -144,5 +164,5 @@ for (const entry of SPECIES) {
 const binary = Buffer.concat(chunks);
 mkdirSync(dirname(BIN), { recursive: true });
 writeFileSync(BIN, binary);
-writeFileSync(MANIFEST, `${JSON.stringify({ version: 1, species }, null, 2)}\n`);
+writeFileSync(MANIFEST, `${JSON.stringify({ version: 2, species }, null, 2)}\n`);
 console.log(`écrit ${BIN} (${(binary.length / 1024).toFixed(0)} Ko) et ${MANIFEST}`);

@@ -20,9 +20,11 @@ function makeRig() {
   // Un jeu d'assets minimal : trois niveaux par espèce, géométries factices.
   const assets = ['oak', 'aspen', 'bush'].map((id) => ({
     id,
-    lods: [0, 1, 2].map((level) => ({ level, triangles: 100, geometry: {} })),
+    lods: [0, 1, 2].map((level) => ({ level, triangles: 100, bark: {}, leaves: {} })),
   }));
-  world.registerSystem(FloraSystem, { configData: { assets, material: null } });
+  world.registerSystem(FloraSystem, {
+    configData: { assets, barkMaterial: null, leafMaterial: null },
+  });
   const system = world.getSystem(FloraSystem) as FloraSystem;
   (system as unknown as { player: unknown }).player = { position: { x: 0, y: 0, z: 0 } };
   return { world, system };
@@ -87,7 +89,9 @@ describe('FloraSystem', () => {
     // Elles arrivent du réseau : une tuile non plantée le sera au passage suivant.
     const world = new World();
     world.registerComponent(FloraTile);
-    world.registerSystem(FloraSystem, { configData: { assets: null, material: null } });
+    world.registerSystem(FloraSystem, {
+      configData: { assets: null, barkMaterial: null, leafMaterial: null },
+    });
     const system = world.getSystem(FloraSystem) as FloraSystem;
     const entity = world.createEntity();
     entity.addComponent(FloraTile, { tx: 2, tz: 2, _needsPlant: true });

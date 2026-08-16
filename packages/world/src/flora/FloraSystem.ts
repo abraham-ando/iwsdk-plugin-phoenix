@@ -14,7 +14,8 @@ export class FloraSystem extends createSystem(
   { tiles: { required: [FloraTile] } },
   {
     assets: { type: Types.Object, default: null },
-    material: { type: Types.Object, default: null },
+    barkMaterial: { type: Types.Object, default: null },
+    leafMaterial: { type: Types.Object, default: null },
   },
 ) {
   public plantedTiles = 0;
@@ -58,25 +59,36 @@ export class FloraSystem extends createSystem(
         if (asset === undefined || asset.lods.length === 0) continue;
         const lod = asset.lods[Math.min(level, asset.lods.length - 1)]!;
 
-        const mesh = new InstancedMesh(
-          lod.geometry,
-          this.config.material.value as ConstructorParameters<typeof InstancedMesh>[1],
-          group.length,
-        );
-        mesh.name = `Flora ${species} ${tx},${tz}`;
-        mesh.castShadow = false; // la flore reçoit l'ombre, elle n'en projette pas
-        mesh.receiveShadow = true;
+        // DEUX maillages par espèce : l'écorce et le feuillage ont chacun leur
+        // matériau. Fusionnés, tout l'arbre prenait celui du feuillage — et
+        // l'écorce représente 83 % de sa géométrie.
+        const parts: [unknown, unknown][] = [
+          [lod.bark, this.config.barkMaterial.value],
+          [lod.leaves, this.config.leafMaterial.value],
+        ];
 
-        for (let i = 0; i < group.length; i++) {
-          const item = group[i]!;
-          this.dummy.position.set(item.x, heightAt(item.x, item.z), item.z);
-          this.dummy.rotation.set(0, item.rotationY, 0);
-          this.dummy.scale.set(item.scale, item.scale, item.scale);
-          this.dummy.updateMatrix();
-          mesh.setMatrixAt(i, this.dummy.matrix);
+        for (const [geometry, material] of parts) {
+          if (geometry === null || geometry === undefined) continue;
+          const mesh = new InstancedMesh(
+            geometry as ConstructorParameters<typeof InstancedMesh>[0],
+            material as ConstructorParameters<typeof InstancedMesh>[1],
+            group.length,
+          );
+          mesh.name = `Flora ${species} ${tx},${tz}`;
+          mesh.castShadow = false; // la flore reçoit l'ombre, elle n'en projette pas
+          mesh.receiveShadow = true;
+
+          for (let i = 0; i < group.length; i++) {
+            const item = group[i]!;
+            this.dummy.position.set(item.x, heightAt(item.x, item.z), item.z);
+            this.dummy.rotation.set(0, item.rotationY, 0);
+            this.dummy.scale.set(item.scale, item.scale, item.scale);
+            this.dummy.updateMatrix();
+            mesh.setMatrixAt(i, this.dummy.matrix);
+          }
+          mesh.instanceMatrix.needsUpdate = true;
+          this.world.createTransformEntity(mesh, undefined);
         }
-        mesh.instanceMatrix.needsUpdate = true;
-        this.world.createTransformEntity(mesh, undefined);
         this.instanceCount += group.length;
       }
 

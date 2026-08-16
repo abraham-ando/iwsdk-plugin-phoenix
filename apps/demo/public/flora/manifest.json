@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "species": [
     {
       "id": "oak",
@@ -7,73 +7,151 @@
         {
           "level": 0,
           "triangles": 2232,
-          "position": {
-            "offset": 0,
-            "count": 5904,
-            "bytes": 4
+          "bark": {
+            "triangles": 1872,
+            "position": {
+              "offset": 0,
+              "count": 3744,
+              "bytes": 4
+            },
+            "normal": {
+              "offset": 14976,
+              "count": 3744,
+              "bytes": 4
+            },
+            "uv": {
+              "offset": 29952,
+              "count": 2496,
+              "bytes": 4
+            },
+            "index": {
+              "offset": 39936,
+              "count": 5616,
+              "bytes": 4
+            }
           },
-          "normal": {
-            "offset": 23616,
-            "count": 5904,
-            "bytes": 4
-          },
-          "uv": {
-            "offset": 47232,
-            "count": 3936,
-            "bytes": 4
-          },
-          "index": {
-            "offset": 62976,
-            "count": 6696,
-            "bytes": 4
+          "leaves": {
+            "triangles": 360,
+            "position": {
+              "offset": 62400,
+              "count": 2160,
+              "bytes": 4
+            },
+            "normal": {
+              "offset": 71040,
+              "count": 2160,
+              "bytes": 4
+            },
+            "uv": {
+              "offset": 79680,
+              "count": 1440,
+              "bytes": 4
+            },
+            "index": {
+              "offset": 85440,
+              "count": 1080,
+              "bytes": 4
+            }
           }
         },
         {
           "level": 1,
           "triangles": 988,
-          "position": {
-            "offset": 89760,
-            "count": 2616,
-            "bytes": 4
+          "bark": {
+            "triangles": 808,
+            "position": {
+              "offset": 89760,
+              "count": 1536,
+              "bytes": 4
+            },
+            "normal": {
+              "offset": 95904,
+              "count": 1536,
+              "bytes": 4
+            },
+            "uv": {
+              "offset": 102048,
+              "count": 1024,
+              "bytes": 4
+            },
+            "index": {
+              "offset": 106144,
+              "count": 2424,
+              "bytes": 4
+            }
           },
-          "normal": {
-            "offset": 100224,
-            "count": 2616,
-            "bytes": 4
-          },
-          "uv": {
-            "offset": 110688,
-            "count": 1744,
-            "bytes": 4
-          },
-          "index": {
-            "offset": 117664,
-            "count": 2964,
-            "bytes": 4
+          "leaves": {
+            "triangles": 180,
+            "position": {
+              "offset": 115840,
+              "count": 1080,
+              "bytes": 4
+            },
+            "normal": {
+              "offset": 120160,
+              "count": 1080,
+              "bytes": 4
+            },
+            "uv": {
+              "offset": 124480,
+              "count": 720,
+              "bytes": 4
+            },
+            "index": {
+              "offset": 127360,
+              "count": 540,
+              "bytes": 4
+            }
           }
         },
         {
           "level": 2,
           "triangles": 828,
-          "position": {
-            "offset": 129520,
-            "count": 1656,
-            "bytes": 4
+          "bark": {
+            "triangles": 808,
+            "position": {
+              "offset": 129520,
+              "count": 1536,
+              "bytes": 4
+            },
+            "normal": {
+              "offset": 135664,
+              "count": 1536,
+              "bytes": 4
+            },
+            "uv": {
+              "offset": 141808,
+              "count": 1024,
+              "bytes": 4
+            },
+            "index": {
+              "offset": 145904,
+              "count": 2424,
+              "bytes": 4
+            }
           },
-          "normal": {
-            "offset": 136144,
-            "count": 1656,
-            "bytes": 4
-          },
-          "uv": {
-            "offset": 142768,
-            "count": 1104,
-            "bytes": 4
-          },
-          "index": {
-            "offset": 147184,
-            "count": 2484,
-            "bytes": 4
+          "leaves": {
+            "triangles": 20,
+            "position": {
+              "offset": 155600,
+              "count": 120,
+              "bytes": 4
+            },
+            "normal": {
+              "offset": 156080,
+              "count": 120,
+              "bytes": 4
+            },
+            "uv": {
+              "offset": 156560,
+              "count": 80,
+              "bytes": 4
+            },
+            "index": {
+              "offset": 156880,
+              "count": 60,
+              "bytes": 4
+            }
           }
         }
       ]
@@ -84,73 +162,151 @@
         {
           "level": 0,
           "triangles": 2976,
-          "position": {
-            "offset": 157120,
-            "count": 7806,
-            "bytes": 4
+          "bark": {
+            "triangles": 2496,
+            "position": {
+              "offset": 157120,
+              "count": 4926,
+              "bytes": 4
+            },
+            "normal": {
+              "offset": 176824,
+              "count": 4926,
+              "bytes": 4
+            },
+            "uv": {
+              "offset": 196528,
+              "count": 3284,
+              "bytes": 4
+            },
+            "index": {
+              "offset": 209664,
+              "count": 7488,
+              "bytes": 4
+            }
           },
-          "normal": {
-            "offset": 188344,
-            "count": 7806,
-            "bytes": 4
-          },
-          "uv": {
-            "offset": 219568,
-            "count": 5204,
-            "bytes": 4
-          },
-          "index": {
-            "offset": 240384,
-            "count": 8928,
-            "bytes": 4
+          "leaves": {
+            "triangles": 480,
+            "position": {
+              "offset": 239616,
+              "count": 2880,
+              "bytes": 4
+            },
+            "normal": {
+              "offset": 251136,
+              "count": 2880,
+              "bytes": 4
+            },
+            "uv": {
+              "offset": 262656,
+              "count": 1920,
+              "bytes": 4
+            },
+            "index": {
+              "offset": 270336,
+              "count": 1440,
+              "bytes": 4
+            }
           }
         },
         {
           "level": 1,
           "triangles": 1044,
-          "position": {
-            "offset": 276096,
-            "count": 2706,
-            "bytes": 4
+          "bark": {
+            "triangles": 864,
+            "position": {
+              "offset": 276096,
+              "count": 1626,
+              "bytes": 4
+            },
+            "normal": {
+              "offset": 282600,
+              "count": 1626,
+              "bytes": 4
+            },
+            "uv": {
+              "offset": 289104,
+              "count": 1084,
+              "bytes": 4
+            },
+            "index": {
+              "offset": 293440,
+              "count": 2592,
+              "bytes": 4
+            }
           },
-          "normal": {
-            "offset": 286920,
-            "count": 2706,
-            "bytes": 4
-          },
-          "uv": {
-            "offset": 297744,
-            "count": 1804,
-            "bytes": 4
-          },
-          "index": {
-            "offset": 304960,
-            "count": 3132,
-            "bytes": 4
+          "leaves": {
+            "triangles": 180,
+            "position": {
+              "offset": 303808,
+              "count": 1080,
+              "bytes": 4
+            },
+            "normal": {
+              "offset": 308128,
+              "count": 1080,
+              "bytes": 4
+            },
+            "uv": {
+              "offset": 312448,
+              "count": 720,
+              "bytes": 4
+            },
+            "index": {
+              "offset": 315328,
+              "count": 540,
+              "bytes": 4
+            }
           }
         },
         {
           "level": 2,
           "triangles": 884,
-          "position": {
-            "offset": 317488,
-            "count": 1746,
-            "bytes": 4
+          "bark": {
+            "triangles": 864,
+            "position": {
+              "offset": 317488,
+              "count": 1626,
+              "bytes": 4
+            },
+            "normal": {
+              "offset": 323992,
+              "count": 1626,
+              "bytes": 4
+            },
+            "uv": {
+              "offset": 330496,
+              "count": 1084,
+              "bytes": 4
+            },
+            "index": {
+              "offset": 334832,
+              "count": 2592,
+              "bytes": 4
+            }
           },
-          "normal": {
-            "offset": 324472,
-            "count": 1746,
-            "bytes": 4
-          },
-          "uv": {
-            "offset": 331456,
-            "count": 1164,
-            "bytes": 4
-          },
-          "index": {
-            "offset": 336112,
-            "count": 2652,
-            "bytes": 4
+          "leaves": {
+            "triangles": 20,
+            "position": {
+              "offset": 345200,
+              "count": 120,
+              "bytes": 4
+            },
+            "normal": {
+              "offset": 345680,
+              "count": 120,
+              "bytes": 4
+            },
+            "uv": {
+              "offset": 346160,
+              "count": 80,
+              "bytes": 4
+            },
+            "index": {
+              "offset": 346480,
+              "count": 60,
+              "bytes": 4
+            }
           }
         }
       ]
@@ -161,73 +317,151 @@
         {
           "level": 0,
           "triangles": 848,
-          "position": {
-            "offset": 346720,
-            "count": 3441,
-            "bytes": 4
+          "bark": {
+            "triangles": 432,
+            "position": {
+              "offset": 346720,
+              "count": 945,
+              "bytes": 4
+            },
+            "normal": {
+              "offset": 350500,
+              "count": 945,
+              "bytes": 4
+            },
+            "uv": {
+              "offset": 354280,
+              "count": 630,
+              "bytes": 4
+            },
+            "index": {
+              "offset": 356800,
+              "count": 1296,
+              "bytes": 4
+            }
           },
-          "normal": {
-            "offset": 360484,
-            "count": 3441,
-            "bytes": 4
-          },
-          "uv": {
-            "offset": 374248,
-            "count": 2294,
-            "bytes": 4
-          },
-          "index": {
-            "offset": 383424,
-            "count": 2544,
-            "bytes": 4
+          "leaves": {
+            "triangles": 416,
+            "position": {
+              "offset": 361984,
+              "count": 2496,
+              "bytes": 4
+            },
+            "normal": {
+              "offset": 371968,
+              "count": 2496,
+              "bytes": 4
+            },
+            "uv": {
+              "offset": 381952,
+              "count": 1664,
+              "bytes": 4
+            },
+            "index": {
+              "offset": 388608,
+              "count": 1248,
+              "bytes": 4
+            }
           }
         },
         {
           "level": 1,
           "triangles": 624,
-          "position": {
-            "offset": 393600,
-            "count": 2097,
-            "bytes": 4
+          "bark": {
+            "triangles": 432,
+            "position": {
+              "offset": 393600,
+              "count": 945,
+              "bytes": 4
+            },
+            "normal": {
+              "offset": 397380,
+              "count": 945,
+              "bytes": 4
+            },
+            "uv": {
+              "offset": 401160,
+              "count": 630,
+              "bytes": 4
+            },
+            "index": {
+              "offset": 403680,
+              "count": 1296,
+              "bytes": 4
+            }
           },
-          "normal": {
-            "offset": 401988,
-            "count": 2097,
-            "bytes": 4
-          },
-          "uv": {
-            "offset": 410376,
-            "count": 1398,
-            "bytes": 4
-          },
-          "index": {
-            "offset": 415968,
-            "count": 1872,
-            "bytes": 4
+          "leaves": {
+            "triangles": 192,
+            "position": {
+              "offset": 408864,
+              "count": 1152,
+              "bytes": 4
+            },
+            "normal": {
+              "offset": 413472,
+              "count": 1152,
+              "bytes": 4
+            },
+            "uv": {
+              "offset": 418080,
+              "count": 768,
+              "bytes": 4
+            },
+            "index": {
+              "offset": 421152,
+              "count": 576,
+              "bytes": 4
+            }
           }
         },
         {
           "level": 2,
           "triangles": 464,
-          "position": {
-            "offset": 423456,
-            "count": 1137,
-            "bytes": 4
+          "bark": {
+            "triangles": 432,
+            "position": {
+              "offset": 423456,
+              "count": 945,
+              "bytes": 4
+            },
+            "normal": {
+              "offset": 427236,
+              "count": 945,
+              "bytes": 4
+            },
+            "uv": {
+              "offset": 431016,
+              "count": 630,
+              "bytes": 4
+            },
+            "index": {
+              "offset": 433536,
+              "count": 1296,
+              "bytes": 4
+            }
           },
-          "normal": {
-            "offset": 428004,
-            "count": 1137,
-            "bytes": 4
-          },
-          "uv": {
-            "offset": 432552,
-            "count": 758,
-            "bytes": 4
-          },
-          "index": {
-            "offset": 435584,
-            "count": 1392,
-            "bytes": 4
+          "leaves": {
+            "triangles": 32,
+            "position": {
+              "offset": 438720,
+              "count": 192,
+              "bytes": 4
+            },
+            "normal": {
+              "offset": 439488,
+              "count": 192,
+              "bytes": 4
+            },
+            "uv": {
+              "offset": 440256,
+              "count": 128,
+              "bytes": 4
+            },
+            "index": {
+              "offset": 440768,
+              "count": 96,
+              "bytes": 4
+            }
           }
         }
       ]

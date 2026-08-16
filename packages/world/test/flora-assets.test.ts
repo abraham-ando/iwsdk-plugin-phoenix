@@ -20,23 +20,16 @@ function makeFixture() {
     offset += part.byteLength;
   }
 
+  const part = {
+    triangles: 1,
+    position: ranges[0]!,
+    normal: ranges[1]!,
+    uv: ranges[2]!,
+    index: ranges[3]!,
+  };
   const manifest = {
-    version: 1,
-    species: [
-      {
-        id: 'oak',
-        lods: [
-          {
-            level: 0,
-            triangles: 1,
-            position: ranges[0]!,
-            normal: ranges[1]!,
-            uv: ranges[2]!,
-            index: ranges[3]!,
-          },
-        ],
-      },
-    ],
+    version: 2,
+    species: [{ id: 'oak', lods: [{ level: 0, triangles: 1, bark: part, leaves: null }] }],
   };
   return { manifest, binary };
 }
@@ -54,7 +47,7 @@ describe('parseFloraManifest', () => {
     // Une erreur d'un octet dans les décalages passerait inaperçue à l'écran
     // sous forme d'arbres tordus ; ici elle échoue franchement.
     const { manifest, binary } = makeFixture();
-    const geom = parseFloraManifest(manifest, binary)[0]!.lods[0]!.geometry;
+    const geom = parseFloraManifest(manifest, binary)[0]!.lods[0]!.bark;
     const pos = geom.getAttribute('position');
     expect(pos.count).toBe(3);
     expect(pos.getX(1)).toBeCloseTo(1, 6);
@@ -64,7 +57,7 @@ describe('parseFloraManifest', () => {
 
   it('porte les trois attributs et un index', () => {
     const { manifest, binary } = makeFixture();
-    const geom = parseFloraManifest(manifest, binary)[0]!.lods[0]!.geometry;
+    const geom = parseFloraManifest(manifest, binary)[0]!.lods[0]!.bark;
     for (const name of ['position', 'normal', 'uv']) {
       expect(() => geom.getAttribute(name), name).not.toThrow();
     }
@@ -81,7 +74,7 @@ describe('parseFloraManifest', () => {
   it('REFUSE une plage qui déborde du binaire', () => {
     const { manifest, binary } = makeFixture();
     const broken = structuredClone(manifest);
-    broken.species[0]!.lods[0]!.position.offset = binary.byteLength;
+    broken.species[0]!.lods[0]!.bark.position.offset = binary.byteLength;
     expect(() => parseFloraManifest(broken, binary)).toThrow(/déborde/i);
   });
 });
@@ -104,11 +97,40 @@ describe('accord avec le générateur', () => {
     for (const asset of assets) {
       expect(asset.lods, asset.id).toHaveLength(3);
       for (const lod of asset.lods) {
-        const position = lod.geometry.getAttribute('position');
-        expect(position.count, `${asset.id} niveau ${lod.level}`).toBeGreaterThan(0);
-        // Le compte de triangles annoncé doit correspondre à l'index livré.
-        expect(lod.geometry.getIndex()!.count / 3).toBe(lod.triangles);
+        expect(lod.bark.getAttribute('position').count, `${asset.id} niveau ${lod.level}`).toBeGreaterThan(0);
+        // Le compte annoncé doit correspondre aux index des DEUX parties.
+        const bark = lod.bark.getIndex()!.count / 3;
+        const leaves = lod.leaves === null ? 0 : lod.leaves.getIndex()!.count / 3;
+        expect(bark + leaves, `${asset.id} niveau ${lod.level}`).toBe(lod.triangles);
       }
+    }
+  });
+});
+
+describe("séparation de l'écorce et du feuillage", () => {
+  it('porte deux géométries distinctes tant que le feuillage existe', async () => {
+    // Fusionnées, elles partageaient un matériau et les arbres sortaient
+    // monochromes. C'est la raison d'être de la version 2 du format.
+    const { readFileSync } = await import('node:fs');
+    const manifest = JSON.parse(
+      readFileSync('../../apps/demo/public/flora/manifest.json', 'utf8'),
+    ) as unknown;
+    const file = readFileSync('../../apps/demo/public/flora/geometry.bin');
+    const binary = file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength);
+    const assets = parseFloraManifest(manifest, binary as ArrayBuffer);
+
+    for (const asset of assets) {
+      for (const lod of asset.lods) {
+        expect(lod.leaves, `${asset.id} niveau ${lod.level}`).not.toBeNull();
+        expect(lod.leaves).not.toBe(lod.bark);
+        expect(lod.leaves!.getAttribute('position').count).toBeGreaterThan(0);
+      }
+      // Le feuillage s'allège avec le niveau ; l'écorce, elle, domine — 1 872
+      // triangles contre 360 pour un chêne au niveau fin. C'est pourquoi les
+      // fusionner et tout peindre en feuillage verdissait le bois.
+      const leaves = asset.lods.map((l) => l.leaves!.getIndex()!.count / 3);
+      expect(leaves[0]!, `${asset.id}`).toBeGreaterThan(leaves[leaves.length - 1]!);
+      expect(asset.lods[0]!.bark.getIndex()!.count / 3, `${asset.id}`).toBeGreaterThan(leaves[0]!);
     }
   });
 });

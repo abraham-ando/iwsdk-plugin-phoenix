@@ -12,7 +12,7 @@ test('le manifeste de flore existe et décrit le binaire', () => {
   const manifest = JSON.parse(readFileSync(MANIFEST, 'utf8'));
   const bin = readFileSync(BIN);
 
-  assert.equal(manifest.version, 1);
+  assert.equal(manifest.version, 2);
   assert.ok(manifest.species.length >= 3, 'au moins trois espèces');
 
   for (const species of manifest.species) {
@@ -29,13 +29,19 @@ test('le manifeste de flore existe et décrit le binaire', () => {
       );
       previous = lod.triangles;
 
-      for (const field of ['position', 'normal', 'uv', 'index']) {
-        const range = lod[field];
-        assert.ok(range, `${species.id} niveau ${lod.level} : champ ${field} absent`);
-        assert.ok(
-          range.offset + range.count * range.bytes <= bin.length,
-          `${species.id}.${field} déborde du binaire`,
-        );
+      // L'écorce existe toujours ; le feuillage disparaît au niveau le plus
+      // grossier, où il est délibérément supprimé.
+      assert.ok(lod.bark, `${species.id} niveau ${lod.level} : écorce absente`);
+      for (const part of ['bark', 'leaves']) {
+        if (!lod[part]) continue;
+        for (const field of ['position', 'normal', 'uv', 'index']) {
+          const range = lod[part][field];
+          assert.ok(range, `${species.id}.${part} : champ ${field} absent`);
+          assert.ok(
+            range.offset + range.count * range.bytes <= bin.length,
+            `${species.id}.${part}.${field} déborde du binaire`,
+          );
+        }
       }
     }
   }
@@ -59,4 +65,23 @@ test('les niveaux tiennent dans le budget de rendu', () => {
       `${species.id} au niveau le plus grossier : ${coarsest.triangles} triangles`,
     );
   }
+});
+
+test("SÉPARE l'écorce du feuillage", () => {
+  // Fusionnées, les deux parties partageaient un matériau et les arbres
+  // sortaient monochromes. La séparation est la raison d'être de la version 2.
+  const manifest = JSON.parse(readFileSync(MANIFEST, 'utf8'));
+  let withLeaves = 0;
+  for (const species of manifest.species) {
+    for (const lod of species.lods) {
+      if (lod.leaves) {
+        withLeaves++;
+        assert.ok(
+          lod.leaves.triangles > 0,
+          `${species.id} niveau ${lod.level} : feuillage déclaré mais vide`,
+        );
+      }
+    }
+  }
+  assert.ok(withLeaves >= 3, `seulement ${withLeaves} niveaux portent du feuillage`);
 });
