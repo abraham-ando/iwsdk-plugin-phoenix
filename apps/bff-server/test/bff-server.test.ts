@@ -216,6 +216,25 @@ describe('/agents/plan (mock mode, server-side jsonl logging)', () => {
     expect(body.sharedFacts[0]?.objectId).toBe('berry_bush_1');
   });
 
+  it('mock player_dialogue returns an in-character reply', async () => {
+    const token = await getToken();
+    const request = {
+      ...dawnRequest(),
+      requestId: 'mira:300:player_dialogue',
+      reason: 'player_dialogue',
+      participantIds: ['player', 'mira'],
+      playerText: 'Bonjour !',
+    };
+    const res = await fetch(`${baseUrl}/agents/plan`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ request }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { reply: string };
+    expect(body.reply.length).toBeGreaterThan(0);
+  });
+
   it('trajectories/batch appends jsonl per run and stats counts them', async () => {
     const token = await getToken();
     const post = await fetch(`${baseUrl}/trajectories/batch`, {

@@ -33,7 +33,8 @@ interface ResolvedLlm {
  * engine, it just relays and logs. */
 interface AgentPlanRequest {
   requestId: string;
-  reason: 'dawn' | 'surprise' | 'dialogue' | 'reflection';
+  reason: 'dawn' | 'surprise' | 'dialogue' | 'reflection' | 'player_dialogue';
+  playerText?: string;
   agentId: string;
   participantIds?: string[];
   tick?: number;
@@ -283,6 +284,10 @@ export class CardinalBFFServer {
       return { ...base, insights: ['Jour vécu: besoins gérés, tribu soudée.'] };
     }
 
+    if (request.reason === 'player_dialogue') {
+      return { ...base, reply: 'Bienvenue près de notre feu, étranger.' };
+    }
+
     const withObject = (request.tools ?? [])
       .filter((t) => t.objectId !== undefined)
       .sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0));
@@ -396,6 +401,14 @@ export class CardinalBFFServer {
         `Tu es ${request.persona} (${request.role}, tribu ${request.tribe}). ` +
         `Synthétise la journée décrite (souvenirs fournis) en 1 à 3 enseignements durables, ` +
         `concrets et utiles demain. Réponds UNIQUEMENT en JSON: {"insights":["..."]}`
+      );
+    }
+    if (request.reason === 'player_dialogue') {
+      return (
+        `Tu es ${request.persona} (${request.role}, tribu ${request.tribe}), un villageois ` +
+        `préhistorique. Un étranger (le joueur, présent dans ta vallée) vient de te dire : ` +
+        `"${request.playerText ?? ''}". Réponds-lui en 1 ou 2 phrases, dans ton personnage, ` +
+        `en français. Réponds UNIQUEMENT en JSON: {"reply":"..."}`
       );
     }
     return (
