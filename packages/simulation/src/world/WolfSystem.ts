@@ -95,8 +95,10 @@ export class WolfSystem {
         }
         case 'roam': {
           if (this.stepToward(wolf.targetX, wolf.targetZ)) {
-            wolf.targetX = ctx.rng.int(-20, 21);
-            wolf.targetZ = ctx.rng.int(-20, 21);
+            // Le rôdage suivait la zone de 64 m ; à 400 m, un loup confiné à
+            // ±20 m ne serait plus qu'un décor du village.
+            wolf.targetX = ctx.rng.int(-60, 61);
+            wolf.targetZ = ctx.rng.int(-60, 61);
           }
           if (wolf.hunger < WOLF_HUNT_THRESHOLD) wolf.mode = 'hunt';
           break;

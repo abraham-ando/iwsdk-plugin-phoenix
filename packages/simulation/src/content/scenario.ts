@@ -5,6 +5,8 @@ import { SmartObjectRegistry } from '../world/SmartObject';
 import { WeatherMachine } from '../world/WeatherMachine';
 import { AgentRuntime } from '../agents/AgentRuntime';
 import { registerDefaultContent } from './objects';
+import { spawnScatter } from './scatterSpawn';
+import { WORLD_SIZE } from '../world/terrain';
 
 /**
  * The default village scenario — the SINGLE source shared by the VR demo and
@@ -132,6 +134,10 @@ export function buildVillageSim(seed: number, replayLog?: EventLog): VillageSim 
   for (const obj of DEFAULT_VILLAGE.objects) {
     world.spawn(obj.type, obj.x, obj.z);
   }
+  // Le village d'abord, la nature ensuite : les 23 objets calés à la main
+  // gardent les identifiants les plus bas, et les tests qui les nomment
+  // restent valables.
+  spawnScatter(world, WORLD_SIZE);
   for (const agent of DEFAULT_VILLAGE.agents) {
     runtime.addAgent(
       { id: agent.id, name: agent.name, tribe: agent.tribe, role: agent.role, persona: agent.persona },

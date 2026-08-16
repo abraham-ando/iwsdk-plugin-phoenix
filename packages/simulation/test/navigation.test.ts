@@ -31,8 +31,8 @@ describe('stepToward', () => {
   });
 
   it('clamps to world bounds', () => {
-    const pos = { x: 31.9, z: -15 };           // heading out of the 64 m map
-    for (let i = 0; i < 100; i++) stepToward(pos, { x: 50, z: -15 });
-    expect(pos.x).toBeLessThanOrEqual(32);
+    const pos = { x: 199.9, z: -15 };          // heading out of the 400 m map
+    for (let i = 0; i < 100; i++) stepToward(pos, { x: 400, z: -15 });
+    expect(pos.x).toBeLessThanOrEqual(200);
   });
 });

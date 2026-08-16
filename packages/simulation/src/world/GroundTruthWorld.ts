@@ -73,6 +73,15 @@ export class GroundTruthWorld {
     bucket.add(instance.id);
   }
 
+  /**
+   * Tous les objets du monde, triés par identifiant. Pour les rares appelants
+   * qui les veulent vraiment tous : `objectsNear(0, 0, 1000)` balayait
+   * 251 001 cellules de grille pour arriver au même résultat.
+   */
+  allObjects(): SmartObjectInstance[] {
+    return [...this.objects.values()].sort((a, b) => a.id.localeCompare(b.id));
+  }
+
   /** Tous les objets d'un type, où qu'ils soient, triés par identifiant. */
   objectsOfType(type: string): SmartObjectInstance[] {
     const bucket = this.typeIndex.get(type);

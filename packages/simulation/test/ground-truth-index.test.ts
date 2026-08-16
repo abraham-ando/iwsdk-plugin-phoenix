@@ -52,3 +52,19 @@ describe('GroundTruthWorld.objectsOfType', () => {
     expect(restored.objectsOfType('hunting_ground')).toHaveLength(2);
   });
 });
+
+describe('GroundTruthWorld.allObjects', () => {
+  it('rend tous les objets sans balayer la grille, triés par identifiant', () => {
+    const world = makeWorld();
+    world.spawn('campfire', 0, 0);
+    world.spawn('oak_tree', 180, -180);
+    world.spawn('berry_bush', -190, 190);
+    const ids = world.allObjects().map((o) => o.id);
+    expect(ids).toHaveLength(3);
+    expect([...ids].sort()).toEqual(ids);
+  });
+
+  it("rend un tableau vide sur un monde vide", () => {
+    expect(makeWorld().allObjects()).toEqual([]);
+  });
+});

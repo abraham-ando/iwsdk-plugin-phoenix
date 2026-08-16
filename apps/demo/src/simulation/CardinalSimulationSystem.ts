@@ -149,9 +149,7 @@ export class CardinalSimulationSystem extends createSystem({}) {
       );
     }
     // Day one starts with the fires lit, as the village always did.
-    for (const fire of this.simWorld.objectsNear(0, 0, 1000)) {
-      if (fire.type === 'campfire') fire.state.lit = 1;
-    }
+    for (const fire of this.simWorld.objectsOfType('campfire')) fire.state.lit = 1;
 
     this.weather.onChange((state, tick) => {
       this.emit({ tick, kind: 'weather', text: WEATHER_LABELS[state] ?? state });
@@ -315,7 +313,7 @@ export class CardinalSimulationSystem extends createSystem({}) {
   }
 
   grantBlessing(): void {
-    for (const obj of this.simWorld.objectsNear(0, 0, 1000)) {
+    for (const obj of this.simWorld.allObjects()) {
       const def = this.registry.get(obj.type);
       for (const rule of def.regrowth ?? []) {
         obj.state[rule.field] = rule.max;
