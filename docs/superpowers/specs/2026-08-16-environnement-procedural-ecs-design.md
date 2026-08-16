@@ -117,6 +117,21 @@ Le module `terrain/` de `packages/simulation` expose quatre fonctions pures, app
 
 **Risque de migration assumé :** changer le relief invalidera des tests moteur qui figent le terrain actuel (plateau plat à y=0, rivière en `x = 4 + sin(z·0,12)·3,5`) et surtout **les coordonnées de `DEFAULT_VILLAGE`**. Le nouveau générateur devra conserver un plateau habitable à l'origine avec accès à l'eau, faute de quoi les agents se retrouveraient dans une falaise ou sans rivière. La phase terrain inclut la revalidation du village.
 
+## 6 bis. Hydrologie : un cours d'eau qui descend
+
+*Section ajoutée après mesure du terrain de la phase 3A, qui a révélé une incohérence que la conception initiale n'avait pas anticipée.*
+
+**Le constat.** Le bassin habitable introduit pour protéger le village en a fait une **cuvette fermée** : le plateau est à l'altitude 0, ceinturé de crêtes montant à 36–86 m dans toutes les directions, et la mer la plus proche est à 800 m à l'ouest. Une rivière ne peut pas sortir d'une cuvette, et le plateau étant exactement au niveau de la mer, elle n'aurait de toute façon aucune charge hydraulique. Le cours d'eau actuel — un sinus analytique creusé de 1,2 m partout où il passe — n'est donc pas une rivière : c'est une rainure.
+
+**Le principe retenu.** Une rivière réelle **creuse sa vallée**. Le moteur trace un cours déterministe de la source à la mer, dont l'altitude décroît strictement vers l'aval, puis abaisse le terrain jusqu'à lui. L'entaille ne remonte jamais le sol : elle ne fait que le creuser, ce qui garantit que le lit est toujours en dépression.
+
+- **Le village gagne de l'altitude.** Le plateau passe au-dessus du niveau de la mer pour donner à la rivière sa charge. Sans ce dénivelé, aucun écoulement n'est possible.
+- **Le tronçon du village est épinglé.** À l'intérieur de la zone simulée, le cours suit **exactement** la formule historique : les deux points d'eau de `DEFAULT_VILLAGE` y sont calés à la main, l'un avec 0,43 m de marge. Hors de cette zone, le cours est libre de suivre la pente.
+- **Le cours porte son altitude et sa largeur en chaque point.** C'est précisément ce dont la surface d'eau de la §7 a besoin : une nappe qui descend, et non un ruban plat.
+- **La proximité au cours se lit en temps constant.** Le cours est une polyligne indexée dans une grille de hachage ; `isRiverAt` est appelé par agent et par tick, il ne peut pas parcourir la polyligne.
+
+**Ce qui reste hors périmètre :** un réseau hydrographique (affluents, confluences), les lacs, et la variation saisonnière du débit. Un seul cours, de la source à la mer.
+
 ## 7. L'eau : rivière et mer
 
 Deux corps d'eau, une même famille de matériau. La mer est un plan au niveau zéro découpé par les tuiles visibles ; la rivière suit l'entaille du terrain et porte une direction d'écoulement.
