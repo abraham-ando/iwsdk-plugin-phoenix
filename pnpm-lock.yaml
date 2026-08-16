@@ -13,10 +13,13 @@ importers:
     devDependencies:
       '@dgreenheck/ez-tree':
         specifier: ^1.1.0
-        version: 1.1.0(three@0.185.1)
+        version: 1.1.0(super-three@0.181.0)
       '@types/node':
         specifier: ^22.20.1
         version: 22.20.1
+      three:
+        specifier: npm:super-three@0.181.0
+        version: super-three@0.181.0
       typescript:
         specifier: ^5.9.2
         version: 5.9.3
@@ -2164,9 +2167,6 @@ packages:
     peerDependencies:
       three: '>=0.162.0 <1.0.0'
 
-  three@0.185.1:
-    resolution: {integrity: sha512-5aojFCXKwnjBRZvUnt3WFfEcvUJgkN5LlijRFN95hMy8WVkG4I0QNcJE+OuWvuJ0bOdStrbfXn0pkd6/QyiAlg==}
-
   tinybench@2.9.0:
     resolution: {integrity: sha512-0+DUvqWMValLmha6lr4kD8iAMK1HzV0/aKnCtWb9v9641TnP/MFb7Pc2bxoxQjTXAErryXVgUOfv2YqNllqGeg==}
 
@@ -2454,9 +2454,9 @@ snapshots:
 
   '@bufbuild/protobuf@2.14.0': {}
 
-  '@dgreenheck/ez-tree@1.1.0(three@0.185.1)':
+  '@dgreenheck/ez-tree@1.1.0(super-three@0.181.0)':
     dependencies:
-      three: 0.185.1
+      three: super-three@0.181.0
 
   '@dimforge/rapier3d-compat@0.12.0': {}
 
@@ -4280,8 +4280,6 @@ snapshots:
   three-viewport-gizmo@2.2.0(super-three@0.181.0):
     dependencies:
       three: super-three@0.181.0
-
-  three@0.185.1: {}
 
   tinybench@2.9.0: {}
 
