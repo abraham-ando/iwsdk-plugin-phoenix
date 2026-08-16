@@ -20,3 +20,4 @@ export {
   withLevelRoot,
   type CardinalWorldOptions,
 } from './install';
+export { valueNoise2D, fbm2D, ridged2D } from './materials/noise';
