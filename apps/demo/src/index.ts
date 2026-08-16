@@ -19,6 +19,7 @@ import { PrehistoricEnvironment3D } from './simulation/PrehistoricEnvironment3D.
 import { VILLAGE_LAYOUT } from './simulation/layout.js';
 import { SimulationHud } from './simulation/simulation-hud.js';
 import { Mode2Client } from './simulation/Mode2Client.js';
+import { TrajectoryUploader } from './simulation/TrajectoryUploader.js';
 import { PhysicsSimulationSystem } from './simulation/PhysicsSimulationSystem.js';
 
 const container = document.getElementById('scene-container') as HTMLDivElement;
@@ -48,6 +49,8 @@ World.create(container, projectOptions)
       new SimulationHud(document.body, simSystem);
       // Mode-2 deliberation: pump plan requests to the BFF (LLM or mock).
       new Mode2Client(simSystem);
+      // Dataset capture: ship recorded trajectories to the BFF periodically.
+      new TrajectoryUploader(simSystem);
     }
 
     // Registers the plugin's components and its four systems, and starts

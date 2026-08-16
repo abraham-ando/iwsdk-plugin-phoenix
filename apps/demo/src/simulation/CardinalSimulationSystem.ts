@@ -11,6 +11,7 @@ import {
   SmartObjectRegistry,
   AgentRuntime,
   WeatherMachine,
+  TrajectoryRecorder,
   registerDefaultContent,
   hourOfDay,
   TICKS_PER_DAY,
@@ -64,20 +65,21 @@ export class CardinalSimulationSystem extends createSystem({}) {
   public runtime!: AgentRuntime;
   public weather!: WeatherMachine;
   public registry!: SmartObjectRegistry;
+  public recorder!: TrajectoryRecorder;
 
-  private listeners: Array<(e: SimEvent) => void> = [];
+  private readonly listeners: Array<(e: SimEvent) => void> = [];
   private lastDay = 0;
-  private lastSpeech = new Map<string, string>();
+  private readonly lastSpeech = new Map<string, string>();
   private sceneData: PrehistoricSceneResult | null = null;
   private elapsed = 0;
-  private campfireBindings: Array<{ group: Group; objectId: string }> = [];
+  private readonly campfireBindings: Array<{ group: Group; objectId: string }> = [];
   private celestial: CelestialVisuals | null = null;
 
   /** Bind the rendered scene once; per-frame projection targets it. */
   attachScene(sceneData: PrehistoricSceneResult): void {
     this.sceneData = sceneData;
     this.celestial = new CelestialVisuals(sceneData.root);
-    this.campfireBindings = [];
+    this.campfireBindings.length = 0;
     for (const [, group] of sceneData.campfires) {
       const worldX = group.position.x + (group.parent?.position.x ?? 0);
       const worldZ = group.position.z + (group.parent?.position.z ?? 0);
@@ -126,6 +128,10 @@ export class CardinalSimulationSystem extends createSystem({}) {
     this.weather.onChange((state, tick) => {
       this.emit({ tick, kind: 'weather', text: WEATHER_LABELS[state] ?? state });
     });
+
+    // Dataset capture (spec §9.1) — drained periodically by TrajectoryUploader.
+    this.recorder = new TrajectoryRecorder(this.runtime, SIM_SEED, this.weather);
+    this.recorder.attachTo(this.kernel);
   }
 
   update(delta: number): void {
@@ -149,34 +155,38 @@ export class CardinalSimulationSystem extends createSystem({}) {
     // Per-frame projection of engine views onto the rendered scene.
     this.elapsed += delta;
     if (this.sceneData !== null) {
-      for (const view of this.runtime.views()) {
-        const avatar = this.sceneData.agentAvatars.get(view.id);
-        if (avatar === undefined) continue;
-        avatar.position.set(view.x, view.y, view.z);
-        avatar.rotation.y = view.heading;
-        applyAvatarPose(avatar, view.animation, this.elapsed);
-        // Surface fresh dialogue lines to the HUD chronicle.
-        if (view.dialogue !== null && this.lastSpeech.get(view.id) !== view.dialogue) {
-          this.lastSpeech.set(view.id, view.dialogue);
-          this.emit({
-            tick: this.kernel.tick,
-            kind: 'action',
-            agentName: view.name,
-            text: `💬 ${view.name} : « ${view.dialogue} »`,
-          });
-        }
-      }
-      for (const binding of this.campfireBindings) {
-        const fire = this.simWorld.get(binding.objectId);
-        if (fire) {
-          PrehistoricEnvironment3D.setCampfireLit(binding.group, (fire.state.lit ?? 0) === 1);
-        }
-      }
-      // Scenery animation (wind, water) lives with rendering, not simulation.
-      this.sceneData.grassField.updateWind(this.elapsed);
-      this.sceneData.river.updateWater(this.elapsed);
-      this.celestial?.update(this.hourOfDaySim(), this.weather.current, this.elapsed);
+      this.projectScene(this.sceneData);
     }
+  }
+
+  private projectScene(sceneData: PrehistoricSceneResult): void {
+    for (const view of this.runtime.views()) {
+      const avatar = sceneData.agentAvatars.get(view.id);
+      if (avatar === undefined) continue;
+      avatar.position.set(view.x, view.y, view.z);
+      avatar.rotation.y = view.heading;
+      applyAvatarPose(avatar, view.animation, this.elapsed);
+      // Surface fresh dialogue lines to the HUD chronicle.
+      if (view.dialogue !== null && this.lastSpeech.get(view.id) !== view.dialogue) {
+        this.lastSpeech.set(view.id, view.dialogue);
+        this.emit({
+          tick: this.kernel.tick,
+          kind: 'action',
+          agentName: view.name,
+          text: `💬 ${view.name} : « ${view.dialogue} »`,
+        });
+      }
+    }
+    for (const binding of this.campfireBindings) {
+      const fire = this.simWorld.get(binding.objectId);
+      if (fire) {
+        PrehistoricEnvironment3D.setCampfireLit(binding.group, (fire.state.lit ?? 0) === 1);
+      }
+    }
+    // Scenery animation (wind, water) lives with rendering, not simulation.
+    sceneData.grassField.updateWind(this.elapsed);
+    sceneData.river.updateWater(this.elapsed);
+    this.celestial?.update(this.hourOfDaySim(), this.weather.current, this.elapsed);
   }
 
   private narrate(event: ActionEvent): SimEvent | null {
@@ -196,13 +206,14 @@ export class CardinalSimulationSystem extends createSystem({}) {
   }
 
   private emit(event: SimEvent): void {
-    for (const listener of [...this.listeners]) listener(event);
+    for (const listener of this.listeners) listener(event);
   }
 
   subscribe(cb: (e: SimEvent) => void): () => void {
     this.listeners.push(cb);
     return () => {
-      this.listeners = this.listeners.filter((l) => l !== cb);
+      const index = this.listeners.indexOf(cb);
+      if (index >= 0) this.listeners.splice(index, 1);
     };
   }
 
