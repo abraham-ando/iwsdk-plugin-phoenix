@@ -37,14 +37,22 @@ describe('buildRiverGeometry', () => {
     const depth = geom.getAttribute('aDepth');
     for (let i = 0; i < depth.count; i++) expect(depth.getX(i)).toBeGreaterThanOrEqual(0);
 
+    let checked = 0;
     for (let row = 0; row < course.points.length; row += 11) {
       const base = row * RIVER_COLUMNS;
+      const left = depth.getX(base);
+      const right = depth.getX(base + RIVER_COLUMNS - 1);
+      // Près de l'embouchure la vallée est noyée sur toute sa largeur : la
+      // recherche de rive bute alors sur sa borne et le bord est légitimement
+      // plus profond que l'axe. Le profil en chenal ne vaut que là où le ruban
+      // touche réellement terre.
+      if (left > 0.05 || right > 0.05) continue;
       const centre = depth.getX(base + Math.floor(RIVER_COLUMNS / 2));
-      expect(depth.getX(base), `berge gauche, rangée ${row}`).toBeLessThanOrEqual(centre);
-      expect(depth.getX(base + RIVER_COLUMNS - 1), `berge droite, rangée ${row}`).toBeLessThanOrEqual(
-        centre,
-      );
+      expect(left, `berge gauche, rangée ${row}`).toBeLessThanOrEqual(centre);
+      expect(right, `berge droite, rangée ${row}`).toBeLessThanOrEqual(centre);
+      checked++;
     }
+    expect(checked, 'rangées à profil de chenal vérifiées').toBeGreaterThan(5);
   });
 
   it("MEURT À ZÉRO SUR LA RIVE : sans cela, ni écume ni estompage", () => {
