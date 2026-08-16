@@ -1,5 +1,16 @@
 import { clamp01, smoothstep, valueNoise } from './noise';
-import { SEA_LEVEL, heightAt, slopeAt, landMaskAt } from './terrain';
+import {
+  SEA_LEVEL,
+  RIVER_CARVE_RADIUS,
+  heightAt,
+  slopeAt,
+  landMaskAt,
+  riverCenterX,
+} from './terrain';
+
+function distanceToRiver(x: number, z: number): number {
+  return Math.abs(x - riverCenterX(z));
+}
 
 /**
  * Les biomes sont une donnée de simulation, pas une décoration (spec §6) :
@@ -41,21 +52,30 @@ export function biomeAt(x: number, z: number): BiomeSample {
   const land = landMaskAt(x, z);
   const wet = humidityAt(x, z);
 
-  // Chaque score est une préférence non normalisée ; la somme les met à l'échelle.
-  const ocean = h < SEA_LEVEL ? 1 + (SEA_LEVEL - h) : 0;
-
   // GRILLE, pas intensité : « sommes-nous près de la côte ? ». Sans elle, le
   // cœur du village — plat et exactement à l'altitude zéro — deviendrait une
   // plage, puisqu'il en présente toutes les autres caractéristiques.
   const coastGate = smoothstep(0.15, 0.45, 1 - land);
 
-  // La végétation ne pousse pas sur l'estran. Ce terme lui cède le rivage.
-  const aboveShore = smoothstep(0.5, 3.0, h);
+  // « Sommes-nous au bord de la rivière ? » — un marais est un sol gorgé d'eau,
+  // pas simplement un sol bas et humide.
+  const riverGate = smoothstep(RIVER_CARVE_RADIUS + 8, RIVER_CARVE_RADIUS, distanceToRiver(x, z));
+
+  // Le lit de la rivière n'est pas la mer. Sans cette réserve, `ocean` happait
+  // toute altitude négative, y compris la vallée creusée en plein continent.
+  const inRiverValley = distanceToRiver(x, z) < RIVER_CARVE_RADIUS;
+  const ocean = h < SEA_LEVEL && !inRiverValley ? 1 + (SEA_LEVEL - h) : 0;
+
+  // La végétation cède l'estran à la plage — MAIS SEULEMENT PRÈS DE LA CÔTE.
+  // Conditionner sur la seule altitude éteignait la végétation de tout le
+  // bassin du village, qui vit sous 3 m : être au niveau de la mer loin dans
+  // les terres est banal, ce n'est pas un rivage.
+  const aboveShore = 1 - coastGate * smoothstep(3.0, 0.5, h);
 
   // Poids : sans eux, `forest` gagne partout parce que ses trois facteurs
   // saturent à 1, alors que ceux d'une plage ou d'un marais ne le peuvent pas.
   const BEACH_WEIGHT = 2.2;
-  const WETLAND_WEIGHT = 1.8;
+  const WETLAND_WEIGHT = 1.4;
 
   const scores: Record<BiomeId, number> = {
     ocean,
@@ -68,10 +88,11 @@ export function biomeAt(x: number, z: number): BiomeSample {
     wetland:
       ocean > 0
         ? 0
-        : smoothstep(9, 1, h) *
+        : smoothstep(18, 2, h) *
           smoothstep(0.25, 0.05, s) *
-          smoothstep(0.55, 0.85, wet) *
+          smoothstep(0.5, 0.75, wet) *
           (1 - coastGate) *
+          riverGate *
           WETLAND_WEIGHT,
     grassland:
       ocean > 0

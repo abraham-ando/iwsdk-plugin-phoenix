@@ -13,7 +13,15 @@ import {
   Color,
   Float32BufferAttribute,
 } from '@iwsdk/core';
-import { getTerrainHeight, isRiverAt, isShoreAt } from '@iwsdk/cardinal-simulation';
+import {
+  getTerrainHeight,
+  isRiverAt,
+  isShoreAt,
+  riverCenterX,
+  biomeAt,
+  BIOME_IDS,
+  type BiomeId,
+} from '@iwsdk/cardinal-simulation';
 import type { MaterialLibrary } from '@iwsdk/cardinal-world';
 
 export interface TerrainData {
@@ -61,12 +69,29 @@ export class ProceduralTerrain {
     const colors: number[] = [];
 
     // Color palette
-    const colDeepGrass = new Color(0x365314);   // Dark emerald mossy grass
-    const colLushGrass = new Color(0x65a30d);   // Vibrant sunlit meadow grass
+    const colDeepGrass = new Color(0x365314); // Dark emerald mossy grass
+    const colLushGrass = new Color(0x65a30d); // Vibrant sunlit meadow grass
     const colGoldenGrass = new Color(0x84cc16); // High hill golden grass
-    const colSand = new Color(0xd4a373);        // Warm river shore sand
-    const colDirt = new Color(0x78350f);        // Rich agricultural dirt
-    const colRock = new Color(0x64748b);        // Mountain cliff rock
+    const colSand = new Color(0xd4a373); // Warm river shore sand
+    const colDirt = new Color(0x78350f); // Rich agricultural dirt
+    const colRock = new Color(0x64748b); // Mountain cliff rock
+
+    // Une teinte par biome du moteur. Les seuils d'altitude codés en dur qui
+    // vivaient ici (roche au-dessus de 4,5 m) encodaient l'ancienne plage de
+    // relief et ne se déclencheraient plus jamais : le sol qu'on voit et les
+    // ressources que les agents y trouvent découlent maintenant du même calcul.
+    const biomeColors: Record<BiomeId, Color> = {
+      ocean: new Color(0x1e3a5f),
+      beach: colSand,
+      wetland: new Color(0x4d7c0f),
+      grassland: colLushGrass,
+      forest: colDeepGrass,
+      rock: colRock,
+      alpine: new Color(0xe2e8f0),
+    };
+
+    // Alloué une fois : la boucle couvre 9409 sommets.
+    const vertexCol = new Color();
 
     for (let i = 0; i < posAttr.count; i++) {
       const x = posAttr.getX(i);
@@ -74,37 +99,28 @@ export class ProceduralTerrain {
       const y = this.getHeight(x, z);
       posAttr.setY(i, y);
 
-      const riverX = 4.0 + Math.sin(z * 0.12) * 3.5;
-      const distToRiver = Math.abs(x - riverX);
-
-      const vertexCol = new Color();
+      const distToRiver = Math.abs(x - riverCenterX(z));
 
       if (distToRiver < 2.4) {
-        // Riverbed
+        // Riverbed — la rivière n'est pas un biome en phase 3A.
         vertexCol.copy(colSand).lerp(colDirt, 0.4);
       } else if (distToRiver < 4.5) {
         // Sandy River Shoreline
         const shoreFactor = (distToRiver - 2.4) / 2.1;
         vertexCol.copy(colSand).lerp(colLushGrass, shoreFactor);
-      } else if (y > 4.5) {
-        // High Rocky Peaks
-        const rockFactor = Math.min(1, (y - 4.5) / 4.0);
-        vertexCol.copy(colGoldenGrass).lerp(colRock, rockFactor);
-      } else if (x < -8 && z > -12 && z < 2) {
-        // Cultivated Vineyard / Agricultural Soil Terraces (Image 1 pattern)
-        const rowPattern = Math.sin(x * 1.5 + z * 0.5);
-        if (rowPattern > 0.2) {
-          vertexCol.copy(colLushGrass);
-        } else {
-          vertexCol.copy(colDirt);
-        }
       } else {
-        // Rolling Meadow Plains (Image 2 & 5 pattern)
-        const grassMix = (Math.sin(x * 0.2) + Math.cos(z * 0.2) + 2) / 4;
-        vertexCol.copy(colDeepGrass).lerp(colLushGrass, grassMix);
-        if (y > 1.5) {
-          vertexCol.lerp(colGoldenGrass, (y - 1.5) / 2.5);
+        const { weights } = biomeAt(x, z);
+        vertexCol.setRGB(0, 0, 0);
+        for (const id of BIOME_IDS) {
+          const w = weights[id];
+          if (w <= 0) continue;
+          const c = biomeColors[id];
+          vertexCol.r += c.r * w;
+          vertexCol.g += c.g * w;
+          vertexCol.b += c.b * w;
         }
+        // Les hauteurs dorent l'herbe, comme avant.
+        if (y > 1.5) vertexCol.lerp(colGoldenGrass, Math.min(1, (y - 1.5) / 2.5));
       }
 
       colors.push(vertexCol.r, vertexCol.g, vertexCol.b);

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { BIOME_IDS, biomeAt, humidityAt } from '../src/world/biomes';
-import { heightAt, slopeAt, isWaterAt } from '../src/world/terrain';
+import { heightAt, slopeAt, isWaterAt, riverCenterX } from '../src/world/terrain';
 
 describe('humidityAt', () => {
   it('reste dans [0, 1] et est déterministe', () => {
@@ -124,5 +124,22 @@ describe('littoral', () => {
     expect(biomeAt(0, -2.5).primary).not.toBe('beach');
     expect(biomeAt(5.5, -3).primary).not.toBe('beach');
     expect(biomeAt(-5.5, -3).primary).not.toBe('beach');
+  });
+});
+
+describe('marais', () => {
+  it('existe quelque part, au bord de l\'eau et en plaine', () => {
+    // Un biome declare mais jamais atteint est du code mort qui se donne
+    // l'apparence d'une fonctionnalite.
+    let found = 0;
+    for (let z = 1400; z <= 1700; z += 3) {
+      for (let d = -12; d <= 12; d += 1) {
+        const x = riverCenterX(z) + d;
+        if (biomeAt(x, z).primary !== 'wetland') continue;
+        found++;
+        expect(heightAt(x, z), `marais à (${x.toFixed(0)}, ${z})`).toBeLessThan(18);
+      }
+    }
+    expect(found).toBeGreaterThan(0);
   });
 });

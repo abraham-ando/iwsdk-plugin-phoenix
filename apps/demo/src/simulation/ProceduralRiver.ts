@@ -4,13 +4,10 @@
  * and depth color gradients.
  */
 
-import {
-  Group,
-  Mesh,
-  PlaneGeometry,
-  MeshStandardMaterial,
-  Color,
-} from '@iwsdk/core';
+import { Group, Mesh, PlaneGeometry, MeshStandardMaterial, Color } from '@iwsdk/core';
+// L'axe de la rivière vient du moteur : le ruban d'eau et le lit creusé dans le
+// terrain suivent la même courbe par construction, jamais par recopie.
+import { riverCenterX } from '@iwsdk/cardinal-simulation';
 
 export class ProceduralRiver {
   private riverMesh: Mesh | null = null;
@@ -30,9 +27,8 @@ export class ProceduralRiver {
     const pos = geom.attributes.position;
     for (let i = 0; i < pos.count; i++) {
       const z = pos.getZ(i);
-      const riverCenterX = 4.0 + Math.sin(z * 0.12) * 3.5;
       const curX = pos.getX(i);
-      pos.setX(i, curX + riverCenterX);
+      pos.setX(i, curX + riverCenterX(z));
       pos.setY(i, -0.05);
     }
     geom.computeVertexNormals();

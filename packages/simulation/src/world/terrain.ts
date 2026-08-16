@@ -24,10 +24,13 @@ const VILLAGE_Z = -2.5;
 
 const CONTINENT_SCALE = 1 / 2600;
 const MOUNTAIN_SCALE = 1 / 420;
+/** Échelle des CHAÎNES : où les montagnes existent, par opposition à leur forme. */
+const RANGE_SCALE = 1 / 1800;
 const DETAIL_SCALE = 1 / 55;
 
 const CONTINENT_SEED = 90210;
 const MOUNTAIN_SEED = 31337;
+const RANGE_SEED = 8675309;
 const DETAIL_SEED = 5150;
 
 const SEA_FLOOR = -22;
@@ -73,13 +76,29 @@ export function riverCenterX(z: number): number {
   return 4.0 + Math.sin(z * 0.12) * 3.5 + Math.sin(z * 0.004) * MEANDER_AMPLITUDE * meander;
 }
 
+/** Altitudes entre lesquelles la rivière s'efface. Au-delà, plus d'eau courante. */
+const RIVER_FADE_ALTITUDE = 8;
+export const RIVER_MAX_ALTITUDE = 22;
+
+/**
+ * Présence de la rivière, de 1 (pleine eau) à 0 (aucune).
+ *
+ * Sans ce masque, l'entaille creusait ses 1,2 m PARTOUT où passe l'axe, y
+ * compris sur un flanc alpin à 68 m : une rivière qui gravit les sommets.
+ * Le routage hydrologique complet (la rivière suit réellement la pente
+ * descendante) relève de la phase 4 ; ceci empêche seulement l'absurde.
+ */
+export function riverStrengthAt(x: number, z: number): number {
+  return 1 - smoothstep(RIVER_FADE_ALTITUDE, RIVER_MAX_ALTITUDE, reliefWithoutRiver(x, z));
+}
+
 export function isRiverAt(x: number, z: number): boolean {
-  return Math.abs(x - riverCenterX(z)) < 2.2;
+  return Math.abs(x - riverCenterX(z)) < 2.2 && riverStrengthAt(x, z) > 0.5;
 }
 
 export function isShoreAt(x: number, z: number): boolean {
   const d = Math.abs(x - riverCenterX(z));
-  return d >= 2.2 && d < 4.5;
+  return d >= 2.2 && d < 4.5 && riverStrengthAt(x, z) > 0.5;
 }
 
 /** Demi-largeur de la vallée creusée. Plus large que le lit et que la berge. */
@@ -101,7 +120,13 @@ function riverCarveAt(x: number, z: number): number {
   return RIVER_CARVE_DEPTH * (1 - smoothstep(0, RIVER_CARVE_RADIUS, d));
 }
 
-export function heightAt(x: number, z: number): number {
+/**
+ * Le relief AVANT que la rivière n'y soit creusée.
+ *
+ * Cette séparation lève une circularité : la présence de la rivière dépend de
+ * l'altitude, qui dépendrait de l'entaille. On mesure donc le terrain sec.
+ */
+function reliefWithoutRiver(x: number, z: number): number {
   const land = landMaskAt(x, z);
   const d = distanceToVillage(x, z);
 
@@ -110,9 +135,14 @@ export function heightAt(x: number, z: number): number {
 
   const base = lerp(SEA_FLOOR, INLAND_RISE, land) * relief;
 
-  // Les montagnes exigent d'être loin de la côte : land³ les efface sur le littoral.
+  // Où les montagnes ont le DROIT d'être. Sans ce masque, `ridgedFbm` lève des
+  // crêtes sur toute la surface : un monde intégralement montagneux, sans
+  // plaine, donc sans rivière ni marais possibles au-delà du village.
+  const range = smoothstep(0.42, 0.62, erodedFbm(x * RANGE_SCALE, z * RANGE_SCALE, RANGE_SEED, 3));
+
+  // Les montagnes exigent aussi d'être loin de la côte : land³ les efface sur le littoral.
   const ridges = ridgedFbm(x * MOUNTAIN_SCALE, z * MOUNTAIN_SCALE, MOUNTAIN_SEED, 5);
-  const mountain = ridges * MOUNTAIN_HEIGHT * land * land * land * relief;
+  const mountain = ridges * MOUNTAIN_HEIGHT * land * land * land * relief * range;
 
   // Le détail survit dans le bassin, atténué : le village ondule, il n'est pas lisse.
   // Il reste POSITIF pour que la seule chose qui creuse sous zéro près du village
@@ -121,9 +151,16 @@ export function heightAt(x: number, z: number): number {
   const detailAmplitude = lerp(1.6, 4.5, relief) * land;
   const detail = erodedFbm(x * DETAIL_SCALE, z * DETAIL_SCALE, DETAIL_SEED, 4) * detailAmplitude;
 
-  const height = base + mountain + detail - riverCarveAt(x, z) * land;
+  return base + mountain + detail;
+}
+
+export function heightAt(x: number, z: number): number {
+  const dry = reliefWithoutRiver(x, z);
+  const carve = riverCarveAt(x, z) * landMaskAt(x, z) * riverStrengthAt(x, z);
+  const height = dry - carve;
 
   // Aplatissement exact du cœur : multiplier garantit 0, une interpolation non.
+  const d = distanceToVillage(x, z);
   const plateau = 1 - smoothstep(PLATEAU_RADIUS, PLATEAU_RADIUS + PLATEAU_FALLOFF, d);
   return height * (1 - plateau);
 }

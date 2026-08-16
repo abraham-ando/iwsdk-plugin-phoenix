@@ -11,6 +11,8 @@ import {
   riverCenterX,
   landMaskAt,
   RIVER_CARVE_RADIUS,
+  RIVER_MAX_ALTITUDE,
+  riverStrengthAt,
   slopeAt,
   isWaterAt,
   depthAt,
@@ -204,5 +206,48 @@ describe('isWaterAt / depthAt', () => {
       expect(depthAt(x, 900)).toBeCloseTo(Math.max(0, SEA_LEVEL - h), 10);
       expect(isWaterAt(x, 900)).toBe(h < SEA_LEVEL);
     }
+  });
+});
+
+describe('plausibilité hydrologique', () => {
+  it("n'a pas de rivière en altitude", () => {
+    // Sans le masque d'altitude, l'entaille creusait ses 1,2 m partout ou passe
+    // l'axe, y compris sur un flanc alpin a 68 m : une riviere qui gravit les
+    // sommets. Le routage hydrologique complet reste la phase 4.
+    for (let z = -3000; z <= 3000; z += 11) {
+      const x = riverCenterX(z);
+      if (isRiverAt(x, z)) {
+        expect(heightAt(x, z), `rivière à (${x.toFixed(0)}, ${z})`).toBeLessThan(
+          RIVER_MAX_ALTITUDE,
+        );
+      }
+    }
+  });
+
+  it('garde la rivière présente au village', () => {
+    expect(riverStrengthAt(4, 0)).toBeGreaterThan(0.9);
+  });
+});
+
+describe('géographie', () => {
+  it('laisse de vraies plaines entre les chaînes de montagnes', () => {
+    // Sans masque de chaînes, ridgedFbm leve des cretes sur TOUTE la surface :
+    // un monde integralement montagneux, sans plaine donc sans riviere.
+    let lowland = 0;
+    let highland = 0;
+    let n = 0;
+    for (let x = -2500; x <= 2500; x += 61) {
+      for (let z = -2500; z <= 2500; z += 61) {
+        if (landMaskAt(x, z) < 0.9) continue;
+        const h = heightAt(x, z);
+        n++;
+        if (h < 15) lowland++;
+        if (h > 45) highland++;
+      }
+    }
+    expect(n).toBeGreaterThan(100);
+    // Les deux doivent exister : ni plaine partout, ni montagne partout.
+    expect(lowland / n, 'proportion de plaine').toBeGreaterThan(0.25);
+    expect(highland / n, 'proportion de haute montagne').toBeGreaterThan(0.02);
   });
 });
