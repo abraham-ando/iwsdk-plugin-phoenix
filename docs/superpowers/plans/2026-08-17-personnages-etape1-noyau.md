@@ -1036,6 +1036,23 @@ describe('breed', () => {
     }
   });
 
+  it('borne le mélange même avec une dominance non neutre', () => {
+    // C'est CE test qui garde le clamp, et non celui à dominance neutre :
+    // à 0.5 le clamp est un non-événement. À 0.9, t = clamp01(rng.next() + 0.4)
+    // dépasse 1 dès que le tirage passe 0.6, et sans le clamp le mélange
+    // extrapolerait AU-DELÀ du père au lieu d'interpoler entre les parents.
+    const DOMINANT: FamilyDescriptor = {
+      ...PUR,
+      genes: { taille: { group: 'structure', heritability: 1, dominance: 0.9, mutationRate: 0 } },
+    };
+    for (let seed = 0; seed < 200; seed++) {
+      const enfant = breed(DOMINANT, g('pur', { taille: 0.2 }), g('pur', { taille: 0.8 }),
+        makeCountingRng(seed), 'f');
+      expect(enfant.genes['taille']!).toBeGreaterThanOrEqual(0.2);
+      expect(enfant.genes['taille']!).toBeLessThanOrEqual(0.8);
+    }
+  });
+
   it('deux parents identiques donnent un enfant identique', () => {
     const enfant = breed(PUR, g('pur', { taille: 0.37 }), g('pur', { taille: 0.37 }),
       makeCountingRng(5), 'm');
