@@ -38,3 +38,23 @@ export { ProceduralMaterial } from './materials/components';
 export { MaterialSystem } from './materials/MaterialSystem';
 export { ExposureSystem } from './atmosphere/ExposureSystem';
 export { applyColorManagement } from './core/colorManagement';
+
+export { TerrainTile } from './terrain/components';
+export { TerrainStreamingSystem } from './terrain/TerrainStreamingSystem';
+export { TerrainMeshSystem } from './terrain/TerrainMeshSystem';
+export {
+  TILE_SIZE,
+  MAX_RING,
+  LOD_SEGMENTS,
+  desiredTiles,
+  diffTiles,
+  lodForRing,
+  tileIndexFor,
+  tileKey,
+  tileOriginX,
+  tileOriginZ,
+  type TileSpec,
+  type TileDiff,
+} from './terrain/tiling';
+export { sampleTile, BIOME_RGB, type TileSample } from './terrain/sampling';
+export { buildTileGeometry, tileVertexCount, tileTriangleCount, SKIRT_DEPTH } from './terrain/geometry';
