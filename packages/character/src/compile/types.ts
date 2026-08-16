@@ -37,5 +37,13 @@ export interface CompiledCharacter {
   morphs: Record<string, number>;
   /** Scalaires normalisés. La conversion en couleur appartient au pont. */
   surface: { skinTone: number; hairTone: number; hairStyle: number };
-  stats: { heightMeters: number };
+  /**
+   * Hauteur NOMINALE : `restHeightMeters × bodyScale × stature`. Elle rend
+   * compte de l'âge et de la stature, et de rien d'autre — ni la longueur des
+   * jambes, ni celle du tronc, ni le rapport membres/tronc, ni l'os racine qui
+   * n'est jamais mis à l'échelle. La hauteur réellement debout se mesure sur la
+   * pose composée, ce qui exige de savoir quelle chaîne touche le sol : un fait
+   * de rig que seul le pont possède.
+   */
+  stats: { nominalHeightMeters: number };
 }

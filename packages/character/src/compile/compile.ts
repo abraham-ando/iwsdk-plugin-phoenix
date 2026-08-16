@@ -1,6 +1,6 @@
 import { evalCurve } from '../family/proportions';
-import type { ChainDef, FamilyDescriptor } from '../family/types';
-import type { Genome } from '../genome/types';
+import type { FamilyDescriptor } from '../family/types';
+import { clamp01, type Genome } from '../genome/types';
 import type { BoneRest, CompiledBone, CompiledCharacter, RigBinding, Vec3 } from './types';
 
 /** Plage d'action d'un gène de longueur : ±25 % autour du rig source. */
@@ -58,7 +58,10 @@ export function compile(
     );
   }
 
-  const gene = (key: string): number => genome.genes[key] ?? 0.5;
+  // Borné ici et pas seulement à la création : `compile` est publique et reçoit
+  // un objet nu. Un gène hors plage donnerait un facteur négatif, donc une
+  // réflexion — la même catastrophe que le cisaillement, par une autre porte.
+  const gene = (key: string): number => clamp01(genome.genes[key] ?? 0.5);
 
   const adult = family.adultAge;
   const bodyScale = evalCurve(family.proportions.bodyScale, age);
@@ -74,11 +77,11 @@ export function compile(
   const stature = lengthFactor(gene('stature'));
 
   const factors = new Map<string, number>();
-  for (const [label, chain] of Object.entries(family.chains) as Array<[string, ChainDef]>) {
+  for (const [label, chain] of Object.entries(family.chains)) {
     const own = lengthFactor(gene(chain.gene));
     // Un enfant a les membres courts par rapport au tronc : le rapport ne
     // s'applique qu'aux chaînes de membres, jamais au tronc lui-même.
-    const ageFactor = label === 'torso' ? 1 : limbRatio;
+    const ageFactor = chain.limb ? limbRatio : 1;
     const factor = stature * own * ageFactor;
 
     for (const role of chainRoles(binding, chain.from, chain.to, label)) {
@@ -119,6 +122,6 @@ export function compile(
       hairTone: gene('hairTone'),
       hairStyle: gene('hairStyle'),
     },
-    stats: { heightMeters: binding.restHeightMeters * bodyScale * stature },
+    stats: { nominalHeightMeters: binding.restHeightMeters * bodyScale * stature },
   };
 }

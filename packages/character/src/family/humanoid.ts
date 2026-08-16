@@ -33,9 +33,21 @@ export const HUMANOID: FamilyDescriptor = {
   },
 
   chains: {
-    arm: { from: 'shoulderL', to: 'handL', gene: 'armLength', mirror: ['shoulderR', 'handR'] },
-    leg: { from: 'upLegL', to: 'footL', gene: 'legLength', mirror: ['upLegR', 'footR'] },
-    torso: { from: 'root', to: 'neck', gene: 'torsoLength' },
+    arm: {
+      from: 'shoulderL',
+      to: 'handL',
+      gene: 'armLength',
+      mirror: ['shoulderR', 'handR'],
+      limb: true,
+    },
+    leg: {
+      from: 'upLegL',
+      to: 'footL',
+      gene: 'legLength',
+      mirror: ['upLegR', 'footR'],
+      limb: true,
+    },
+    torso: { from: 'root', to: 'neck', gene: 'torsoLength', limb: false },
   },
 
   morphs: {

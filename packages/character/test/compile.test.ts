@@ -20,7 +20,7 @@ describe('compile — génome neutre', () => {
 
   it('rend la hauteur du rig de repos', () => {
     const c = compile(HUMANOID, defaultGenome(HUMANOID), 18, binding());
-    expect(c.stats.heightMeters).toBeCloseTo(1.75, 3);
+    expect(c.stats.nominalHeightMeters).toBeCloseTo(1.75, 3);
   });
 
   it('demande toujours un recalcul des matrices inverses', () => {
@@ -51,6 +51,16 @@ describe('compile — invariants géométriques', () => {
     );
     expect(croix).toBeCloseTo(0, 9);
     expect(avant[0] * après[0] + avant[1] * après[1] + avant[2] * après[2]).toBeGreaterThan(0);
+  });
+
+  it('borne un gène hors plage au lieu de réfléchir l os', () => {
+    const g = { family: 'humanoid', genes: { ...defaultGenome(HUMANOID).genes, armLength: -2 } };
+    const c = compile(HUMANOID, g, 18, binding());
+    for (const bone of c.restPose) expect(bone.scale).toBeGreaterThan(0);
+    // -2 est ramené à 0, donc le facteur le plus court possible, jamais négatif.
+    const avant = binding().bones['foreArmL']!.position;
+    const après = trouve(c, 'foreArmL').position;
+    expect(après[0] / avant[0]).toBeGreaterThan(0);
   });
 });
 
@@ -83,7 +93,7 @@ describe('compile — l âge', () => {
     const g = defaultGenome(HUMANOID);
     const bébé = compile(HUMANOID, g, 0, binding());
     const adulte = compile(HUMANOID, g, 18, binding());
-    expect(bébé.stats.heightMeters).toBeLessThan(adulte.stats.heightMeters * 0.35);
+    expect(bébé.stats.nominalHeightMeters).toBeLessThan(adulte.stats.nominalHeightMeters * 0.35);
   });
 
   it('la tête d un nourrisson est proportionnellement bien plus grosse', () => {
@@ -99,7 +109,7 @@ describe('compile — l âge', () => {
     const g = defaultGenome(HUMANOID);
     let précédente = 0;
     for (let age = 0; age <= 18; age += 1) {
-      const h = compile(HUMANOID, g, age, binding()).stats.heightMeters;
+      const h = compile(HUMANOID, g, age, binding()).stats.nominalHeightMeters;
       expect(h).toBeGreaterThanOrEqual(précédente);
       précédente = h;
     }

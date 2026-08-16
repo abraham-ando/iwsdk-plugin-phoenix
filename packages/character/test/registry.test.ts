@@ -32,7 +32,7 @@ describe('HUMANOID', () => {
 const broken: FamilyDescriptor = {
   ...HUMANOID,
   id: 'cassé',
-  chains: { bras: { from: 'inconnu', to: 'handL', gene: 'absent' } },
+  chains: { bras: { from: 'inconnu', to: 'handL', gene: 'absent', limb: true } },
 };
 
 describe('validateDescriptor', () => {

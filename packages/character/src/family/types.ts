@@ -25,6 +25,12 @@ export interface ChainDef {
   gene: string;
   /** Couple (départ, terminal) du côté opposé, mis à l'échelle à l'identique. */
   mirror?: readonly [string, string];
+  /**
+   * Vrai pour un membre, faux pour le tronc. Requis et non optionnel : le
+   * compilateur applique le rapport membres/tronc selon ce champ, et un défaut
+   * implicite ferait exactement l'erreur qu'on veut rendre impossible.
+   */
+  limb: boolean;
 }
 
 export interface MorphDef {
