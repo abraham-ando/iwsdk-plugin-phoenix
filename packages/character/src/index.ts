@@ -16,6 +16,7 @@ export type { Genome, RngLike } from './genome/types';
 export { clamp01 } from './genome/types';
 export { createGenome, defaultGenome, centeredDraw } from './genome/create';
 export { breed } from './genome/breed';
+export { GENOME_FORMAT_VERSION, packGenome, unpackGenome } from './genome/serialize';
 
 import { HUMANOID } from './family/humanoid';
 import { registerFamily } from './family/registry';
