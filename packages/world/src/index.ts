@@ -89,3 +89,8 @@ export {
   type FloraAsset,
   type FloraLod,
 } from './flora/floraAssets';
+
+export { SmartObjectVisual, AnimalVisual } from './objects/components';
+export { SmartObjectVisualSystem } from './objects/SmartObjectVisualSystem';
+export { FaunaSystem } from './objects/FaunaSystem';
+export { visualStateFor, VISUAL_TYPES, type ObjectVisualState } from './objects/visualState';

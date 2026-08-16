@@ -19,6 +19,9 @@ import { createWaterMaterial } from './water/WaterMaterial';
 import { FloraTile } from './flora/components';
 import { FloraSystem } from './flora/FloraSystem';
 import { loadFloraAssets } from './flora/floraAssets';
+import { SmartObjectVisual, AnimalVisual } from './objects/components';
+import { SmartObjectVisualSystem } from './objects/SmartObjectVisualSystem';
+import { FaunaSystem } from './objects/FaunaSystem';
 
 export interface CardinalWorldOptions {
   quality?: QualityTier;
@@ -60,6 +63,8 @@ export function installCardinalWorld(
   terrain: { streaming: TerrainStreamingSystem; mesh: TerrainMeshSystem };
   water: WaterSystem;
   flora: FloraSystem;
+  objects: SmartObjectVisualSystem;
+  fauna: FaunaSystem;
 } {
   const quality = options.quality ?? detectQuality();
   const materials = new MaterialLibrary(quality);
@@ -71,7 +76,9 @@ export function installCardinalWorld(
     .registerComponent(ProceduralMaterial)
     .registerComponent(TerrainTile)
     .registerComponent(WaterSurface)
-    .registerComponent(FloraTile);
+    .registerComponent(FloraTile)
+    .registerComponent(SmartObjectVisual)
+    .registerComponent(AnimalVisual);
 
   world.registerSystem(CelestialTimeSystem);
   world.registerSystem(SkyRenderSystem, { configData: { quality } });
@@ -97,6 +104,9 @@ export function installCardinalWorld(
       leafMaterial: materials.get('foliage'),
     },
   });
+  world.registerSystem(SmartObjectVisualSystem);
+  world.registerSystem(FaunaSystem);
+
   // Les géométries arrivent du réseau. Le système reste inerte jusque-là, ce
   // qui est correct : une tuile non plantée le sera au passage suivant.
   void loadFloraAssets()
@@ -150,5 +160,7 @@ export function installCardinalWorld(
     },
     water: world.getSystem(WaterSystem) as WaterSystem,
     flora: world.getSystem(FloraSystem) as FloraSystem,
+    objects: world.getSystem(SmartObjectVisualSystem) as SmartObjectVisualSystem,
+    fauna: world.getSystem(FaunaSystem) as FaunaSystem,
   };
 }
