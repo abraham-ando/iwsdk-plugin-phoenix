@@ -42,6 +42,12 @@ export {
   type AgentMetrics,
 } from './telemetry/MetricsCollector';
 export {
+  TrajectoryRecorder,
+  EPISODE_SNAPSHOT_PERIOD,
+  type TrajectoryBatch,
+} from './telemetry/TrajectoryRecorder';
+export { mockPlanResponse } from './telemetry/MockPlanner';
+export {
   GroundTruthWorld,
   type NamedPlace,
   type WorldSnapshot,
