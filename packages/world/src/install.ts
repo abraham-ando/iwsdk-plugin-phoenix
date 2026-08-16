@@ -16,6 +16,9 @@ import { WaterSurface } from './water/components';
 import { WaterSystem } from './water/WaterSystem';
 import { buildRiverGeometry } from './water/riverGeometry';
 import { createWaterMaterial } from './water/WaterMaterial';
+import { FloraTile } from './flora/components';
+import { FloraSystem } from './flora/FloraSystem';
+import { loadFloraAssets } from './flora/floraAssets';
 
 export interface CardinalWorldOptions {
   quality?: QualityTier;
@@ -56,6 +59,7 @@ export function installCardinalWorld(
   colorManaged: boolean;
   terrain: { streaming: TerrainStreamingSystem; mesh: TerrainMeshSystem };
   water: WaterSystem;
+  flora: FloraSystem;
 } {
   const quality = options.quality ?? detectQuality();
   const materials = new MaterialLibrary(quality);
@@ -66,7 +70,8 @@ export function installCardinalWorld(
     .registerComponent(StarField)
     .registerComponent(ProceduralMaterial)
     .registerComponent(TerrainTile)
-    .registerComponent(WaterSurface);
+    .registerComponent(WaterSurface)
+    .registerComponent(FloraTile);
 
   world.registerSystem(CelestialTimeSystem);
   world.registerSystem(SkyRenderSystem, { configData: { quality } });
@@ -82,6 +87,23 @@ export function installCardinalWorld(
   world.registerSystem(TerrainStreamingSystem, { configData: { material: terrainMaterial } });
   world.registerSystem(TerrainMeshSystem);
   world.registerSystem(WaterSystem);
+
+  // La flore partage le matériau de feuillage : une seule instance pour tout
+  // le monde, comme la bibliothèque le prévoit.
+  world.registerSystem(FloraSystem, {
+    configData: { assets: null, material: materials.get('foliage') },
+  });
+  // Les géométries arrivent du réseau. Le système reste inerte jusque-là, ce
+  // qui est correct : une tuile non plantée le sera au passage suivant.
+  void loadFloraAssets()
+    .then((assets) => {
+      const flora = world.getSystem(FloraSystem) as FloraSystem;
+      flora.config.assets.value = assets;
+    })
+    .catch((error: unknown) => {
+      // Un échec de chargement laisse le monde sans arbres : il doit se voir.
+      console.warn('[cardinal-world] flore indisponible :', error);
+    });
 
   const colorManaged = applyColorManagement((world as unknown as { renderer?: unknown }).renderer);
 
@@ -123,5 +145,6 @@ export function installCardinalWorld(
       mesh: world.getSystem(TerrainMeshSystem) as TerrainMeshSystem,
     },
     water: world.getSystem(WaterSystem) as WaterSystem,
+    flora: world.getSystem(FloraSystem) as FloraSystem,
   };
 }

@@ -80,3 +80,12 @@ export {
   gerstnerDisplacement,
   type GerstnerWave,
 } from './water/waves';
+
+export { FloraTile } from './flora/components';
+export { FloraSystem } from './flora/FloraSystem';
+export {
+  parseFloraManifest,
+  loadFloraAssets,
+  type FloraAsset,
+  type FloraLod,
+} from './flora/floraAssets';

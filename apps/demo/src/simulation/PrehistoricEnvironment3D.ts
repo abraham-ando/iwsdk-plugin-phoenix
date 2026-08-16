@@ -94,37 +94,18 @@ export class PrehistoricEnvironment3D {
     vineEntity.addComponent(PhysicsBody, { state: PhysicsState.Static });
     entities.push(vineEntity);
 
-    // 5. Procedural Forests: Cypress, Oak, Pine, Wildflowers, Boulders
-    // 5a. Slender Italian Cypress Trees along ridges & trails (Reference Image 1)
-    const cypressLocations: [number, number][] = [
-      [8.5, -3.0], [9.2, -4.5], [8.0, -6.0], [9.8, -7.5], // River ridge grove
-      [-7.5, -8.0], [-6.8, -9.5], [-8.2, -11.0],           // Vineyard edge
-      [5.5, 3.5], [6.2, 5.0],                              // South meadow
-    ];
-
-    cypressLocations.forEach(([cx, cz], idx) => {
-      const cy = terrain.getHeight(cx, cz);
-      const cypress = ProceduralVegetation.createCypressTree(0.85 + Math.random() * 0.3, materials);
-      cypress.position.set(cx, cy, cz);
-      root.add(cypress);
-
-      const treeEntity = world.createEntity();
-      treeEntity.addComponent(Transform, { position: [cx, cy, cz] });
-      treeEntity.addComponent(PhysicsShape, {
-        shape: PhysicsShapeType.Cylinder,
-        dimensions: [0.22, 4.2, 0],
-        friction: 0.8,
-        restitution: 0.1,
-      });
-      treeEntity.addComponent(PhysicsBody, { state: PhysicsState.Static });
-      entities.push(treeEntity);
-    });
+    // 5. La flore SAUVAGE est désormais semée par le moteur (scatterAt) et
+    // instanciée par @iwsdk/cardinal-world. Le bosquet de cyprès posé à la main
+    // qui vivait ici faisait double emploi.
+    //
+    // Les chênes du VILLAGE restent posés ici : ils portent des smart objects
+    // exploitables, et scatterAt observe une réserve autour du plateau — sans
+    // quoi les agents bûcheronneraient des arbres invisibles.
 
     // 5b. Volumetric Broadleaf Oak Trees (Reference Images 1 & 5)
-    const oakLocations: [number, number][] = [
-      [-6.5, 2.0], [7.0, -1.0], [-10.5, 5.0], [11.0, 3.0],
-      [-2.0, -13.0], [4.5, -14.0], [-8.0, -16.0], [10.0, -15.0],
-    ];
+    const oakLocations: [number, number][] = layout.objects
+      .filter((o) => o.type === 'oak_tree')
+      .map((o) => [o.x, o.z]);
 
     oakLocations.forEach(([ox, oz]) => {
       const oy = terrain.getHeight(ox, oz);

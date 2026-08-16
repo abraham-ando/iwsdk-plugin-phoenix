@@ -1,5 +1,6 @@
 import { createSystem, LocomotionEnvironment, type Entity } from '@iwsdk/core';
 import { TerrainTile } from './components';
+import { FloraTile } from '../flora/components';
 import { LOD_SEGMENTS, TILE_SIZE, tileOriginX, tileOriginZ } from './tiling';
 import { sampleTile } from './sampling';
 import { buildTileGeometry } from './geometry';
@@ -67,6 +68,11 @@ export class TerrainMeshSystem extends createSystem({
       // le poser plus tôt faisait échouer la fusion sur un maillage vide.
       if (lod === 0 && !entity.hasComponent(LocomotionEnvironment)) {
         entity.addComponent(LocomotionEnvironment);
+      }
+
+      // La flore suit la tuile : même grille, même cycle de vie.
+      if (!entity.hasComponent(FloraTile)) {
+        entity.addComponent(FloraTile, { tx, tz, _needsPlant: true });
       }
 
       entity.setValue(TerrainTile, '_needsBuild', false);

@@ -246,3 +246,57 @@ export class ShaderMaterial {
     this.disposed = true;
   }
 }
+
+// --- Instanciation ---------------------------------------------------------
+
+export class Matrix4 {
+  public elements = new Float32Array(16);
+  compose(): this {
+    return this;
+  }
+}
+
+class Vec3Mutable {
+  public x = 0;
+  public y = 0;
+  public z = 0;
+  set(x: number, y: number, z: number): void {
+    this.x = x;
+    this.y = y;
+    this.z = z;
+  }
+}
+
+export class Object3D {
+  public position = new Vec3Mutable();
+  public rotation = new Vec3Mutable();
+  public scale = new Vec3Mutable();
+  public matrix = new Matrix4();
+  updateMatrix(): void {
+    // Le mock ne compose rien : les tests constatent le nombre d'instances et
+    // le niveau choisi, jamais le contenu des matrices.
+  }
+}
+
+export class InstancedMesh {
+  public count = 0;
+  public instanceMatrix = { needsUpdate: false };
+  public name = '';
+  public castShadow = false;
+  public receiveShadow = false;
+  public disposed = false;
+  private readonly matrices: Matrix4[] = [];
+  constructor(
+    public geometry: unknown,
+    public material: unknown,
+    public capacity: number,
+  ) {
+    this.count = capacity;
+  }
+  setMatrixAt(index: number, matrix: Matrix4): void {
+    this.matrices[index] = matrix;
+  }
+  dispose(): void {
+    this.disposed = true;
+  }
+}

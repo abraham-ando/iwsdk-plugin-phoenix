@@ -1,13 +1,18 @@
 import { describe, it, expect } from 'vitest';
 import { World, LocomotionEnvironment } from '@iwsdk/core';
 import { TerrainTile } from '../src/terrain/components';
+import { FloraTile } from '../src/flora/components';
 import { TerrainStreamingSystem } from '../src/terrain/TerrainStreamingSystem';
 import { TerrainMeshSystem } from '../src/terrain/TerrainMeshSystem';
 import { TILE_SIZE, MAX_RING } from '../src/terrain/tiling';
 
 function makeRig() {
   const world = new World();
-  world.registerComponent(TerrainTile).registerComponent(LocomotionEnvironment);
+  world
+    .registerComponent(TerrainTile)
+    .registerComponent(LocomotionEnvironment)
+    // TerrainMeshSystem adjoint sa flore à chaque tuile construite.
+    .registerComponent(FloraTile);
 
   // Le mock d'elics ne connaît pas createTransformEntity : on l'ajoute ici
   // plutôt que dans le mock, pour que le mock reste une image honnête de
