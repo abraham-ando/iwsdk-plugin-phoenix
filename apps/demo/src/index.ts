@@ -19,6 +19,7 @@ import { PrehistoricEnvironment3D } from './simulation/PrehistoricEnvironment3D.
 import { VILLAGE_LAYOUT } from './simulation/layout.js';
 import { SimulationHud } from './simulation/simulation-hud.js';
 import { Mode2Client } from './simulation/Mode2Client.js';
+import { PlayerMicrophone } from './simulation/PlayerMicrophone.js';
 import { TrajectoryUploader } from './simulation/TrajectoryUploader.js';
 import { PhysicsSimulationSystem } from './simulation/PhysicsSimulationSystem.js';
 
@@ -46,7 +47,8 @@ World.create(container, projectOptions)
       const sceneData = PrehistoricEnvironment3D.createWorldScene(world, VILLAGE_LAYOUT);
       (world as any).scene?.add?.(sceneData.root);
       simSystem.attachScene(sceneData);
-      new SimulationHud(document.body, simSystem);
+      const microphone = new PlayerMicrophone(world, (text) => simSystem.playerSpeak(text));
+      new SimulationHud(document.body, simSystem, microphone);
       // Mode-2 deliberation: pump plan requests to the BFF (LLM or mock).
       new Mode2Client(simSystem);
       // Dataset capture: ship recorded trajectories to the BFF periodically.

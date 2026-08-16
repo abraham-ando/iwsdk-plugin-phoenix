@@ -6,6 +6,7 @@
  */
 
 import type { CardinalSimulationSystem, SimEvent } from './CardinalSimulationSystem';
+import type { PlayerMicrophone } from './PlayerMicrophone';
 
 const WEATHER_ICONS: Record<string, string> = {
   clear: '☀️',
@@ -21,7 +22,11 @@ export class SimulationHud {
   private system: CardinalSimulationSystem;
   private statsTimer: number;
 
-  constructor(container: HTMLElement, system: CardinalSimulationSystem) {
+  constructor(
+    container: HTMLElement,
+    system: CardinalSimulationSystem,
+    private readonly microphone?: PlayerMicrophone
+  ) {
     this.system = system;
 
     this.root = document.createElement('div');
@@ -124,6 +129,29 @@ export class SimulationHud {
     });
     chatRow.appendChild(chatInput);
     chatRow.appendChild(this.createButton('🗣️ Parler', '#2563eb', sendSpeech));
+
+    // Push-to-talk microphone (étape 7) — toggles Cardinal STT listening.
+    const micButton = this.createButton('🎤', '#475569', () => void toggleMicrophone());
+    const toggleMicrophone = async () => {
+      const mic = this.microphone;
+      if (mic === undefined || !mic.available) return;
+      if (mic.active) {
+        mic.stop();
+        micButton.textContent = '🎤';
+        micButton.style.background = '#475569';
+      } else if (await mic.start()) {
+        micButton.textContent = '🎤 REC';
+        micButton.style.background = '#dc2626';
+      } else {
+        micButton.disabled = true;
+        micButton.title = 'Micro indisponible — utilisez le champ texte.';
+      }
+    };
+    if (this.microphone === undefined || !this.microphone.available) {
+      micButton.disabled = true;
+      micButton.title = 'STT non initialisé — utilisez le champ texte.';
+    }
+    chatRow.appendChild(micButton);
     this.root.appendChild(chatRow);
 
     // Live Emergent Story Feed
