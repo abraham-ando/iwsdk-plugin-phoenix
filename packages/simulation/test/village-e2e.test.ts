@@ -91,6 +91,16 @@ describe('village end-to-end (spec §13.2: autonomous civilization without LLM)'
     expect(mira.needs.hunger).not.toBe(hungerBefore);
   });
 
+  it('memories survive the snapshot round-trip', () => {
+    const run = buildVillage(7);
+    for (let t = 0; t < 400; t++) run.kernel.step();
+    const snap = JSON.parse(JSON.stringify(snapshotSim(run.kernel, run.world, run.runtime)));
+    const { runtime } = restoreSim(snap, makeRegistry());
+    expect(runtime.agents.get('mira')!.memories.all()).toEqual(
+      run.runtime.agents.get('mira')!.memories.all()
+    );
+  });
+
   it('restoreSim still accepts version 1 snapshots (no agents)', () => {
     const reg = makeRegistry();
     const kernel = new SimKernel({ seed: 1 });

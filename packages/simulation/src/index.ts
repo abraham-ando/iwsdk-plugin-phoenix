@@ -68,6 +68,8 @@ export {
   type AgentProfile,
   type AgentState,
   type CurrentAction,
+  type PlannedStep,
+  type Mode2State,
 } from './agents/AgentState';
 export { executeActionTick, type ActionEvent } from './agents/actions';
 export { selectAction } from './agents/Mode1';

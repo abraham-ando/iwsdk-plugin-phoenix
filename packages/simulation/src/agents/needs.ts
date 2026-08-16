@@ -54,3 +54,8 @@ const ALL_NEEDS: NeedId[] = ['hunger', 'warmth', 'energy', 'affection', 'stress'
 export function wellbeingCost(needs: AgentNeeds): number {
   return ALL_NEEDS.reduce((sum, id) => sum + urgency(needs, id), 0);
 }
+
+/** The single most pressing drive — Mode-1/Mode-2 arbitration reads this. */
+export function maxUrgency(needs: AgentNeeds): number {
+  return ALL_NEEDS.reduce((max, id) => Math.max(max, urgency(needs, id)), 0);
+}

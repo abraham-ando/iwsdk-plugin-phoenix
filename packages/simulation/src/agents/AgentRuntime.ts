@@ -18,6 +18,7 @@ export interface AgentView {
   heading: number;
   animation: 'idle' | 'walk' | 'gather' | 'craft' | 'rest' | 'sleep';
   verb: string | null;
+  dialogue: string | null;
 }
 
 const PERCEPTION_PERIOD = 10; // ticks (1 s simulated, spec §6.1)
@@ -124,6 +125,7 @@ export class AgentRuntime {
       heading: agent.heading,
       animation: animationOf(agent),
       verb: agent.currentAction === null ? null : verbOf(agent),
+      dialogue: agent.speech !== null ? agent.speech.text : null,
     };
   }
 

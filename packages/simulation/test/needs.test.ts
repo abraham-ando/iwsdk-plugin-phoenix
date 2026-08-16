@@ -3,6 +3,7 @@ import {
   createDefaultNeeds,
   decayNeeds,
   urgency,
+  maxUrgency,
   wellbeingCost,
   isNightHour,
   clampNeed,
@@ -63,6 +64,12 @@ describe('needs', () => {
     // Stress is inverted: high stress = high urgency.
     needs.stress = 90;
     expect(urgency(needs, 'stress')).toBeGreaterThan(0.5);
+  });
+
+  it('maxUrgency returns the dominant drive', () => {
+    const needs = createDefaultNeeds();
+    needs.warmth = 10;
+    expect(maxUrgency(needs)).toBeCloseTo(urgency(needs, 'warmth'));
   });
 
   it('wellbeingCost sums urgencies and clampNeed bounds values', () => {

@@ -5,7 +5,8 @@ import { GroundTruthWorld, type WorldSnapshot } from '../world/GroundTruthWorld'
 import type { SmartObjectRegistry } from '../world/SmartObject';
 import { AgentRuntime } from '../agents/AgentRuntime';
 import { BeliefState, type Belief } from '../agents/BeliefState';
-import type { AgentProfile, CurrentAction } from '../agents/AgentState';
+import { MemoryStream, type MemoryEntry } from '../agents/MemoryStream';
+import type { AgentProfile, CurrentAction, Mode2State, PlannedStep } from '../agents/AgentState';
 import type { AgentNeeds } from '../agents/needs';
 import { WeatherMachine, type WeatherState } from '../world/WeatherMachine';
 
@@ -23,6 +24,9 @@ export interface SerializedAgent {
   beliefs: Belief[];
   currentAction: CurrentAction | null;
   sleeping: boolean;
+  memories?: MemoryEntry[];
+  plan?: PlannedStep[];
+  mode2?: Mode2State;
 }
 
 export interface SimSnapshot {
@@ -54,6 +58,9 @@ export function snapshotSim(
           beliefs: a.beliefs.toJSON(),
           currentAction: a.currentAction === null ? null : { ...a.currentAction },
           sleeping: a.sleeping,
+          memories: a.memories.toJSON(),
+          plan: a.plan.map((s) => ({ ...s })),
+          mode2: { ...a.mode2 },
         }))
     : [];
   return {
@@ -96,6 +103,9 @@ export function restoreSim(
     agent.beliefs = BeliefState.fromJSON(s.beliefs);
     agent.currentAction = s.currentAction === null ? null : { ...s.currentAction };
     agent.sleeping = s.sleeping;
+    if (s.memories !== undefined) agent.memories = MemoryStream.fromJSON(s.memories);
+    if (s.plan !== undefined) agent.plan = s.plan.map((step) => ({ ...step }));
+    if (s.mode2 !== undefined) agent.mode2 = { ...s.mode2 };
   }
   runtime.attachTo(kernel);
   const weather =
