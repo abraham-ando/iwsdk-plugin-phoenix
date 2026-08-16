@@ -120,6 +120,19 @@ export function registerDefaultContent(registry: SmartObjectRegistry): void {
     state: { progress: 0 },
   });
 
+  registry.define('hunting_ground', {
+    affordances: [
+      {
+        verb: 'hunt',
+        durationTicks: 80,
+        preconditions: { objectState: { gameLeft: '>0' }, actorDistance: '<3' },
+        effects: { object: { gameLeft: -1 }, actorInventory: { meat: 1 } },
+      },
+    ],
+    state: { gameLeft: 5 },
+    regrowth: [{ field: 'gameLeft', perDay: 1, max: 5 }],
+  });
+
   registry.define('camp_storage', {
     affordances: [
       {

@@ -8,8 +8,13 @@ import {
 } from '../src/agents/intrinsics';
 
 describe('intrinsic actions', () => {
-  it('declares eat_berries, eat_fish and nap', () => {
-    expect(defaultIntrinsics().map((i) => i.verb).sort()).toEqual(['eat_berries', 'eat_fish', 'nap']);
+  it('declares eat_berries, eat_fish, eat_meat and nap', () => {
+    expect(defaultIntrinsics().map((i) => i.verb).sort()).toEqual([
+      'eat_berries',
+      'eat_fish',
+      'eat_meat',
+      'nap',
+    ]);
   });
 
   it('eat_berries requires berries and restores hunger', () => {

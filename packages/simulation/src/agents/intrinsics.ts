@@ -38,6 +38,12 @@ export function defaultIntrinsics(): IntrinsicActionDef[] {
       effects: { actorInventory: { fish: -1 }, actorNeeds: { hunger: 40 } },
     },
     {
+      verb: 'eat_meat',
+      durationTicks: 30,
+      preconditions: { actorInventory: { meat: '>=1' } },
+      effects: { actorInventory: { meat: -1 }, actorNeeds: { hunger: 50 } },
+    },
+    {
       verb: 'nap',
       durationTicks: 200,
       effects: { actorNeeds: { energy: 15 } },

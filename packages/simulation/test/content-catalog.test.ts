@@ -10,12 +10,13 @@ function freshRegistry(): SmartObjectRegistry {
 }
 
 describe('default content catalog', () => {
-  it('registers the seven v1 smart object types', () => {
+  it('registers the eight smart object types', () => {
     expect(freshRegistry().types()).toEqual([
       'berry_bush',
       'camp_storage',
       'campfire',
       'flint_deposit',
+      'hunting_ground',
       'oak_tree',
       'river_bank',
       'shelter',

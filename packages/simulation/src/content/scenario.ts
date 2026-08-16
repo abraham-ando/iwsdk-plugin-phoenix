@@ -65,6 +65,9 @@ const SHARED_OBJECTS: ScenarioObject[] = [
   // River access points (river center x = 4 + sin(z*0.12)*3.5).
   { type: 'river_bank', x: 4.0, z: 0.0 },
   { type: 'river_bank', x: 2.9, z: -8.0 },
+  // Hunting grounds — abstract game populations, shared with the wolf.
+  { type: 'hunting_ground', x: 10, z: -12 },
+  { type: 'hunting_ground', x: -11, z: -9 },
 ];
 
 const AGENTS: ScenarioAgent[] = [
