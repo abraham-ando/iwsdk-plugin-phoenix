@@ -73,6 +73,13 @@ export {
 } from './agents/AgentState';
 export { executeActionTick, type ActionEvent } from './agents/actions';
 export { selectAction } from './agents/Mode1';
+export {
+  buildPlanRequest,
+  parsePlanSteps,
+  type PlanRequest,
+  type PlanRequestReason,
+  type PlanToolCandidate,
+} from './agents/Mode2';
 export { AgentRuntime, type AgentView } from './agents/AgentRuntime';
 export { WeatherMachine, WEATHER_CHECK_PERIOD, type WeatherState } from './world/WeatherMachine';
 export {
