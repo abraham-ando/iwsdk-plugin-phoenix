@@ -7,6 +7,7 @@ import { AgentRuntime } from '../agents/AgentRuntime';
 import { BeliefState, type Belief } from '../agents/BeliefState';
 import type { AgentProfile, CurrentAction } from '../agents/AgentState';
 import type { AgentNeeds } from '../agents/needs';
+import { WeatherMachine, type WeatherState } from '../world/WeatherMachine';
 
 /**
  * Full serializable simulation state (spec §8.4). v1 = kernel + world
@@ -31,12 +32,14 @@ export interface SimSnapshot {
   events: ExternalEvent[];
   world: WorldSnapshot;
   agents: SerializedAgent[];
+  weather?: { current: WeatherState; sinceTick: number };
 }
 
 export function snapshotSim(
   kernel: SimKernel,
   world: GroundTruthWorld,
-  runtime?: AgentRuntime
+  runtime?: AgentRuntime,
+  weather?: WeatherMachine
 ): SimSnapshot {
   const agents: SerializedAgent[] = runtime
     ? [...runtime.agents.values()]
@@ -60,13 +63,19 @@ export function snapshotSim(
     events: kernel.log.toJSON(),
     world: world.toJSON(),
     agents,
+    ...(weather ? { weather: weather.toJSON() } : {}),
   };
 }
 
 export function restoreSim(
   snapshot: SimSnapshot | (Omit<SimSnapshot, 'version' | 'agents'> & { version: 1 }),
   registry: SmartObjectRegistry
-): { kernel: SimKernel; world: GroundTruthWorld; runtime: AgentRuntime } {
+): {
+  kernel: SimKernel;
+  world: GroundTruthWorld;
+  runtime: AgentRuntime;
+  weather: WeatherMachine | null;
+} {
   const version: number = snapshot.version;
   if (version !== 1 && version !== 2) {
     throw new Error(`restoreSim: unsupported snapshot version ${String(version)}`);
@@ -89,5 +98,9 @@ export function restoreSim(
     agent.sleeping = s.sleeping;
   }
   runtime.attachTo(kernel);
-  return { kernel, world, runtime };
+  const weather =
+    version === 2 && snapshot.weather !== undefined
+      ? WeatherMachine.fromJSON(snapshot.weather)
+      : null;
+  return { kernel, world, runtime, weather };
 }
