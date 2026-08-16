@@ -42,14 +42,14 @@ World.create(container, projectOptions)
     setupCardinalVillage(world);
 
     // 2a. Mount the procedural environment package (sky rig, quality tiers)
-    const { quality } = installCardinalWorld(world, { latitudeDeg: 45 });
+    const { quality, materials } = installCardinalWorld(world, { latitudeDeg: 45 });
     console.log(`[demo] environment quality tier: ${quality}`);
 
     // 2. Mount the Cardinal simulation engine + its VR projection & HUD
     world.registerSystem(CardinalSimulationSystem);
     const simSystem = world.getSystem(CardinalSimulationSystem);
     if (simSystem) {
-      const sceneData = PrehistoricEnvironment3D.createWorldScene(world, VILLAGE_LAYOUT);
+      const sceneData = PrehistoricEnvironment3D.createWorldScene(world, VILLAGE_LAYOUT, materials);
       (world as any).scene?.add?.(sceneData.root);
       simSystem.attachScene(sceneData);
       const microphone = new PlayerMicrophone(world, (text) => simSystem.playerSpeak(text));

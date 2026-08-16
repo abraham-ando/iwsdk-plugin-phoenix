@@ -14,20 +14,25 @@ import {
   MeshStandardMaterial,
   Color,
 } from '@iwsdk/core';
+import type { MaterialLibrary } from '@iwsdk/cardinal-world';
 
 export class ProceduralVegetation {
   /**
    * Slender Italian Cypress Tree (as seen in Image 1).
    */
-  public static createCypressTree(scale: number = 1.0): Group {
+  public static createCypressTree(scale: number = 1.0, materials?: MaterialLibrary): Group {
     const tree = new Group();
     tree.name = 'Cypress_Tree';
 
-    const trunkMat = new MeshStandardMaterial({ color: 0x3f2e21, roughness: 0.9 });
-    const foliageMat = new MeshStandardMaterial({
-      color: 0x14532d, // Dark emerald green
-      roughness: 0.8,
-    });
+    const trunkMat = materials
+      ? materials.get('bark')
+      : new MeshStandardMaterial({ color: 0x3f2e21, roughness: 0.9 });
+    const foliageMat = materials
+      ? materials.get('foliage')
+      : new MeshStandardMaterial({
+          color: 0x14532d, // Dark emerald green
+          roughness: 0.8,
+        });
 
     // Slender lower trunk
     const trunk = new Mesh(new CylinderGeometry(0.1 * scale, 0.14 * scale, 1.2 * scale, 8), trunkMat);
@@ -53,15 +58,19 @@ export class ProceduralVegetation {
   /**
    * Volumetric Broadleaf Oak Tree (as seen in Images 1 & 5).
    */
-  public static createOakTree(scale: number = 1.0): Group {
+  public static createOakTree(scale: number = 1.0, materials?: MaterialLibrary): Group {
     const tree = new Group();
     tree.name = 'Oak_Tree';
 
-    const trunkMat = new MeshStandardMaterial({ color: 0x451a03, roughness: 0.85 });
-    const foliageMat = new MeshStandardMaterial({
-      color: 0x22c55e, // Vibrant leafy green
-      roughness: 0.75,
-    });
+    const trunkMat = materials
+      ? materials.get('bark')
+      : new MeshStandardMaterial({ color: 0x451a03, roughness: 0.85 });
+    const foliageMat = materials
+      ? materials.get('foliage')
+      : new MeshStandardMaterial({
+          color: 0x22c55e, // Vibrant leafy green
+          roughness: 0.75,
+        });
 
     // Sturdy rugged trunk
     const trunk = new Mesh(new CylinderGeometry(0.22 * scale, 0.35 * scale, 2.0 * scale, 8), trunkMat);
@@ -161,15 +170,19 @@ export class ProceduralVegetation {
   /**
    * Mossy Field Boulder / River Rock (as seen in Images 1, 3, 5).
    */
-  public static createMossyBoulder(scale: number = 1.0): Group {
+  public static createMossyBoulder(scale: number = 1.0, materials?: MaterialLibrary): Group {
     const rockGroup = new Group();
     rockGroup.name = 'Mossy_Boulder';
 
-    const rockMat = new MeshStandardMaterial({
-      color: 0x4b5563,
-      roughness: 0.8,
-      metalness: 0.15,
-    });
+    // The moss below stays a flat colour accent — no catalogue material
+    // renders that vivid velvet green.
+    const rockMat = materials
+      ? materials.get('rock')
+      : new MeshStandardMaterial({
+          color: 0x4b5563,
+          roughness: 0.8,
+          metalness: 0.15,
+        });
     const mossMat = new MeshStandardMaterial({
       color: 0x365314, // Velvet dark moss
       roughness: 0.9,

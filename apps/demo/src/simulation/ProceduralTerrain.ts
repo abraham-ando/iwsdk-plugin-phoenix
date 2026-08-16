@@ -14,6 +14,7 @@ import {
   Float32BufferAttribute,
 } from '@iwsdk/core';
 import { getTerrainHeight, isRiverAt, isShoreAt } from '@iwsdk/cardinal-simulation';
+import type { MaterialLibrary } from '@iwsdk/cardinal-world';
 
 export interface TerrainData {
   mesh: Mesh;
@@ -50,7 +51,7 @@ export class ProceduralTerrain {
   /**
    * Builds the procedural vertex-colored terrain mesh.
    */
-  public static createTerrain(): TerrainData {
+  public static createTerrain(materials?: MaterialLibrary): TerrainData {
     const size = this.SIZE;
     const segments = this.SEGMENTS;
     const geom = new PlaneGeometry(size, size, segments, segments);
@@ -112,12 +113,22 @@ export class ProceduralTerrain {
     geom.setAttribute('color', new Float32BufferAttribute(colors, 3));
     geom.computeVertexNormals();
 
-    const mat = new MeshStandardMaterial({
-      vertexColors: true,
-      roughness: 0.85,
-      metalness: 0.05,
-      flatShading: false,
-    });
+    // The library material carries grain and relief; vertex colours keep
+    // carrying the biome hues on top of it. clone() is deliberate: the
+    // terrain needs vertexColors, which other users of 'grass' do not want.
+    // The clone shares the same textures — only the material object is new.
+    let mat: MeshStandardMaterial;
+    if (materials) {
+      mat = materials.get('grass').clone();
+      mat.vertexColors = true;
+    } else {
+      mat = new MeshStandardMaterial({
+        vertexColors: true,
+        roughness: 0.85,
+        metalness: 0.05,
+        flatShading: false,
+      });
+    }
 
     const mesh = new Mesh(geom, mat);
     mesh.name = 'Procedural_Terrain_Mesh';

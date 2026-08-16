@@ -27,6 +27,7 @@ import { ProceduralGrassField } from './ProceduralGrassField';
 import { ProceduralVegetation } from './ProceduralVegetation';
 import { ProceduralRiver } from './ProceduralRiver';
 import { createAgentAvatar } from './AgentAvatarFactory';
+import type { MaterialLibrary } from '@iwsdk/cardinal-world';
 import type { VILLAGE_LAYOUT } from './layout';
 
 export interface PrehistoricSceneResult {
@@ -42,7 +43,8 @@ export interface PrehistoricSceneResult {
 export class PrehistoricEnvironment3D {
   public static createWorldScene(
     world: World,
-    layout: typeof VILLAGE_LAYOUT
+    layout: typeof VILLAGE_LAYOUT,
+    materials?: MaterialLibrary
   ): PrehistoricSceneResult {
     const root = new Group();
     root.name = 'Procedural_Nature_World_3D';
@@ -51,7 +53,7 @@ export class PrehistoricEnvironment3D {
     const entities: Entity[] = [];
 
     // 1. Procedural Terrain Height & River Reference
-    const terrain = ProceduralTerrain.createTerrain();
+    const terrain = ProceduralTerrain.createTerrain(materials);
     const river = new ProceduralRiver();
     const riverMesh = river.createRiver();
     root.add(riverMesh);
@@ -89,7 +91,7 @@ export class PrehistoricEnvironment3D {
 
     cypressLocations.forEach(([cx, cz], idx) => {
       const cy = terrain.getHeight(cx, cz);
-      const cypress = ProceduralVegetation.createCypressTree(0.85 + Math.random() * 0.3);
+      const cypress = ProceduralVegetation.createCypressTree(0.85 + Math.random() * 0.3, materials);
       cypress.position.set(cx, cy, cz);
       root.add(cypress);
 
@@ -113,7 +115,7 @@ export class PrehistoricEnvironment3D {
 
     oakLocations.forEach(([ox, oz]) => {
       const oy = terrain.getHeight(ox, oz);
-      const oak = ProceduralVegetation.createOakTree(0.9 + Math.random() * 0.25);
+      const oak = ProceduralVegetation.createOakTree(0.9 + Math.random() * 0.25, materials);
       oak.position.set(ox, oy, oz);
       root.add(oak);
 
@@ -150,7 +152,7 @@ export class PrehistoricEnvironment3D {
 
     boulderLocations.forEach(([bx, bz]) => {
       const by = terrain.getHeight(bx, bz);
-      const boulder = ProceduralVegetation.createMossyBoulder(0.8 + Math.random() * 0.4);
+      const boulder = ProceduralVegetation.createMossyBoulder(0.8 + Math.random() * 0.4, materials);
       boulder.position.set(bx, by, bz);
       root.add(boulder);
 
@@ -192,7 +194,7 @@ export class PrehistoricEnvironment3D {
       entities.push(fireEntity);
 
       // Tribal Shelter with static collider
-      const shelter = this.createShelter(settlement.color);
+      const shelter = this.createShelter(settlement.color, materials);
       shelter.position.set(0, 0, -1.3);
       tribeGroup.add(shelter);
 
@@ -240,7 +242,7 @@ export class PrehistoricEnvironment3D {
       entities.push(bushEntity);
 
       // Flint Rock formation with static collider
-      const rock = this.createFlintRock();
+      const rock = this.createFlintRock(materials);
       rock.position.set(-1.4, 0, 0.8);
       tribeGroup.add(rock);
 
@@ -366,9 +368,11 @@ export class PrehistoricEnvironment3D {
     return bush;
   }
 
-  public static createFlintRock(): Group {
+  public static createFlintRock(materials?: MaterialLibrary): Group {
     const rockGroup = new Group();
-    const rockMat = new MeshStandardMaterial({ color: 0x475569, roughness: 0.65, metalness: 0.25 });
+    const rockMat = materials
+      ? materials.get('flint')
+      : new MeshStandardMaterial({ color: 0x475569, roughness: 0.65, metalness: 0.25 });
 
     const mainRock = new Mesh(new BoxGeometry(0.6, 0.35, 0.45), rockMat);
     mainRock.rotation.y = 0.4;
@@ -382,10 +386,21 @@ export class PrehistoricEnvironment3D {
     return rockGroup;
   }
 
-  public static createShelter(bannerColor: number): Group {
+  public static createShelter(bannerColor: number, materials?: MaterialLibrary): Group {
     const shelter = new Group();
-    const woodMat = new MeshStandardMaterial({ color: 0x3e2723, roughness: 0.9 });
-    const hideMat = new MeshStandardMaterial({ color: bannerColor, roughness: 0.7 });
+    const woodMat = materials
+      ? materials.get('bark')
+      : new MeshStandardMaterial({ color: 0x3e2723, roughness: 0.9 });
+    // The hide keeps its tribal banner colour: it is how you tell the three
+    // settlements apart at a glance. Texture comes from the library, tint
+    // from the tribe.
+    const hideMat = materials
+      ? (() => {
+          const tinted = materials.get('hide').clone();
+          tinted.color = new Color(bannerColor);
+          return tinted;
+        })()
+      : new MeshStandardMaterial({ color: bannerColor, roughness: 0.7 });
 
     const pole1 = new Mesh(new CylinderGeometry(0.055, 0.055, 1.8, 6), woodMat);
     pole1.position.set(-0.65, 0.85, 0);
