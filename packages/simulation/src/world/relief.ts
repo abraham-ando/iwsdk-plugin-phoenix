@@ -121,5 +121,12 @@ function reliefFromLand(x: number, z: number, land: number): number {
  * le tracé du cours de l'entaille que ce tracé produit.
  */
 export function dryReliefAt(x: number, z: number): number {
-  return reliefFromLand(x, z, landMaskAt(x, z));
+  const raw = reliefFromLand(x, z, landMaskAt(x, z));
+  // Le plateau du village fait partie du TERRAIN, pas de la rivière : il doit
+  // donc être visible d'ici. Le laisser dans `heightAt` faisait voir au cours
+  // d'eau un village à 1 m pendant que le sol l'élevait à 6 — les deux ne
+  // parlaient pas du même terrain, et la vallée creusait le village.
+  const d = distanceToVillage(x, z);
+  const plateau = 1 - smoothstep(PLATEAU_RADIUS, PLATEAU_RADIUS + PLATEAU_FALLOFF, d);
+  return lerp(raw, VILLAGE_ELEVATION, plateau);
 }

@@ -16,7 +16,6 @@ export {
   SEA_LEVEL,
   PLATEAU_RADIUS,
   BASIN_RADIUS,
-  RIVER_CARVE_RADIUS,
   heightAt,
   getTerrainHeight,
   slopeAt,
@@ -24,9 +23,21 @@ export {
   depthAt,
   isRiverAt,
   isShoreAt,
-  riverCenterX,
+  riverSurfaceAt,
   landMaskAt,
+  dryReliefAt,
+  VILLAGE_ELEVATION,
+  VALLEY_RATIO,
 } from './world/terrain';
+export {
+  getRiverCourse,
+  riverProximityAt,
+  historicalRiverX,
+  PINNED_HALF_LENGTH,
+  type CoursePoint,
+  type RiverCourse,
+  type RiverProximity,
+} from './world/flow';
 export { BIOME_IDS, biomeAt, classifyBiome, humidityAt, type BiomeId, type BiomeSample } from './world/biomes';
 export {
   SmartObjectRegistry,

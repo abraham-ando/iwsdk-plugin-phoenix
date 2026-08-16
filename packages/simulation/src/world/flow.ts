@@ -33,7 +33,6 @@ export const PINNED_HALF_LENGTH = 60;
 
 const STEP = 6;
 const MAX_POINTS = 400;
-const SOURCE_Z = 260;
 const WIDTH_SOURCE = 2.6;
 const WIDTH_MOUTH = 8;
 
@@ -125,27 +124,13 @@ function bestDirection(
 function buildCourse(): RiverCourse {
   // 1. Tronçon épinglé : le cours suit EXACTEMENT la formule historique dans
   //    la zone simulée, pour ne pas déplacer les points d'eau du village.
+  // La SOURCE est au village. Le terrain en amont lui est plus bas : une
+  // rivière qui viendrait de là devrait grimper. Un village fondé sur sa
+  // source est d'ailleurs le cas le plus courant qui soit.
   const pinned: { x: number; z: number }[] = [];
-  for (let z = PINNED_HALF_LENGTH; z >= -PINNED_HALF_LENGTH; z -= STEP) {
+  for (let z = 0; z >= -PINNED_HALF_LENGTH; z -= STEP) {
     pinned.push({ x: historicalRiverX(z), z });
   }
-
-  // 2. Amont : on remonte vers la crête depuis le début de l'épinglage, puis
-  //    on retourne la séquence pour que le cours parte bien de la source.
-  const upstream: { x: number; z: number }[] = [];
-  let ux = historicalRiverX(PINNED_HALF_LENGTH);
-  let uz = PINNED_HALF_LENGTH;
-  let udx = 0;
-  let udz = 1;
-  while (uz < SOURCE_Z && upstream.length < 140) {
-    const [nx, nz] = bestDirection(ux, uz, udx, udz, -1, null);
-    ux += nx * STEP;
-    uz += nz * STEP;
-    udx = nx;
-    udz = nz;
-    upstream.push({ x: ux, z: uz });
-  }
-  upstream.reverse();
 
   // 3. Aval : descente libre jusqu'à la mer.
   const downstream: { x: number; z: number }[] = [];
@@ -164,7 +149,7 @@ function buildCourse(): RiverCourse {
     if (landMaskAt(dx, dz) < 0.35) break; // la mer est atteinte
   }
 
-  const all = [...upstream, ...pinned, ...downstream];
+  const all = [...pinned, ...downstream];
 
   // 4. Altitude forcée décroissante, et largeur croissante vers l'aval.
   const points: CoursePoint[] = [];
@@ -234,18 +219,26 @@ function getIndex(): Map<string, number[]> {
 
 const FAR: RiverProximity = { distance: Infinity, elevation: SEA_LEVEL, width: 0 };
 
+/**
+ * Proximité au cours. EXACTE à moins d'une cellule ({@link CELL} mètres) du
+ * cours, et `Infinity` au-delà.
+ *
+ * Ce contrat n'est pas un raccourci : c'est ce qui rend la fonction utilisable.
+ * Replier sur un parcours de la polyligne hors index coûtait 306 comparaisons
+ * — pour la grande majorité des points du terrain, qui sont loin de l'eau. Le
+ * chemin réputé rare était le plus fréquent, et `heightAt` passait de 0,60 à
+ * 2,51 µs. L'entaille ne porte qu'à 17,6 m au plus : au-delà d'une cellule,
+ * la distance exacte n'intéresse personne.
+ */
 export function riverProximityAt(x: number, z: number): RiverProximity {
-  const course = getRiverCourse();
   const candidates = getIndex().get(cellKey(Math.floor(x / CELL), Math.floor(z / CELL)));
+  if (candidates === undefined) return FAR;
 
-  // Hors de toute cellule indexée, il n'y a aucun point de cours à moins d'une
-  // cellule : on parcourt alors la polyligne, ce qui n'arrive que loin de l'eau
-  // et jamais dans le chemin chaud.
+  const course = getRiverCourse();
   let best = FAR;
   let bestDistance = Infinity;
-  const count = candidates === undefined ? course.points.length : candidates.length;
-  for (let k = 0; k < count; k++) {
-    const i = candidates === undefined ? k : candidates[k]!;
+  for (let k = 0; k < candidates.length; k++) {
+    const i = candidates[k]!;
     const p = course.points[i]!;
     const d = Math.hypot(p.x - x, p.z - z);
     if (d >= bestDistance) continue;

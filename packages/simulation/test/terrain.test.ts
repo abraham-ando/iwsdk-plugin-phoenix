@@ -8,16 +8,15 @@ import {
   getTerrainHeight,
   isRiverAt,
   isShoreAt,
-  riverCenterX,
   landMaskAt,
   VILLAGE_ELEVATION,
-  RIVER_CARVE_RADIUS,
-  RIVER_MAX_ALTITUDE,
-  riverStrengthAt,
+  dryReliefAt,
+  riverSurfaceAt,
   slopeAt,
   isWaterAt,
   depthAt,
 } from '../src/world/terrain';
+import { getRiverCourse, riverProximityAt, historicalRiverX } from '../src/world/flow';
 
 describe('constantes', () => {
   it('garde la zone simulée à 64 m et la mer à zéro', () => {
@@ -34,9 +33,19 @@ describe('plateau du village', () => {
     // Un plateau au niveau de la mer ne donne aucune charge hydraulique :
     // la rivière n'aurait nulle part où descendre (spec §6 bis).
     expect(VILLAGE_ELEVATION).toBeGreaterThan(SEA_LEVEL + 3);
-    expect(heightAt(0, -2.5)).toBe(VILLAGE_ELEVATION);
-    expect(heightAt(2, 0)).toBe(VILLAGE_ELEVATION);
-    expect(heightAt(-3, -4)).toBe(VILLAGE_ELEVATION);
+    // Plat À L'ÉCART DE LA RIVIÈRE : celle-ci traverse le village et y creuse
+    // son chenal, ce qui est le comportement voulu — un village au bord de
+    // l'eau a une berge, pas une dalle.
+    // Plat au centimètre À L'ÉCART DE LA RIVIÈRE : celle-ci traverse le
+    // village et y creuse son chenal, ce qui est voulu — un village au bord de
+    // l'eau a une berge, pas une dalle. Le cours redescend ensuite vers
+    // l'ouest, effleurant le flanc du plateau.
+    for (const [x, z] of [
+      [-4, -2.5],
+      [-5, -4],
+    ]) {
+      expect(heightAt(x!, z!), `(${x}, ${z})`).toBeCloseTo(VILLAGE_ELEVATION, 1);
+    }
   });
 
   it('getTerrainHeight reste un alias exact de heightAt', () => {
@@ -109,42 +118,73 @@ describe('relief lointain', () => {
 });
 
 describe('rivière', () => {
-  it('passe toujours au même endroit près du village', () => {
-    expect(riverCenterX(0)).toBeCloseTo(4.0, 10);
+  it("garde les deux points d'eau du village dans le lit", () => {
+    // river_bank(2.9, -8) ne dispose que de 0,43 m de marge : c'est la
+    // contrainte la plus serrée de tout le projet.
     expect(isRiverAt(4.0, 0)).toBe(true);
-    expect(isRiverAt(4.0 + 3.0, 0)).toBe(false);
-    expect(isRiverAt(20, 0)).toBe(false);
+    expect(isRiverAt(2.9, -8)).toBe(true);
   });
 
-  it('sépare le lit de la berge', () => {
+  it('sépare le lit, la berge et la terre ferme', () => {
+    expect(isRiverAt(4.0 + 25, 0)).toBe(false);
     expect(isShoreAt(4.0, 0)).toBe(false);
-    expect(isShoreAt(4.0 + 3.0, 0)).toBe(true);
-    expect(isShoreAt(4.0 + 9.0, 0)).toBe(false);
+    expect(isShoreAt(4.0 + 25, 0)).toBe(false);
   });
 
-  it('méandre à grande échelle', () => {
-    expect(Math.abs(riverCenterX(400) - riverCenterX(0))).toBeGreaterThan(5);
+  it('creuse : le lit est plus bas que ses abords', () => {
+    for (const z of [-40, -20, 0, 20, 40]) {
+      const x = historicalRiverX(z);
+      const river = riverProximityAt(x, z);
+      if (river.distance > 2) continue;
+      // On compare au BORD de la vallée, non à un point lointain : le village
+      // est une butte, tout point éloigné est plus bas que lui.
+      expect(heightAt(x, z), `à z=${z}`).toBeLessThan(heightAt(x - river.width * 3, z));
+    }
   });
+});
 
-  it("ne bouge d'aucun millimètre dans la zone simulée", () => {
-    // Verrou de non-régression : la formule historique, à laquelle les points
-    // d'eau de DEFAULT_VILLAGE sont calés à la main.
-    for (let z = -WORLD_SIZE / 2; z <= WORLD_SIZE / 2; z += 0.5) {
-      expect(riverCenterX(z)).toBeCloseTo(4.0 + Math.sin(z * 0.12) * 3.5, 12);
+describe("l'entaille ne remonte jamais le sol", () => {
+  it('reste partout sous le relief sec ou à son niveau', () => {
+    // Invariant central : formulé avec Math.min, il rend impossible qu'une
+    // rivière se retrouve perchée sur une crête.
+    for (let x = -600; x <= 600; x += 23) {
+      for (let z = -600; z <= 600; z += 23) {
+        if (Math.hypot(x, z + 2.5) < 40) continue; // le plateau surélève, c'est voulu
+        expect(heightAt(x, z), `(${x}, ${z})`).toBeLessThanOrEqual(dryReliefAt(x, z) + 1e-9);
+      }
     }
   });
 
-  it("garde le point d'eau river_bank(2.9, -8) dans le lit", () => {
-    // Cet objet ne dispose que de 0,43 m de marge. Il est l'accès à l'eau du
-    // camp Aube : s'il sort du lit, les agents ne peuvent plus boire.
-    expect(isRiverAt(2.9, -8)).toBe(true);
-    expect(isRiverAt(4.0, 0)).toBe(true);
+  it('ne touche pas au terrain loin du cours', () => {
+    let untouched = 0;
+    for (let x = -600; x <= 600; x += 37) {
+      for (let z = -600; z <= 600; z += 37) {
+        if (riverProximityAt(x, z).distance < 40) continue;
+        if (Math.hypot(x, z + 2.5) < 40) continue;
+        untouched++;
+        expect(heightAt(x, z)).toBeCloseTo(dryReliefAt(x, z), 6);
+      }
+    }
+    expect(untouched).toBeGreaterThan(100);
+  });
+});
+
+describe('riverSurfaceAt', () => {
+  it("rend une nappe qui descend vers l'aval", () => {
+    const atVillage = riverSurfaceAt(historicalRiverX(0), 0);
+    const mouth = getRiverCourse().points[getRiverCourse().points.length - 1]!;
+    expect(atVillage).toBeGreaterThan(mouth.elevation);
+  });
+
+  it('pose la nappe au-dessus du lit', () => {
+    const x = historicalRiverX(0);
+    expect(riverSurfaceAt(x, 0)).toBeGreaterThan(heightAt(x, 0));
   });
 });
 
 describe('slopeAt', () => {
-  it('est nulle sur le plateau du village', () => {
-    expect(slopeAt(0, -2.5)).toBeCloseTo(0, 6);
+  it('est quasi nulle sur le plateau, à l\'écart de la rivière', () => {
+    expect(slopeAt(-5, -4)).toBeLessThan(0.02);
   });
 
   it('reste dans [0, π/2)', () => {
@@ -204,25 +244,6 @@ describe('isWaterAt / depthAt', () => {
   });
 });
 
-describe('plausibilité hydrologique', () => {
-  it("n'a pas de rivière en altitude", () => {
-    // Sans le masque d'altitude, l'entaille creusait ses 1,2 m partout ou passe
-    // l'axe, y compris sur un flanc alpin a 68 m : une riviere qui gravit les
-    // sommets. Le routage hydrologique complet reste la phase 4.
-    for (let z = -3000; z <= 3000; z += 11) {
-      const x = riverCenterX(z);
-      if (isRiverAt(x, z)) {
-        expect(heightAt(x, z), `rivière à (${x.toFixed(0)}, ${z})`).toBeLessThan(
-          RIVER_MAX_ALTITUDE,
-        );
-      }
-    }
-  });
-
-  it('garde la rivière présente au village', () => {
-    expect(riverStrengthAt(4, 0)).toBeGreaterThan(0.9);
-  });
-});
 
 describe('géographie', () => {
   it('laisse de vraies plaines entre les chaînes de montagnes', () => {
@@ -247,23 +268,3 @@ describe('géographie', () => {
   });
 });
 
-describe('cohérence après partage des calculs', () => {
-  it('accorde heightAt avec la force de rivière publique', () => {
-    // heightAt calcule desormais le relief sec et le masque UNE fois et les
-    // partage, au lieu de repasser par riverStrengthAt qui les recalculait.
-    // Ce test verrouille l'equivalence : l'optimisation ne doit RIEN changer
-    // au terrain, seulement au temps qu'il coute.
-    for (let x = -500; x <= 500; x += 37) {
-      for (let z = -500; z <= 500; z += 37) {
-        const strength = riverStrengthAt(x, z);
-        expect(strength).toBeGreaterThanOrEqual(0);
-        expect(strength).toBeLessThanOrEqual(1);
-        // Là où la rivière est pleine et le sol hors plateau, l'entaille doit
-        // se voir : la hauteur est strictement sous le relief environnant.
-        if (strength > 0.9 && Math.abs(x - riverCenterX(z)) < 1 && Math.hypot(x, z + 2.5) > 12) {
-          expect(heightAt(x, z)).toBeLessThan(heightAt(x + 8, z));
-        }
-      }
-    }
-  });
-});

@@ -7,10 +7,10 @@ import {
   isWaterAt,
   isRiverAt,
   landMaskAt,
-  riverCenterX,
   VILLAGE_ELEVATION,
 } from '../src/world/terrain';
 import { biomeAt } from '../src/world/biomes';
+import { historicalRiverX } from '../src/world/flow';
 
 /**
  * Garde-fou de migration (spec §6). Les 23 objets, 11 agents et 4 lieux de
@@ -81,7 +81,7 @@ describe('habitabilité du village sur le nouveau relief', () => {
     const camps = DEFAULT_VILLAGE.places.filter((p) => p.name.startsWith('camp_'));
     expect(camps.length).toBe(3);
     for (const camp of camps) {
-      const targetX = riverCenterX(camp.z);
+      const targetX = historicalRiverX(camp.z);
       const steps = 40;
       for (let i = 0; i <= steps; i++) {
         const x = camp.x + ((targetX - camp.x) * i) / steps;

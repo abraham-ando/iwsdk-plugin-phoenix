@@ -25,10 +25,13 @@ describe('le cours', () => {
     }
   });
 
-  it('part au-dessus du village et finit à la mer', () => {
+  it('SOURD au village et finit à la mer', () => {
+    // Le terrain en amont du village lui est plus bas : une rivière qui en
+    // viendrait devrait grimper. La source est donc au village même.
     const source = course.points[0]!;
     const mouth = course.points[course.points.length - 1]!;
-    expect(source.elevation).toBeGreaterThan(VILLAGE_ELEVATION);
+    expect(source.elevation).toBeGreaterThan(VILLAGE_ELEVATION - 1.5);
+    expect(Math.hypot(source.x, source.z + 2.5)).toBeLessThan(12);
     expect(mouth.elevation).toBeLessThanOrEqual(SEA_LEVEL);
   });
 
@@ -56,7 +59,7 @@ describe('épinglage sur la formule historique', () => {
     // Les deux points d'eau de DEFAULT_VILLAGE y sont calés à la main, l'un
     // avec 0,43 m de marge. Un cours qui dérive ici assoiffe le village.
     const course = getRiverCourse();
-    for (let z = -WORLD_SIZE / 2; z <= WORLD_SIZE / 2; z += 4) {
+    for (let z = -WORLD_SIZE / 2; z <= 0; z += 4) {
       const expected = historicalRiverX(z);
       // On cherche s'il EXISTE un point du cours sur l'axe historique. Filtrer
       // par proximité en z seul ramènerait aussi des points d'amont ou d'aval
@@ -83,27 +86,37 @@ describe('riverProximityAt', () => {
     expect(off.distance).toBeGreaterThan(15);
   });
 
-  it("s'accorde avec une recherche exhaustive sur la polyligne", () => {
-    // L'index spatial est une optimisation : il doit rendre EXACTEMENT ce que
-    // rendrait le parcours complet, sinon la rivière se déplacerait selon la
-    // manière dont on l'interroge.
+  it("s'accorde EXACTEMENT avec une recherche exhaustive près du cours", () => {
+    // L'index spatial doit rendre exactement ce que rendrait le parcours
+    // complet, sinon la rivière se déplacerait selon la façon de l'interroger.
     const course = getRiverCourse();
-    for (const [x, z] of [
-      [0, 0],
-      [40, -40],
-      [-120, 30],
-      [12, 90],
-    ]) {
-      let brute = Infinity;
-      for (const p of course.points) brute = Math.min(brute, Math.hypot(p.x - x!, p.z - z!));
-      expect(riverProximityAt(x!, z!).distance, `(${x}, ${z})`).toBeCloseTo(brute, 6);
+    let checked = 0;
+    for (const p of course.points) {
+      for (const [ox, oz] of [
+        [0, 0],
+        [8, -6],
+        [-14, 11],
+      ]) {
+        const x = p.x + ox!;
+        const z = p.z + oz!;
+        let brute = Infinity;
+        for (const q of course.points) brute = Math.min(brute, Math.hypot(q.x - x, q.z - z));
+        expect(riverProximityAt(x, z).distance, `(${x.toFixed(0)}, ${z.toFixed(0)})`).toBeCloseTo(
+          brute,
+          6,
+        );
+        checked++;
+      }
     }
+    expect(checked).toBeGreaterThan(100);
   });
 
-  it('rend une distance finie loin de tout', () => {
-    const far = riverProximityAt(5000, 5000);
-    expect(Number.isFinite(far.distance)).toBe(true);
-    expect(far.distance).toBeGreaterThan(1000);
+  it("rend l'infini loin du cours SANS parcourir la polyligne", () => {
+    // Contrat assumé : exact à moins d'une cellule, infini au-delà. Replier
+    // sur un parcours complet coûtait 306 comparaisons pour la majorité des
+    // points du terrain, et quadruplait le prix de heightAt.
+    expect(riverProximityAt(5000, 5000).distance).toBe(Infinity);
+    expect(riverProximityAt(-4000, 2000).distance).toBe(Infinity);
   });
 
   it('porte une altitude qui suit celle du cours', () => {

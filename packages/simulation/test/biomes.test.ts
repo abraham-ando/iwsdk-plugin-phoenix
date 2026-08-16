@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { BIOME_IDS, biomeAt, humidityAt } from '../src/world/biomes';
-import { heightAt, slopeAt, isWaterAt, riverCenterX } from '../src/world/terrain';
+import { heightAt, slopeAt, isWaterAt } from '../src/world/terrain';
+import { getRiverCourse } from '../src/world/flow';
+
 
 describe('humidityAt', () => {
   it('reste dans [0, 1] et est déterministe', () => {
@@ -132,12 +134,11 @@ describe('marais', () => {
     // Un biome declare mais jamais atteint est du code mort qui se donne
     // l'apparence d'une fonctionnalite.
     let found = 0;
-    for (let z = 1400; z <= 1700; z += 3) {
-      for (let d = -12; d <= 12; d += 1) {
-        const x = riverCenterX(z) + d;
-        if (biomeAt(x, z).primary !== 'wetland') continue;
+    for (const p of getRiverCourse().points) {
+      for (let d = -12; d <= 12; d += 2) {
+        if (biomeAt(p.x + d, p.z).primary !== 'wetland') continue;
         found++;
-        expect(heightAt(x, z), `marais à (${x.toFixed(0)}, ${z})`).toBeLessThan(18);
+        expect(heightAt(p.x + d, p.z), `marais à (${p.x.toFixed(0)}, ${p.z.toFixed(0)})`).toBeLessThan(18);
       }
     }
     expect(found).toBeGreaterThan(0);

@@ -1,15 +1,13 @@
 import { clamp01, smoothstep, valueNoise } from './noise';
-import {
-  SEA_LEVEL,
-  RIVER_CARVE_RADIUS,
-  heightAt,
-  slopeAt,
-  landMaskAt,
-  riverCenterX,
-} from './terrain';
+import { SEA_LEVEL, heightAt, slopeAt, landMaskAt } from './terrain';
+import { riverProximityAt } from './flow';
+
+/** Le marais se juge par rapport au COURS, non plus à un axe sinusoïdal. */
+const RIVER_GATE_INNER = 6;
+const RIVER_GATE_OUTER = 14;
 
 function distanceToRiver(x: number, z: number): number {
-  return Math.abs(x - riverCenterX(z));
+  return riverProximityAt(x, z).distance;
 }
 
 /**
@@ -69,11 +67,11 @@ export function classifyBiome(
 
   // « Sommes-nous au bord de la rivière ? » — un marais est un sol gorgé d'eau,
   // pas simplement un sol bas et humide.
-  const riverGate = smoothstep(RIVER_CARVE_RADIUS + 8, RIVER_CARVE_RADIUS, distToRiver);
+  const riverGate = smoothstep(RIVER_GATE_OUTER, RIVER_GATE_INNER, distToRiver);
 
   // Le lit de la rivière n'est pas la mer. Sans cette réserve, `ocean` happait
   // toute altitude négative, y compris la vallée creusée en plein continent.
-  const inRiverValley = distToRiver < RIVER_CARVE_RADIUS;
+  const inRiverValley = distToRiver < RIVER_GATE_INNER;
   const ocean = h < SEA_LEVEL && !inRiverValley ? 1 + (SEA_LEVEL - h) : 0;
 
   // La végétation cède l'estran à la plage — MAIS SEULEMENT PRÈS DE LA CÔTE.
@@ -85,7 +83,10 @@ export function classifyBiome(
   // Poids : sans eux, `forest` gagne partout parce que ses trois facteurs
   // saturent à 1, alors que ceux d'une plage ou d'un marais ne le peuvent pas.
   const BEACH_WEIGHT = 2.2;
-  const WETLAND_WEIGHT = 1.4;
+  // Relevé de 1,4 à 1,9 : sur un sol plat, bas, humide et riverain, le marais
+  // atteignait 0,56 contre 0,66 à la forêt et ne l'emportait jamais. Un biome
+  // déclaré mais jamais atteint est du code mort qui se donne des airs.
+  const WETLAND_WEIGHT = 1.9;
 
   const scores: Record<BiomeId, number> = {
     ocean,
