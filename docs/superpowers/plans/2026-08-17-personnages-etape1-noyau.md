@@ -823,8 +823,11 @@ describe('centeredDraw', () => {
       const v = centeredDraw(rng);
       if (v < 0.15 || v > 0.85) extremes++;
     }
-    // Bates n=2 : P(|X-0.5| > 0.35) = 2 * 0.15^2 = 4.5 %.
-    expect(extremes / 10000).toBeLessThan(0.07);
+    // Bates n=2 est triangulaire : P(X < 0.15) = P(X > 0.85) = 2 × 0.15² = 4,5 %
+    // par queue, soit 9 % au total. Le seuil laisse la marge d'échantillonnage
+    // (σ ≈ 0,3 % sur 10 000 tirages) et reste très en dessous des 30 % qu'un
+    // tirage uniforme produirait — ce que le test doit justement détecter.
+    expect(extremes / 10000).toBeLessThan(0.11);
   });
 });
 
