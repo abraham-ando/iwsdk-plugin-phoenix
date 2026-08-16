@@ -16,12 +16,23 @@ export interface Belief {
   lastSeenTick: number;
 }
 
+/**
+ * Nombre d'objets qu'un agent garde en tête. Ce n'est pas un réglage de
+ * performance déguisé : une mémoire qui décline est une mémoire faillible,
+ * et c'est ce que le modèle du monde demande. La valeur est mesurée —
+ * `Mode1.selectAction` note toutes les croyances à chaque décision, et coûte
+ * 0,13 ms au pire à 128 croyances contre 0,80 ms à 2 166.
+ */
+export const MAX_OBJECT_BELIEFS = 128;
+
 export class BeliefState {
   private beliefs = new Map<string, Belief>();
+  /** Résultat de `known()`, invalidé à la moindre écriture. */
+  private sorted: Belief[] | null = null;
 
   update(obs: Observation): void {
     for (const o of obs.objects) {
-      this.beliefs.set(o.id, {
+      this.remember({
         objectId: o.id,
         type: o.type,
         x: o.x,
@@ -32,8 +43,35 @@ export class BeliefState {
     }
   }
 
+  /**
+   * Retient une croyance et oublie la plus ancienne si la mémoire déborde.
+   * Seul point d'écriture : le cache de `known()` s'invalide ici et nulle
+   * part ailleurs.
+   */
+  private remember(belief: Belief): void {
+    this.beliefs.set(belief.objectId, belief);
+    this.sorted = null;
+    if (this.beliefs.size <= MAX_OBJECT_BELIEFS) return;
+    // À date égale, l'identifiant tranche : sans quoi l'éviction dépendrait
+    // de l'ordre d'insertion et le déterminisme du moteur tomberait.
+    const oldestFirst = [...this.beliefs.values()].sort(
+      (a, b) => a.lastSeenTick - b.lastSeenTick || a.objectId.localeCompare(b.objectId)
+    );
+    const excess = this.beliefs.size - MAX_OBJECT_BELIEFS;
+    for (let i = 0; i < excess; i++) this.beliefs.delete(oldestFirst[i]!.objectId);
+  }
+
+  /**
+   * Croyances triées par identifiant. Le tableau rendu est PARTAGÉ : le muter
+   * corromprait le cache. Les appelants le lisent, le copient s'ils trient.
+   */
   known(): Belief[] {
-    return [...this.beliefs.values()].sort((a, b) => a.objectId.localeCompare(b.objectId));
+    if (this.sorted === null) {
+      this.sorted = [...this.beliefs.values()].sort((a, b) =>
+        a.objectId.localeCompare(b.objectId)
+      );
+    }
+    return this.sorted;
   }
 
   byType(type: string): Belief[] {
@@ -46,12 +84,13 @@ export class BeliefState {
 
   forget(objectId: string): void {
     this.beliefs.delete(objectId);
+    this.sorted = null;
   }
 
   /** Adopt a belief heard from someone else (rumor, spec §7.4). The rumor is
    * dated at the moment it is heard, not when the fact was observed. */
   learn(belief: Belief): void {
-    this.beliefs.set(belief.objectId, { ...belief, state: { ...belief.state } });
+    this.remember({ ...belief, state: { ...belief.state } });
   }
 
   /** Fraction of believed state fields that disagree with ground truth. */
