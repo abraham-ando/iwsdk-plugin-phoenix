@@ -118,6 +118,44 @@ describe('mode-2 plan execution', () => {
     expect([b.x, b.z, b.inventory]).toEqual([a.x, a.z, a.inventory]);
   });
 
+  it('dialogue trigger: two idle neighbors request one dialogue with cooldown', () => {
+    const { kernel, runtime } = setup();
+    const a = runtime.addAgent({ id: 'ana', name: 'Ana', tribe: 'T', role: 'R' }, 0, 0);
+    const b = runtime.addAgent({ id: 'ben', name: 'Ben', tribe: 'T', role: 'R' }, 1, 0);
+    a.needs = { hunger: 100, warmth: 100, energy: 100, affection: 100, stress: 0 };
+    b.needs = { ...a.needs };
+    for (let t = 0; t < 30; t++) kernel.step();
+    const dialogues = runtime.drainPlanRequests().filter((r) => r.reason === 'dialogue');
+    expect(dialogues).toHaveLength(1);
+    expect(dialogues[0]?.participantIds).toEqual(['ana', 'ben']);
+    for (let t = 0; t < 100; t++) kernel.step();
+    expect(runtime.drainPlanRequests().filter((r) => r.reason === 'dialogue')).toHaveLength(0);
+  });
+
+  it('llm_dialogue plants memories, beliefs (rumor) and speech bubbles', () => {
+    const { kernel, runtime } = setup();
+    const a = runtime.addAgent({ id: 'ana', name: 'Ana', tribe: 'T', role: 'R' }, 0, 0);
+    const b = runtime.addAgent({ id: 'ben', name: 'Ben', tribe: 'T', role: 'R' }, 1, 0);
+    kernel.submitEvent('llm_dialogue', {
+      requestId: 'd',
+      agentId: 'ana',
+      participantIds: ['ana', 'ben'],
+      lines: [
+        { speaker: 'ana', text: 'Le gisement de silex de la crête est riche.' },
+        { speaker: 'ben', text: 'Bon à savoir, j’irai demain.' },
+      ],
+      sharedFacts: [
+        { objectId: 'flint_deposit_9', type: 'flint_deposit', x: 20, z: -14, state: { flintLeft: 6 } },
+      ],
+    });
+    kernel.step();
+    expect(a.memories.all().some((m) => m.kind === 'dialogue')).toBe(true);
+    expect(b.beliefs.get('flint_deposit_9')?.type).toBe('flint_deposit'); // rumor became belief
+    expect(runtime.view('ana')?.dialogue).toContain('silex');
+    for (let t = 0; t < 60; t++) kernel.step();
+    expect(runtime.view('ana')?.dialogue).toBeNull(); // bubble expired
+  });
+
   it('reflection insights become high-importance memories', () => {
     const { kernel, runtime } = setup();
     const agent = runtime.addAgent({ id: 'a', name: 'A', tribe: 'T', role: 'R' }, 0, 0);

@@ -48,6 +48,12 @@ export class BeliefState {
     this.beliefs.delete(objectId);
   }
 
+  /** Adopt a belief heard from someone else (rumor, spec §7.4). The rumor is
+   * dated at the moment it is heard, not when the fact was observed. */
+  learn(belief: Belief): void {
+    this.beliefs.set(belief.objectId, { ...belief, state: { ...belief.state } });
+  }
+
   /** Fraction of believed state fields that disagree with ground truth. */
   divergenceFrom(world: GroundTruthWorld): number {
     let fields = 0;

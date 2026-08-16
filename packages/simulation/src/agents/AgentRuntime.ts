@@ -30,6 +30,9 @@ export const MODE2_DAILY_BUDGET = 12;
 export const URGENCY_OVERRIDE = 0.55;
 export const DAWN_HOUR = 6;
 export const REFLECTION_HOUR = 21;
+export const DIALOGUE_RADIUS = 3;
+export const DIALOGUE_COOLDOWN_TICKS = 1200;
+export const SPEECH_DISPLAY_TICKS = 50;
 
 const GATHER_VERBS = /^(gather_|eat_|fish$)/;
 const CRAFT_VERBS = /^(light_fire|add_wood|build|knap_flint|deposit_|take_)/;
@@ -112,6 +115,61 @@ export class AgentRuntime {
           importance: 3,
           kind: 'event',
         });
+      }
+      return;
+    }
+
+    if (event.type === 'llm_dialogue') {
+      const ids = Array.isArray(payload.participantIds) ? (payload.participantIds as string[]) : [];
+      const participants = ids
+        .map((id) => this.agents.get(id))
+        .filter((a): a is AgentState => a !== undefined);
+      if (participants.length === 0) return;
+      const initiator = this.agents.get(payload.agentId ?? '');
+      if (initiator !== undefined && initiator.mode2.pendingRequestId === payload.requestId) {
+        initiator.mode2.pendingRequestId = null;
+      }
+      const lines = Array.isArray(payload.lines)
+        ? (payload.lines as Array<{ speaker?: unknown; text?: unknown }>).filter(
+            (l) => typeof l?.speaker === 'string' && typeof l?.text === 'string'
+          )
+        : [];
+      for (const participant of participants) {
+        for (const line of lines) {
+          participant.memories.add({
+            tick,
+            text: `${String(line.speaker)}: ${String(line.text)}`,
+            importance: 3,
+            kind: 'dialogue',
+          });
+        }
+        // Speech bubble: the participant's own last line, if any.
+        const own = [...lines].reverse().find((l) => l.speaker === participant.profile.id);
+        if (own !== undefined) {
+          participant.speech = { text: String(own.text), untilTick: tick + SPEECH_DISPLAY_TICKS };
+        }
+        // Rumors become beliefs, dated today (spec §7.4).
+        if (Array.isArray(payload.sharedFacts)) {
+          for (const fact of payload.sharedFacts as Array<Record<string, unknown>>) {
+            if (
+              typeof fact?.objectId === 'string' &&
+              typeof fact?.type === 'string' &&
+              typeof fact?.x === 'number' &&
+              typeof fact?.z === 'number' &&
+              typeof fact?.state === 'object' &&
+              fact.state !== null
+            ) {
+              participant.beliefs.learn({
+                objectId: fact.objectId,
+                type: fact.type,
+                x: fact.x,
+                z: fact.z,
+                state: fact.state as Record<string, number>,
+                lastSeenTick: tick,
+              });
+            }
+          }
+        }
       }
       return;
     }
@@ -210,6 +268,27 @@ export class AgentRuntime {
     if (ctx.hour >= REFLECTION_HOUR && agent.mode2.lastReflectionDay < day) {
       agent.mode2.lastReflectionDay = day;
       this.emitPlanRequest(agent, 'reflection', ctx.tick);
+    }
+
+    // Dialogue trigger (spec §7.4): idle neighbors strike a conversation.
+    // The lexicographically smaller id initiates, so each pair fires once.
+    if (
+      agent.currentAction === null &&
+      agent.mode2.pendingRequestId === null &&
+      ctx.tick >= agent.mode2.dialogueCooldownUntilTick
+    ) {
+      for (const other of roster) {
+        if (other === agent || other.profile.id <= agent.profile.id) continue;
+        if (other.currentAction !== null) continue;
+        if (ctx.tick < other.mode2.dialogueCooldownUntilTick) continue;
+        if (Math.hypot(other.x - agent.x, other.z - agent.z) > DIALOGUE_RADIUS) continue;
+        this.emitPlanRequest(agent, 'dialogue', ctx.tick, [agent.profile.id, other.profile.id]);
+        if (agent.mode2.pendingRequestId !== null) {
+          agent.mode2.dialogueCooldownUntilTick = ctx.tick + DIALOGUE_COOLDOWN_TICKS;
+          other.mode2.dialogueCooldownUntilTick = ctx.tick + DIALOGUE_COOLDOWN_TICKS;
+        }
+        break;
+      }
     }
 
     const event = executeActionTick(agent, this.world, this.intrinsics, ctx.tick);
