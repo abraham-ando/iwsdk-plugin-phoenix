@@ -286,9 +286,11 @@ git commit -m "feat(world): pure translation of smart object state into visual p
 - Produces:
   - `SmartObjectVisual` — composant elics : `objectType` (`Types.String`), `stage`, `fill`, `flame` (`Types.Float32`), `lit` (`Types.Boolean`)
   - `SmartObjectVisualSystem` avec `appliedCount: number`
-  - Convention de nommage des enfants : `stage0`…`stageN`, `fill`, `flame`
+  - Convention de nommage des enfants : `from<N>`, `fill`, `flame`
 
-**La convention qui relie les deux mondes.** Le système ne construit aucune géométrie : il montre l'enfant `stage3` et masque les autres, met `fill` à l'échelle, allume `flame`. C'est au constructeur de scène de nommer ses enfants ainsi. Cette convention est le contrat, et un test le vérifie sur la scène réelle.
+**La convention qui relie les deux mondes.** Le système ne construit aucune géométrie : il montre l'enfant `from3` dès que l'avancement atteint 3, met `fill` à l'échelle, allume `flame`.
+
+Le nommage est **cumulatif** et non alternatif, parce qu'une construction l'est : les perches restent quand le toit arrive. `from1` désigne ce qui apparaît à la première étape et ne disparaît plus. C'est ce qui permet de n'ajouter aucune géométrie — l'abri de la démo possède déjà ses perches et son toit, il ne leur manquait qu'un nom.
 
 - [ ] **Step 1: Écrire les tests qui échouent**
 
@@ -329,12 +331,28 @@ function makeRig(names: string[], type: string) {
 }
 
 describe('SmartObjectVisualSystem', () => {
-  it("MONTRE UNE SEULE ÉTAPE À LA FOIS", () => {
-    // Sans cela, l'abri afficherait toutes ses étapes empilées.
-    const rig = makeRig(['stage0', 'stage1', 'stage2'], 'shelter');
-    rig.entity.setValue(SmartObjectVisual, 'stage', 2);
+  it('MONTRE CE QUI EST DÉJÀ BÂTI, ET RIEN DE PLUS', () => {
+    // Une construction est cumulative : les perches restent quand le toit
+    // arrive. Montrer une seule étape à la fois ferait disparaître le bas de
+    // l'abri à mesure qu'on le termine.
+    const rig = makeRig(['from1', 'from3', 'from5'], 'shelter');
+    rig.entity.setValue(SmartObjectVisual, 'stage', 3);
     rig.system.update(0.016, 0);
-    expect(rig.object.children.map((c) => c.visible)).toEqual([false, false, true]);
+    expect(rig.object.children.map((c) => c.visible)).toEqual([true, true, false]);
+  });
+
+  it("ne montre rien d'un chantier pas commencé", () => {
+    const rig = makeRig(['from1', 'from3', 'from5'], 'shelter');
+    rig.entity.setValue(SmartObjectVisual, 'stage', 0);
+    rig.system.update(0.016, 0);
+    expect(rig.object.children.map((c) => c.visible)).toEqual([false, false, false]);
+  });
+
+  it("montre tout l'abri une fois terminé", () => {
+    const rig = makeRig(['from1', 'from3', 'from5'], 'shelter');
+    rig.entity.setValue(SmartObjectVisual, 'stage', 5);
+    rig.system.update(0.016, 0);
+    expect(rig.object.children.map((c) => c.visible)).toEqual([true, true, true]);
   });
 
   it("met l'enfant `fill` à l'échelle de la réserve", () => {
@@ -475,8 +493,12 @@ export class SmartObjectVisualSystem extends createSystem({
         const name = child.name;
         if (name === undefined || name === '') return;
 
-        if (name.startsWith('stage')) {
-          child.visible = name === `stage${stage}`;
+        // `from<N>` : apparaît à l'étape N et ne disparaît plus. Une
+        // construction est cumulative — les perches restent quand le toit
+        // arrive.
+        if (name.startsWith('from')) {
+          const threshold = Number.parseInt(name.slice(4), 10);
+          child.visible = Number.isFinite(threshold) && stage >= threshold;
           return;
         }
         if (name === 'fill') {
@@ -499,7 +521,7 @@ export class SmartObjectVisualSystem extends createSystem({
 - [ ] **Step 5: Lancer les tests et vérifier qu'ils passent**
 
 Run: `pnpm --filter @iwsdk/cardinal-world test smart-object-visual`
-Expected: PASS, 6 tests.
+Expected: PASS, 8 tests.
 
 - [ ] **Step 6: Enregistrer et exporter**
 
@@ -702,7 +724,7 @@ git commit -m "feat(world): project any engine animal, knowing no species"
 Dans `apps/demo/src/simulation/PrehistoricEnvironment3D.ts` :
 
 - pour le foyer, nommer `flame` le maillage de flamme, qui existe déjà et que `setCampfireLit` pilotait à la main ;
-- pour l'abri, nommer `stage0` à `stage5` les groupes correspondant aux six degrés d'avancement. Si la construction actuelle n'a qu'un seul état, nommer ce groupe `stage5` et ajouter cinq groupes intermédiaires réduits à quelques perches — la géométrie existe déjà, il s'agit de la montrer partiellement ;
+- pour l'abri, nommer les parties existantes selon l'étape à laquelle elles apparaissent : `from1` pour la première perche, `from2` pour la seconde, `from4` pour le toit. **Aucune géométrie n'est ajoutée** — l'abri possède déjà ces pièces, il ne leur manquait qu'un nom, et le nommage cumulatif fait le reste ;
 - pour le buisson, le chêne, l'affleurement de silex et le tas de provisions, nommer `fill` le maillage dont le volume doit suivre la réserve.
 
 Supprimer ensuite la méthode `setCampfireLit` : le système la remplace.
@@ -752,7 +774,7 @@ Après `browserCommandReady: true`, **laisser la simulation tourner** — c'est 
 
 1. La console (`npx iwsdk browser logs`, `count` seul, jamais `level`).
 2. `npx iwsdk ecs find --input-json '{"withComponents":["SmartObjectVisual"],"limit":40}'` : autant que d'objets liés.
-3. **Faire avancer un abri** : relever `shelter.progress` dans l'état du moteur, puis vérifier qu'un enfant `stage<N>` différent est visible. C'est la seule preuve que la construction se voit avancer.
+3. **Faire avancer un abri** : relever `shelter.progress` dans l'état du moteur, puis vérifier qu'une pièce `from<N>` supplémentaire est devenue visible. C'est la seule preuve que la construction se voit avancer.
 4. Le loup se déplace et s'oriente.
 5. `npx iwsdk scene render-stats` : les triangles ne doivent **pas** monter — cette phase montre et masque, elle n'ajoute rien.
 
