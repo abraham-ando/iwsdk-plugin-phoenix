@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- **Budget VR : 11–14 ms par image au total** (72–90 fps). Une tuile 33×33 échantillonnée en grille coûte **0,61 ms** (mesuré) ; une par image est donc soutenable, deux ne le sont pas.
+- **Budget VR : 11–14 ms par image au total** (72–90 fps). Une tuile 33×33 complète — hauteurs, pentes et couleurs de biome — coûte **0,98 ms** (mesuré sur le code final ; le prototype annonçait 0,61 ms car il omettait la classification). Une tuile par image occupe donc 7 à 9 % du budget ; deux seraient imprudentes.
 - **Ne jamais allouer dans `update()`** (règle du dépôt, `apps/demo/CLAUDE.md`). Les tampons de travail sont alloués dans `init()` comme propriétés de classe.
 - **Importer Three depuis `@iwsdk/core`, jamais depuis `three`** — un import direct crée une seconde instance de Three et casse tout silencieusement.
 - `packages/world` gagne une dépendance vers `@iwsdk/cardinal-simulation` (le rendu dépend de la vérité, jamais l'inverse). `packages/simulation` conserve **zéro dépendance**.
@@ -351,7 +351,7 @@ git commit -m "feat(world): pure terrain tiling, LOD rings and streaming diff"
   - `sampleTile(originX: number, originZ: number, size: number, segments: number): TileSample`
   - `BIOME_RGB: Readonly<Record<BiomeId, readonly [number, number, number]>>`
 
-**Pourquoi extraire `classifyBiome`.** `biomeAt(x, z)` recalcule la hauteur, puis la pente — laquelle appelle `heightAt` quatre fois de plus. Une tuile possède déjà toute sa grille de hauteurs : la pente s'y dérive des voisins pour presque rien. Mesuré sur une tuile 33×33 : **7,87 ms par requêtes ponctuelles contre 0,61 ms en grille**, soit sept fois moins. Sans cette extraction, une seule tuile mangerait la moitié du budget d'image.
+**Pourquoi extraire `classifyBiome`.** `biomeAt(x, z)` recalcule la hauteur, puis la pente — laquelle appelle `heightAt` quatre fois de plus. Une tuile possède déjà toute sa grille de hauteurs : la pente s'y dérive des voisins pour presque rien. Mesuré sur une tuile 33×33 : **7,87 ms par requêtes ponctuelles contre 0,98 ms en grille**, soit huit fois moins. Sans cette extraction, une seule tuile mangerait la moitié du budget d'image.
 
 - [ ] **Step 1: Écrire les tests qui échouent**
 
@@ -589,7 +589,7 @@ import {
  *
  * L'astuce tient en une phrase : la pente se dérive des voisins déjà calculés
  * au lieu d'être redemandée point par point. Mesuré sur une tuile 33×33,
- * 7,87 ms deviennent 0,61 ms — la différence entre un streaming impossible et
+ * 7,87 ms deviennent 0,98 ms — la différence entre un streaming impossible et
  * un streaming à une tuile par image.
  */
 export interface TileSample {
@@ -1110,7 +1110,7 @@ describe('TerrainStreamingSystem', () => {
 
 describe('TerrainMeshSystem', () => {
   it("ne construit qu'un nombre borné de tuiles par image", () => {
-    // Le budget VR est de 11 à 14 ms au total ; une tuile 33x33 coûte 0,61 ms.
+    // Le budget VR est de 11 à 14 ms au total ; une tuile 33x33 coûte 0,98 ms.
     const rig = makeRig();
     rig.streaming.update(0.016, 0);
     rig.mesh.update(0.016, 0);
@@ -1317,7 +1317,7 @@ import { buildTileGeometry } from './geometry';
  * Construit les tuiles marquées, AU PLUS UNE PAR IMAGE (spec §6).
  *
  * Le chiffre n'est pas arbitraire : une tuile 33×33 échantillonnée en grille
- * coûte 0,61 ms mesurées, et une image VR entière en vaut 11 à 14. En
+ * coûte 0,98 ms mesurées, et une image VR entière en vaut 11 à 14. En
  * construire deux mangerait un dixième du budget pour le seul terrain.
  */
 export class TerrainMeshSystem extends createSystem({

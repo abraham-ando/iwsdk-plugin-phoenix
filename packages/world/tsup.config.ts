@@ -10,5 +10,5 @@ export default defineConfig({
   clean: true,
   target: 'es2022',
   platform: 'browser',
-  external: ['@iwsdk/core', 'three', 'elics'],
+  external: ['@iwsdk/core', 'three', 'elics', '@iwsdk/cardinal-simulation'],
 });

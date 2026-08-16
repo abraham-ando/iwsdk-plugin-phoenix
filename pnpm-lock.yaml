@@ -147,6 +147,10 @@ importers:
         version: 3.2.7(@types/node@22.20.1)(tsx@4.23.12)
 
   packages/world:
+    dependencies:
+      '@iwsdk/cardinal-simulation':
+        specifier: workspace:*
+        version: link:../simulation
     devDependencies:
       '@iwsdk/core':
         specifier: 0.5.3

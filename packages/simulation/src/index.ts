@@ -27,7 +27,7 @@ export {
   riverCenterX,
   landMaskAt,
 } from './world/terrain';
-export { BIOME_IDS, biomeAt, humidityAt, type BiomeId, type BiomeSample } from './world/biomes';
+export { BIOME_IDS, biomeAt, classifyBiome, humidityAt, type BiomeId, type BiomeSample } from './world/biomes';
 export {
   SmartObjectRegistry,
   type Comparison,
