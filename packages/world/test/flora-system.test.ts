@@ -7,13 +7,20 @@ import { scatterAt } from '@iwsdk/cardinal-simulation';
 function makeRig() {
   const world = new World();
   world.registerComponent(FloraTile);
+  const created: { name: string }[] = [];
+  const disposed: string[] = [];
   (world as unknown as { createTransformEntity: unknown }).createTransformEntity = (
     object: unknown,
   ) => {
     const entity = world.createEntity();
     (entity as unknown as { object3D: unknown }).object3D = object;
+    const named = object as { name?: string };
+    created.push({ name: named.name ?? '' });
     const raw = entity as unknown as { dispose?: () => void; destroy: () => void };
-    raw.dispose = () => raw.destroy();
+    raw.dispose = () => {
+      disposed.push(named.name ?? '');
+      raw.destroy();
+    };
     return entity;
   };
 
@@ -27,7 +34,7 @@ function makeRig() {
   });
   const system = world.getSystem(FloraSystem) as FloraSystem;
   (system as unknown as { player: unknown }).player = { position: { x: 0, y: 0, z: 0 } };
-  return { world, system };
+  return { world, system, created, disposed };
 }
 
 describe('FloraSystem', () => {
@@ -71,6 +78,27 @@ describe('FloraSystem', () => {
     far.addComponent(FloraTile, { tx: 3, tz: 3, _needsPlant: true });
     rig.system.update(0.016, 0);
     expect(rig.system.lastLevelNear).toBeLessThan(rig.system.lastLevelFar);
+  });
+
+  it('NE LAISSE PAS SA FLORE SURVIVRE À LA TUILE', () => {
+    // Le streaming libère l'entité de tuile au changement de niveau, mais les
+    // InstancedMesh sont des entités séparées : sans registre, elles
+    // s'accumulaient — 690 maillages devenus 960 sur une longue session, et
+    // 361 000 triangles devenus 554 000, au-dessus du budget.
+    const rig = makeRig();
+    const entity = rig.world.createEntity();
+    entity.addComponent(FloraTile, { tx: 4, tz: -3, _needsPlant: true });
+    rig.system.update(0.016, 0);
+
+    const planted = rig.created.filter((o) => o.name.startsWith('Flora')).length;
+    expect(planted, 'des maillages ont bien été plantés').toBeGreaterThan(0);
+
+    // Retirer le composant désinscrit l'entité de la requête, comme le fait le
+    // streaming lorsqu'il libère une tuile.
+    entity.removeComponent(FloraTile);
+
+    const released = rig.disposed.filter((n) => n.startsWith('Flora')).length;
+    expect(released, 'maillages de flore libérés avec leur tuile').toBe(planted);
   });
 
   it('survit à une tuile vide sans rien planter', () => {

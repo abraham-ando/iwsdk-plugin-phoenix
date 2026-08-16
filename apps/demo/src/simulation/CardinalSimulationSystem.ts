@@ -4,7 +4,7 @@
  * republishes engine events as French narrative lines for the HUD. Rendering
  * projection (avatars, sky, fires) subscribes to this system.
  */
-import { createSystem, type Group } from '@iwsdk/core';
+import { createSystem, Group, type Entity } from '@iwsdk/core';
 import {
   SimKernel,
   GroundTruthWorld,
@@ -22,7 +22,8 @@ import { VILLAGE_LAYOUT } from './layout';
 import { applyAvatarPose } from './AgentAvatarFactory';
 import { PrehistoricEnvironment3D, type PrehistoricSceneResult } from './PrehistoricEnvironment3D';
 import { CelestialTime, WEATHER_KINDS } from '@iwsdk/cardinal-world';
-import { WolfVisual } from './WolfVisual';
+import { SmartObjectVisual, AnimalVisual, visualStateFor } from '@iwsdk/cardinal-world';
+import { WolfShape } from './WolfShape';
 import { VillagerVoices } from './VillagerVoices';
 
 export interface SimEvent {
@@ -71,7 +72,9 @@ export class CardinalSimulationSystem extends createSystem({}) {
   public recorder!: TrajectoryRecorder;
   public wolf!: WolfSystem;
 
-  private wolfVisual: WolfVisual | null = null;
+  /** Une entité par objet lié : le système de rendu lit ces composants. */
+  private readonly objectEntities: Array<{ entity: Entity; objectId: string }> = [];
+  private wolfEntity: Entity | null = null;
   private voices: VillagerVoices | null = null;
   private playerFeedAccumulator = 0;
   private lastPlayerX = 0;
@@ -82,21 +85,37 @@ export class CardinalSimulationSystem extends createSystem({}) {
   private readonly lastSpeech = new Map<string, string>();
   private sceneData: PrehistoricSceneResult | null = null;
   private elapsed = 0;
-  private readonly campfireBindings: Array<{ group: Group; objectId: string }> = [];
 
   /** Bind the rendered scene once; per-frame projection targets it. */
   attachScene(sceneData: PrehistoricSceneResult): void {
     this.sceneData = sceneData;
-    this.wolfVisual = new WolfVisual(sceneData.root);
-    this.campfireBindings.length = 0;
-    for (const [, group] of sceneData.campfires) {
-      const worldX = group.position.x + (group.parent?.position.x ?? 0);
-      const worldZ = group.position.z + (group.parent?.position.z ?? 0);
-      const near = this.simWorld
-        .objectsNear(worldX, worldZ, 3)
-        .find((o) => o.type === 'campfire');
-      if (near) this.campfireBindings.push({ group, objectId: near.id });
-    }
+    this.objectEntities.length = 0;
+
+    // Le rendu de l'état des objets appartient désormais à
+    // @iwsdk/cardinal-world : on lie chaque groupe de scène à l'objet du
+    // moteur le plus proche, et l'on écrit son état par frame.
+    const bind = (groups: Map<string, Group>, type: string): void => {
+      for (const [, group] of groups) {
+        const worldX = group.position.x + (group.parent?.position.x ?? 0);
+        const worldZ = group.position.z + (group.parent?.position.z ?? 0);
+        const near = this.simWorld.objectsNear(worldX, worldZ, 3).find((o) => o.type === type);
+        if (!near) continue;
+        const entity = this.world.createTransformEntity(group);
+        entity.addComponent(SmartObjectVisual, { objectType: type });
+        this.objectEntities.push({ entity, objectId: near.id });
+      }
+    };
+    bind(sceneData.campfires, 'campfire');
+    bind(sceneData.shelters, 'shelter');
+
+    // Le loup se projette comme n'importe quel animal : le rendu ignore qu'il
+    // s'agit d'un loup (spec §8).
+    const wolfGroup = new Group();
+    wolfGroup.name = 'Wolf';
+    wolfGroup.add(WolfShape.create());
+    sceneData.root.add(wolfGroup);
+    this.wolfEntity = this.world.createTransformEntity(wolfGroup);
+    this.wolfEntity.addComponent(AnimalVisual, {});
   }
 
   init(): void {
@@ -233,15 +252,28 @@ export class CardinalSimulationSystem extends createSystem({}) {
         this.voices?.speak(view.id, view.dialogue);
       }
     }
-    for (const binding of this.campfireBindings) {
-      const fire = this.simWorld.get(binding.objectId);
-      if (fire) {
-        PrehistoricEnvironment3D.setCampfireLit(binding.group, (fire.state.lit ?? 0) === 1);
+    for (const binding of this.objectEntities) {
+      const object = this.simWorld.get(binding.objectId);
+      if (object) {
+        const visual = visualStateFor(object.type, object.state);
+        binding.entity.setValue(SmartObjectVisual, 'stage', visual.stage);
+        binding.entity.setValue(SmartObjectVisual, 'fill', visual.fill);
+        binding.entity.setValue(SmartObjectVisual, 'flame', visual.flame);
+        binding.entity.setValue(SmartObjectVisual, 'lit', visual.lit);
       }
     }
     // Scenery animation (wind, water) lives with rendering, not simulation.
     sceneData.grassField.updateWind(this.elapsed);
-    this.wolfVisual?.update(this.wolf.view());
+    // Le loup est projeté comme n'importe quel animal : on écrit sa vue, et
+    // FaunaSystem la pose. Le rendu ignore qu'il s'agit d'un loup.
+    if (this.wolfEntity) {
+      const view = this.wolf.view();
+      this.wolfEntity.setValue(AnimalVisual, 'x', view.x);
+      this.wolfEntity.setValue(AnimalVisual, 'y', view.y);
+      this.wolfEntity.setValue(AnimalVisual, 'z', view.z);
+      this.wolfEntity.setValue(AnimalVisual, 'heading', view.heading);
+      this.wolfEntity.setValue(AnimalVisual, 'animation', view.mode);
+    }
   }
 
   private narrate(event: ActionEvent): SimEvent | null {

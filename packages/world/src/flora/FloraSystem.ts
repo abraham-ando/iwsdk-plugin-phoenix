@@ -1,4 +1,4 @@
-import { createSystem, Types, InstancedMesh, Object3D } from '@iwsdk/core';
+import { createSystem, Types, InstancedMesh, Object3D, type Entity } from '@iwsdk/core';
 import { scatterAt, heightAt, SCATTER_TILE, type ScatterItem } from '@iwsdk/cardinal-simulation';
 import { lodForRing } from '../terrain/tiling';
 import { FloraTile } from './components';
@@ -27,6 +27,25 @@ export class FloraSystem extends createSystem(
   /** Alloué une fois : toute allocation par image est traitée comme un défaut. */
   private readonly dummy = new Object3D();
 
+  /**
+   * Les maillages plantés, par tuile.
+   *
+   * Sans ce registre, la flore SURVIT à sa tuile : le streaming libère
+   * l'entité de tuile au changement de niveau de détail, mais les
+   * `InstancedMesh` sont des entités séparées que rien ne rattache. Elles
+   * s'accumulaient — 690 maillages devenus 960 sur une longue session, et
+   * 361 000 triangles devenus 554 000, au-dessus du budget.
+   */
+  private readonly planted = new Map<string, Entity[]>();
+
+  public override init(): void {
+    this.queries.tiles.subscribe('disqualify', (entity) => {
+      const key = `${entity.getValue(FloraTile, 'tx') ?? 0},${entity.getValue(FloraTile, 'tz') ?? 0}`;
+      for (const mesh of this.planted.get(key) ?? []) mesh.dispose();
+      this.planted.delete(key);
+    });
+  }
+
   public override update(_delta: number, _time: number): void {
     const assets = this.config.assets.value as FloraAsset[] | null;
     if (assets === null) return;
@@ -53,6 +72,9 @@ export class FloraSystem extends createSystem(
         if (list === undefined) bySpecies.set(item.species, [item]);
         else list.push(item);
       }
+
+      const key = `${tx},${tz}`;
+      const created: Entity[] = [];
 
       for (const [species, group] of bySpecies) {
         const asset = assets.find((a) => a.id === species);
@@ -87,10 +109,14 @@ export class FloraSystem extends createSystem(
             mesh.setMatrixAt(i, this.dummy.matrix);
           }
           mesh.instanceMatrix.needsUpdate = true;
-          this.world.createTransformEntity(mesh, undefined);
+          created.push(this.world.createTransformEntity(mesh, undefined));
         }
         this.instanceCount += group.length;
       }
+
+      // La flore est enregistrée sous sa tuile : elle mourra avec elle.
+      for (const mesh of this.planted.get(key) ?? []) mesh.dispose();
+      this.planted.set(key, created);
 
       if (ring <= 1) this.lastLevelNear = level;
       else this.lastLevelFar = level;

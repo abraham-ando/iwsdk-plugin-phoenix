@@ -39,6 +39,7 @@ import type { VILLAGE_LAYOUT } from './layout';
 export interface PrehistoricSceneResult {
   root: Group;
   campfires: Map<string, Group>;
+  shelters: Map<string, Group>;
   agentAvatars: Map<string, Group>;
   entities: Entity[];
   grassField: ProceduralGrassField;
@@ -54,6 +55,7 @@ export class PrehistoricEnvironment3D {
     const root = new Group();
     root.name = 'Procedural_Nature_World_3D';
     const campfires = new Map<string, Group>();
+    const shelters = new Map<string, Group>();
     const agentAvatars = new Map<string, Group>();
     const entities: Entity[] = [];
 
@@ -191,6 +193,7 @@ export class PrehistoricEnvironment3D {
       const shelter = this.createShelter(settlement.color, materials);
       shelter.position.set(0, 0, -1.3);
       tribeGroup.add(shelter);
+      shelters.set(settlement.tribe, shelter);
 
       const shelterEntity = world.createEntity();
       shelterEntity.addComponent(Transform, { position: [pos[0], pos[1], pos[2] - 1.3] });
@@ -268,7 +271,7 @@ export class PrehistoricEnvironment3D {
       agentAvatars.set(agent.id, avatar);
     }
 
-    return { root, campfires, agentAvatars, entities, grassField, terrain };
+    return { root, campfires, shelters, agentAvatars, entities, grassField, terrain };
   }
 
   public static createCampfire(tribeName: string): Group {
@@ -396,17 +399,23 @@ export class PrehistoricEnvironment3D {
         })()
       : new MeshStandardMaterial({ color: bannerColor, roughness: 0.7 });
 
+    // `from<N>` : la pièce apparaît à l'étape N de la construction et ne
+    // disparaît plus. Aucune géométrie n'est ajoutée — les trois pièces
+    // existaient déjà, il leur manquait un nom.
     const pole1 = new Mesh(new CylinderGeometry(0.055, 0.055, 1.8, 6), woodMat);
+    pole1.name = 'from1';
     pole1.position.set(-0.65, 0.85, 0);
     pole1.rotation.z = -0.38;
     shelter.add(pole1);
 
     const pole2 = new Mesh(new CylinderGeometry(0.055, 0.055, 1.8, 6), woodMat);
+    pole2.name = 'from2';
     pole2.position.set(0.65, 0.85, 0);
     pole2.rotation.z = 0.38;
     shelter.add(pole2);
 
     const roof = new Mesh(new BoxGeometry(1.5, 0.12, 1.3), hideMat);
+    roof.name = 'from4';
     roof.position.set(0, 1.2, 0);
     roof.rotation.x = -0.2;
     shelter.add(roof);
