@@ -150,7 +150,12 @@ Deux corps d'eau, une même famille de matériau. La mer est un plan au niveau z
 
 ## 8. Flore et faune
 
-**Flore.** Au chargement, quelques variantes par espèce sont générées via `@dgreenheck/ez-tree` (`new Tree()` + graine déterministe, `generateLODs()`), et l'on ne conserve que les géométries en cache — le paquet de 22,8 Mo est un outil d'atelier, pas une charge d'exécution. Ces géométries alimentent des **`InstancedMesh` par espèce et par niveau de détail**. Herbe et sous-bois restent instanciés autour du joueur seulement, densité dictée par le biome.
+**Flore.** Les variantes d'espèces sont générées **hors ligne** via `@dgreenheck/ez-tree`, et seules les géométries sérialisées sont livrées : le paquet est un outil d'atelier, pas une charge d'exécution.
+
+*Corrigé après vérification sur le paquet réel (v1.1.0), la rédaction initiale reposant sur la documentation du site :*
+- `generateLODs()` **n'existe pas**. Les niveaux de détail se fabriquent en abaissant `options.branch.levels` : 3 → 6 806 triangles, 2 → 2 772, 1 → 1 108 pour « Oak Small ».
+- ez-tree charge ses textures **dès l'import**, via un `TextureLoader` qui exige `document` : la génération hors ligne réclame un substitut minimal de DOM.
+- Le module ES pèse **2,87 Mo gzip**, dont 3,8 Mo de vingt images en base64 dont nous n'avons aucun besoin — notre `MaterialLibrary` produit déjà écorce et feuillage. L'importer à l'exécution triplerait le bundle de la démo, qui pèse 1,6 Mo gzip. Ces géométries alimentent des **`InstancedMesh` par espèce et par niveau de détail**. Herbe et sous-bois restent instanciés autour du joueur seulement, densité dictée par le biome.
 
 **Le semis appartient à la vérité terrain.** `scatterAt(tileX, tileZ)` dans `packages/simulation` renvoie de façon déterministe les positions et espèces d'une tuile (graine, biome, pente, bruit bleu). Le **moteur** y instancie les smart objects exploitables ; le **rendu** y instancie les maillages. Sans cela, les agents bûcheronneraient sur des arbres invisibles pendant que la forêt visible resterait inerte.
 
