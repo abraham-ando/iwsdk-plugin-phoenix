@@ -49,7 +49,9 @@ const sites = [
 
 describe('habitabilité du village sur le nouveau relief', () => {
   it('a bien des sites à vérifier', () => {
-    expect(sites.length).toBe(23 + 11 + 4);
+    // 19 objets calés à la main (les 4 chênes substituts sont partis à la
+    // forêt semée), 11 villageois, 4 lieux nommés.
+    expect(sites.length).toBe(19 + 11 + 4);
   });
 
   it("pose chaque site à l'intérieur de la zone simulée", () => {

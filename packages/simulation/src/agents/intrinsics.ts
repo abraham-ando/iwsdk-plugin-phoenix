@@ -1,6 +1,7 @@
 import { compare } from '../world/affordances';
 import type { Comparison } from '../world/SmartObject';
 import { clampNeed } from './needs';
+import type { NeedId } from './needs';
 
 /**
  * Intrinsic actions are the agent's own repertoire — no smart object involved
@@ -16,7 +17,11 @@ export function invTotal(inv: Record<string, number>): number {
 export interface IntrinsicActionDef {
   verb: string;
   durationTicks: number;
-  preconditions?: { actorInventory?: Record<string, Comparison> };
+  preconditions?: {
+    actorInventory?: Record<string, Comparison>;
+    /** Symétrique de celles des affordances : on ne somnole pas frais et dispos. */
+    actorNeeds?: Record<string, Comparison>;
+  };
   effects: {
     actorInventory?: Record<string, number>;
     actorNeeds?: Record<string, number>;
@@ -46,6 +51,11 @@ export function defaultIntrinsics(): IntrinsicActionDef[] {
     {
       verb: 'nap',
       durationTicks: 200,
+      // La sieste à même le sol est un pis-aller, pas un régime. Sans cette
+      // condition elle se déclenchait dès 70 d'énergie, si bien que l'agent ne
+      // descendait jamais sous les 60 qu'exige `sleep_inside` : les abris se
+      // bâtissaient et ne servaient plus jamais.
+      preconditions: { actorNeeds: { energy: '<40' } },
       effects: { actorNeeds: { energy: 15 } },
     },
   ];
@@ -53,12 +63,22 @@ export function defaultIntrinsics(): IntrinsicActionDef[] {
 
 export function checkIntrinsic(
   def: IntrinsicActionDef,
-  inventory: Record<string, number>
+  inventory: Record<string, number>,
+  // `AgentNeeds` est une interface : TypeScript ne l'accepte pas comme
+  // `Record<string, number>`, faute de signature d'index. Un mappage sur les
+  // besoins connus, lui, la reçoit sans conversion à l'appel.
+  needs: Readonly<Partial<Record<NeedId, number>>> = {}
 ): { ok: true } | { ok: false; reason: string } {
   for (const [item, expr] of Object.entries(def.preconditions?.actorInventory ?? {})) {
     const count = inventory[item] ?? 0;
     if (!compare(count, expr)) {
       return { ok: false, reason: `actorInventory.${item} (${count}) fails ${expr}` };
+    }
+  }
+  for (const [need, expr] of Object.entries(def.preconditions?.actorNeeds ?? {})) {
+    const value = needs[need as NeedId] ?? 0;
+    if (!compare(value, expr)) {
+      return { ok: false, reason: `actorNeeds.${need} (${value}) fails ${expr}` };
     }
   }
   return { ok: true };

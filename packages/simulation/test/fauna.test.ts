@@ -64,6 +64,6 @@ describe('fauna: hunting grounds and meat', () => {
   it('the default village hosts two hunting grounds', () => {
     const grounds = DEFAULT_VILLAGE.objects.filter((o) => o.type === 'hunting_ground');
     expect(grounds).toHaveLength(2);
-    expect(DEFAULT_VILLAGE.objects).toHaveLength(23);
+    expect(DEFAULT_VILLAGE.objects).toHaveLength(19);
   });
 });

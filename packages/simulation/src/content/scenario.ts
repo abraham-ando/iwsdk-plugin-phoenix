@@ -64,11 +64,12 @@ function settlementObjects(s: Settlement): ScenarioObject[] {
 }
 
 const SHARED_OBJECTS: ScenarioObject[] = [
-  // Oaks close to the camps — wood sources.
-  { type: 'oak_tree', x: -6.5, z: 2.0 },
-  { type: 'oak_tree', x: 7.0, z: -1.0 },
-  { type: 'oak_tree', x: -2.0, z: -13.0 },
-  { type: 'oak_tree', x: 4.5, z: -14.0 },
+  // Plus aucun chêne ici. Les quatre qui s'y trouvaient avaient été posés
+  // comme substituts d'une forêt qui n'existait pas encore ; depuis l'écologie
+  // E1 elle existe — 1 561 chênes, dont 11 dans les vingt premiers mètres, le
+  // plus proche à 10,5 m du camp Aube. Garder les substituts revenait à donner
+  // au village un bosquet inépuisable qui absorbait toute la demande : sur six
+  // jours simulés, 2 chênes sur 1 561 étaient exploités, aucun au-delà de 7 m.
   // River access points (river center x = 4 + sin(z*0.12)*3.5).
   { type: 'river_bank', x: 4.0, z: 0.0 },
   { type: 'river_bank', x: 2.9, z: -8.0 },

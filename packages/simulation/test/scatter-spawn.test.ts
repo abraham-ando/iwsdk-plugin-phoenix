@@ -91,10 +91,12 @@ describe('le scénario peuple le monde', () => {
     expect(bushes).toBeGreaterThan(100);
   });
 
-  it('GARDE LE VILLAGE INTACT : ses 23 objets sont toujours là', async () => {
+  it('GARDE LE VILLAGE INTACT : ses 19 objets sont toujours là', async () => {
     const { buildVillageSim, DEFAULT_VILLAGE } = await import('../src/content/scenario');
     const { world } = buildVillageSim(1);
-    expect(DEFAULT_VILLAGE.objects).toHaveLength(23);
+    expect(DEFAULT_VILLAGE.objects).toHaveLength(19);
+    // Aucun chêne calé à la main : le bois vient de la forêt semée.
+    expect(DEFAULT_VILLAGE.objects.filter((o) => o.type === 'oak_tree')).toHaveLength(0);
     expect(world.objectsOfType('campfire')).toHaveLength(3);
     expect(world.objectsOfType('shelter')).toHaveLength(3);
     expect(world.objectsOfType('hunting_ground')).toHaveLength(2);
