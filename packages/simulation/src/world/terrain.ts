@@ -127,7 +127,18 @@ function riverCarveAt(x: number, z: number): number {
  * l'altitude, qui dépendrait de l'entaille. On mesure donc le terrain sec.
  */
 function reliefWithoutRiver(x: number, z: number): number {
-  const land = landMaskAt(x, z);
+  return reliefFromLand(x, z, landMaskAt(x, z));
+}
+
+/**
+ * Variante prenant le masque continental déjà calculé.
+ *
+ * `heightAt` a besoin du masque ET du relief sec ET de la force de la rivière,
+ * qui dépend elle-même du relief sec. En passant par les fonctions publiques,
+ * il recalculait le relief DEUX FOIS et le masque TROIS FOIS par point : le
+ * coût par sommet triplait, ce qui rend un terrain streamé irréalisable.
+ */
+function reliefFromLand(x: number, z: number, land: number): number {
   const d = distanceToVillage(x, z);
 
   // 0 dans le bassin, 1 en plein relief : le village n'hérite pas des montagnes.
@@ -155,9 +166,12 @@ function reliefWithoutRiver(x: number, z: number): number {
 }
 
 export function heightAt(x: number, z: number): number {
-  const dry = reliefWithoutRiver(x, z);
-  const carve = riverCarveAt(x, z) * landMaskAt(x, z) * riverStrengthAt(x, z);
-  const height = dry - carve;
+  // Masque et relief calculés UNE fois, puis partagés avec la force de la
+  // rivière qui en dépend. Voir reliefFromLand pour le coût que cela évite.
+  const land = landMaskAt(x, z);
+  const dry = reliefFromLand(x, z, land);
+  const strength = 1 - smoothstep(RIVER_FADE_ALTITUDE, RIVER_MAX_ALTITUDE, dry);
+  const height = dry - riverCarveAt(x, z) * land * strength;
 
   // Aplatissement exact du cœur : multiplier garantit 0, une interpolation non.
   const d = distanceToVillage(x, z);

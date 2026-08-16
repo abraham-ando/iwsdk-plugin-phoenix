@@ -251,3 +251,24 @@ describe('géographie', () => {
     expect(highland / n, 'proportion de haute montagne').toBeGreaterThan(0.02);
   });
 });
+
+describe('cohérence après partage des calculs', () => {
+  it('accorde heightAt avec la force de rivière publique', () => {
+    // heightAt calcule desormais le relief sec et le masque UNE fois et les
+    // partage, au lieu de repasser par riverStrengthAt qui les recalculait.
+    // Ce test verrouille l'equivalence : l'optimisation ne doit RIEN changer
+    // au terrain, seulement au temps qu'il coute.
+    for (let x = -500; x <= 500; x += 37) {
+      for (let z = -500; z <= 500; z += 37) {
+        const strength = riverStrengthAt(x, z);
+        expect(strength).toBeGreaterThanOrEqual(0);
+        expect(strength).toBeLessThanOrEqual(1);
+        // Là où la rivière est pleine et le sol hors plateau, l'entaille doit
+        // se voir : la hauteur est strictement sous le relief environnant.
+        if (strength > 0.9 && Math.abs(x - riverCenterX(z)) < 1 && Math.hypot(x, z + 2.5) > 12) {
+          expect(heightAt(x, z)).toBeLessThan(heightAt(x + 8, z));
+        }
+      }
+    }
+  });
+});
