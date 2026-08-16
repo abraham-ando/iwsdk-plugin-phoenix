@@ -209,3 +209,40 @@ export const LocomotionEnvironment = createComponent(
   },
   'Locomotion environment',
 );
+
+// --- Matériaux à nuanceur --------------------------------------------------
+
+export const DoubleSide = 2;
+
+export class Color {
+  public r = 1;
+  public g = 1;
+  public b = 1;
+  constructor(hex = 0xffffff) {
+    this.r = ((hex >> 16) & 255) / 255;
+    this.g = ((hex >> 8) & 255) / 255;
+    this.b = (hex & 255) / 255;
+  }
+  setRGB(r: number, g: number, b: number): this {
+    this.r = r;
+    this.g = g;
+    this.b = b;
+    return this;
+  }
+}
+
+export class ShaderMaterial {
+  public uniforms: Record<string, { value: unknown }> = {};
+  public vertexShader = '';
+  public fragmentShader = '';
+  public transparent = false;
+  public side = 0;
+  public depthWrite = true;
+  public disposed = false;
+  constructor(parameters: Record<string, unknown> = {}) {
+    Object.assign(this, parameters);
+  }
+  dispose(): void {
+    this.disposed = true;
+  }
+}
