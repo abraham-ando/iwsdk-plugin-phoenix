@@ -5,3 +5,8 @@ export {
   type QualityTier,
   type QualityEnv,
 } from './core/quality';
+export {
+  solarPosition,
+  declinationForDayOfYear,
+  type SolarPosition,
+} from './atmosphere/solar';
