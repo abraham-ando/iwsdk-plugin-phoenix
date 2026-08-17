@@ -124,6 +124,31 @@ importers:
         specifier: ^3.2.4
         version: 3.2.7(@types/node@22.20.1)(tsx@4.23.12)
 
+  packages/character-three:
+    dependencies:
+      '@iwsdk/cardinal-character':
+        specifier: workspace:*
+        version: link:../character
+    devDependencies:
+      '@iwsdk/core':
+        specifier: 0.5.3
+        version: 0.5.3(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))(react@19.2.8)
+      '@types/node':
+        specifier: ^22.20.1
+        version: 22.20.1
+      elics:
+        specifier: 3.4.2
+        version: 3.4.2
+      tsup:
+        specifier: ^8.5.0
+        version: 8.5.1(postcss@8.5.26)(tsx@4.23.12)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@22.20.1)(tsx@4.23.12)
+
   packages/client:
     dependencies:
       phoenix:
