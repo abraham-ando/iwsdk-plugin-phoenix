@@ -76,7 +76,7 @@ export function installCardinalAI(
 ): CardinalAIHandle {
   const {
     provider = 'local-webgpu',
-    llm = { modelId: 'llama-3.2-1b-it-q4f16-MLC' },
+    llm = { modelId: 'Qwen3-0.6B-q4f16_1-MLC' },
     cloud,
     selfHosted,
     tts = { voiceId: 'fr_FR-siwis-medium' },

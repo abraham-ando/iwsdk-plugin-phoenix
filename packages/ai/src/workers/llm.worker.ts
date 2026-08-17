@@ -27,7 +27,7 @@ self.onmessage = async (event: MessageEvent) => {
 
   switch (type) {
     case 'LOAD_MODEL': {
-      const modelId = payload?.modelId ?? 'llama-3.2-1b-it-q4f16-MLC';
+      const modelId = payload?.modelId ?? 'Qwen3-0.6B-q4f16_1-MLC';
       if (engine && currentModelId === modelId) {
         self.postMessage({ type: 'MODEL_READY', payload: { modelId } });
         return;
