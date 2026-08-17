@@ -234,6 +234,27 @@ describe('createCharacter — pont complet, marionnette', () => {
     expect(body.material.color.equals(before)).toBe(false);
   });
 
+  it('écrit la teinte compilée dans CharacterSurface, lisible par getVectorView', () => {
+    // `Types.Color` est un champ VECTEUR : `setValue` lève dessus en elics
+    // 3.4.x, et la vue est le seul accès (conception §9). Le composant doit
+    // porter exactement la couleur que le matériau porte — c'est la même
+    // interpolation de rampe, appelée une seule fois dans le paquet.
+    const { world, entity, body } = build();
+    const compiler = world.getSystem(CharacterCompileSystem)!;
+    compiler.update();
+
+    const skin = entity.getVectorView(CharacterSurface, 'skin');
+    expect(skin[0]).toBeCloseTo(body.material.color.r, 6);
+    expect(skin[1]).toBeCloseTo(body.material.color.g, 6);
+    expect(skin[2]).toBeCloseTo(body.material.color.b, 6);
+
+    // Les cheveux aussi : la marionnette ne porte aucun maillage de cheveux,
+    // donc rien ne les teinte — le composant les porte quand même, parce que
+    // la couleur est une propriété du personnage, pas de son asset.
+    const hair = entity.getVectorView(CharacterSurface, 'hair');
+    expect([hair[0], hair[1], hair[2]]).not.toEqual([0.2, 0.13, 0.09]);
+  });
+
   it('applique les morphs du visage via CharacterExpressionSystem sans lever', () => {
     const { world, entity } = build();
     const expression = world.getSystem(CharacterExpressionSystem)!;

@@ -1,5 +1,7 @@
-import { Color, type Bone, type Object3D, type SkinnedMesh } from '@iwsdk/core';
+import { Color, type Material, type Object3D, type SkinnedMesh } from '@iwsdk/core';
 import type { CompiledCharacter } from '@iwsdk/cardinal-character';
+import { cloneMaterials, disposeMaterials } from './materials';
+import { rampColour } from './ramp';
 import type { CharacterApplicator } from './types';
 
 export interface SkinnedApplicatorOptions {
@@ -27,8 +29,14 @@ export interface SkinnedApplicatorOptions {
 export class SkinnedApplicator implements CharacterApplicator {
   private readonly lastMorphs = new Map<string, number>();
   private readonly colour = new Color();
+  /** Les matériaux qui NOUS appartiennent : les clones, et eux seuls. */
+  private readonly owned: Material[] = [];
 
-  constructor(private readonly opts: SkinnedApplicatorOptions) {}
+  constructor(private readonly opts: SkinnedApplicatorOptions) {
+    // Un clone par individu, dès la construction et non au premier teintage :
+    // l'appartenance ne doit pas dépendre de ce que l'appelant fera ensuite.
+    for (const mesh of opts.meshes) cloneMaterials(mesh, this.owned);
+  }
 
   applyRestPose(compiled: CompiledCharacter): void {
     for (const bone of compiled.restPose) {
@@ -70,13 +78,14 @@ export class SkinnedApplicator implements CharacterApplicator {
   }
 
   applySurface(surface: Readonly<Record<string, number>>): void {
-    for (const [key, value] of Object.entries(surface)) {
+    for (const key in surface) {
       const ramp = this.opts.ramps[key];
       const targets = this.opts.surfaceTargets[key];
       if (ramp === undefined || targets === undefined) continue;
-      this.colour.set(ramp[0]).lerp(new Color(ramp[1]), value);
+      rampColour(this.colour, ramp, surface[key]!);
       for (const mesh of this.opts.meshes) {
         if (!targets.includes(mesh.name)) continue;
+        // Le matériau écrit ici est notre CLONE, posé par le constructeur.
         const material = mesh.material as { color?: Color };
         material.color?.copy(this.colour);
       }
@@ -84,10 +93,10 @@ export class SkinnedApplicator implements CharacterApplicator {
   }
 
   dispose(): void {
-    // Rien à libérer : cet applicateur ne clone aucun matériau, il écrit dans
-    // ceux que l'asset porte déjà. Le clonage par individu appartient à
-    // l'étape 3, quand plusieurs villageois partageront un même asset — et
-    // c'est là qu'il faudra vraiment disposer quelque chose.
+    // Ces matériaux sont les nôtres — le constructeur les a clonés — donc les
+    // libérer ici ne prive personne. Les textures restent celles de la
+    // bibliothèque : `Material.dispose()` ne les touche pas.
+    disposeMaterials(this.owned);
     this.lastMorphs.clear();
   }
 }

@@ -1,9 +1,10 @@
-import { createSystem } from '@iwsdk/core';
+import { Color, createSystem } from '@iwsdk/core';
 import {
   CompileCache, genomeKey, getFamily,
   type FamilyDescriptor, type Genome, type RigBinding,
 } from '@iwsdk/cardinal-character';
 import { CharacterFace, CharacterIdentity, CharacterStructure, CharacterSurface } from '../components/index';
+import { rampColour } from '../apply/ramp';
 import type { CharacterApplicator } from '../apply/types';
 
 /**
@@ -123,6 +124,23 @@ export function needsRecompile(previous: string | undefined, next: string): bool
   return previous !== next;
 }
 
+/**
+ * Gène de surface → champ de `CharacterSurface`.
+ *
+ * Le noyau pur reste agnostique — une famille à fourrure déclare `furTone` et
+ * le compilateur le porte sans rien savoir de lui — mais `CharacterSurface` est
+ * un composant FIXE, à deux champs de couleur. Cette table est donc la
+ * convention du pont, écrite en un seul endroit. Une famille qui ne déclare pas
+ * ces gènes laisse simplement les valeurs par défaut du composant.
+ */
+const SURFACE_FIELDS = [
+  ['skinTone', 'skin'],
+  ['hairTone', 'hair'],
+] as const;
+
+/** Couleur de travail, réutilisée : l'écrit se fait par composante. */
+const SURFACE_COLOUR = new Color();
+
 /** Un exemplaire par entité, réécrit sur place. Jamais réalloué. */
 interface Scratch {
   genome: MutableGenome;
@@ -212,6 +230,25 @@ export class CharacterCompileSystem extends createSystem({
       // ne changent jamais entre deux compilations : la porte de recompilation
       // est le bon endroit pour les appliquer, pas une frame à part.
       applicator.applySurface(compiled.surface);
+
+      // …et la MÊME couleur dans le composant, par la même interpolation
+      // (`rampColour`). Le README promettait depuis le début que
+      // `CharacterSurface` porte les teintes ; rien ne les y écrivait, donc un
+      // panneau d'inspection aurait lu la couleur par défaut d'un personnage
+      // parfaitement teinté. `Types.Color` est un champ VECTEUR : `setValue`
+      // lève dessus en elics 3.4.x (conception §9), la vue est le seul accès,
+      // et elics la met en cache — ce `getVectorView` n'alloue qu'une fois.
+      for (const [gene, field] of SURFACE_FIELDS) {
+        const ramp = family.genes[gene]?.ramp;
+        const tone = compiled.surface[gene];
+        if (ramp === undefined || tone === undefined) continue;
+        rampColour(SURFACE_COLOUR, ramp, tone);
+        const view = entity.getVectorView(CharacterSurface, field);
+        view[0] = SURFACE_COLOUR.r;
+        view[1] = SURFACE_COLOUR.g;
+        view[2] = SURFACE_COLOUR.b;
+      }
+
       this.compiledCount++;
     }
   }

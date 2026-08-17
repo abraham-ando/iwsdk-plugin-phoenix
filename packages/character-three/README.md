@@ -33,6 +33,19 @@ chaque image.
 `Object3D` nommés, pour les hiérarchies non skinnées. `createCharacter` choisit
 selon ce que l'asset porte réellement, pas selon une option.
 
+### Un clone de matériau par individu
+
+Les deux applicateurs **clonent** à la construction le matériau des maillages
+qu'ils vont teinter, et le remplacent par ce clone. `Object3D.clone()` partage
+ses matériaux, et un asset chargé une fois puis instancié quarante fois aussi :
+sans ce clone, le premier villageois repeindrait les trente-neuf autres, et le
+défaut se lirait comme « tout le monde a la même peau », très loin de sa cause.
+
+Le clone nous appartient, donc `dispose()` le libère — appelé par
+`CharacterCompileSystem` quand l'entité quitte la query. Les **textures**, elles,
+restent celles de la bibliothèque : `Material.clone()` en copie les références
+et `Material.dispose()` n'y touche pas.
+
 ## Usage
 
 ```ts
@@ -126,6 +139,23 @@ entrée. Les gènes de groupe `surface` (teinte de peau, de cheveux…) n'ont do
 aucun champ réglable : ils ne peuvent venir que du génome posé à la création
 via `createCharacter`, qui reste la source de vérité pour tout ce qu'aucun
 curseur n'expose.
+
+`CharacterCompileSystem` **écrit** ces deux couleurs à chaque compilation, par
+la même interpolation de rampe que celle qui teinte le matériau (`rampColour`,
+appelée en un seul endroit du paquet : deux interpolations séparées finiraient
+par diverger, et le composant dirait alors autre chose que l'écran). Elles se
+lisent — et s'écrivent — par `getVectorView`, jamais par `setValue` :
+
+```ts
+const skin = entity.getVectorView(CharacterSurface, 'skin'); // [r, g, b, a]
+```
+
+> `Types.Color` est un champ **vecteur** et `setValue` **lève** dessus en elics
+> 3.4.x. C'est le rappel qui a déjà coûté une revue.
+
+Les couleurs sont écrites même quand l'asset n'a rien à teinter — une
+marionnette sans maillage de cheveux porte quand même sa teinte de cheveux dans
+le composant : la couleur est une propriété du personnage, pas de son asset.
 
 `CharacterCompileSystem` (priorité 60) recompile le squelette **uniquement**
 sur changement de gène de STRUCTURE ou d'âge — `genomeFromComponents` ne lit

@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { MeshBasicMaterial } from '@iwsdk/core';
 import type { CompiledCharacter } from '@iwsdk/cardinal-character';
 import { SkinnedApplicator } from '../src/apply/SkinnedApplicator';
 import { skinnedLeg } from './fixtures/skinned-leg';
@@ -91,6 +92,38 @@ describe('SkinnedApplicator', () => {
     }
     durees.sort((x, y) => x - y);
     expect(durees[50]!).toBeLessThan(2);
+  });
+
+  it('clone le matériau par individu : teinter l un ne repeint pas l autre', () => {
+    // Deux personnages issus du MÊME asset source, donc du même matériau.
+    // Sans clone par individu, le premier teintage repeindrait le village.
+    const source = new MeshBasicMaterial({ color: 0xffffff });
+    const a = skinnedLeg();
+    const b = skinnedLeg();
+    a.mesh.name = 'Wolf3D_Body';
+    b.mesh.name = 'Wolf3D_Body';
+    a.mesh.material = source;
+    b.mesh.material = source;
+    const options = {
+      morphIndex: {},
+      surfaceTargets: { skinTone: ['Wolf3D_Body'] },
+      ramps: { skinTone: ['#000000', '#ff0000'] as const },
+    };
+    const appA = new SkinnedApplicator({ rigRoot: a.mesh, bones: a.bones, meshes: [a.mesh], ...options });
+    new SkinnedApplicator({ rigRoot: b.mesh, bones: b.bones, meshes: [b.mesh], ...options });
+
+    expect(a.mesh.material).not.toBe(source);
+    appA.applySurface({ skinTone: 1 });
+
+    expect((a.mesh.material as MeshBasicMaterial).color.getHex()).not.toBe(0xffffff);
+    expect((b.mesh.material as MeshBasicMaterial).color.getHex()).toBe(0xffffff);
+    expect(source.color.getHex()).toBe(0xffffff);
+
+    const cloneDispose = vi.spyOn(a.mesh.material as MeshBasicMaterial, 'dispose');
+    const sourceDispose = vi.spyOn(source, 'dispose');
+    appA.dispose();
+    expect(cloneDispose).toHaveBeenCalledOnce();
+    expect(sourceDispose).not.toHaveBeenCalled();
   });
 
   it('ignore un rôle que la liaison ne connaît pas, sans lever', () => {

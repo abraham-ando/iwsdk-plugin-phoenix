@@ -1,5 +1,7 @@
-import { Color, type Object3D } from '@iwsdk/core';
+import { Color, type Material, type Object3D } from '@iwsdk/core';
 import type { CompiledCharacter } from '@iwsdk/cardinal-character';
+import { cloneMaterials, disposeMaterials } from './materials';
+import { rampColour } from './ramp';
 import type { CharacterApplicator } from './types';
 
 export interface PuppetApplicatorOptions {
@@ -16,8 +18,22 @@ export interface PuppetApplicatorOptions {
  */
 export class PuppetApplicator implements CharacterApplicator {
   private readonly colour = new Color();
+  /** Les matériaux qui NOUS appartiennent : les clones, et eux seuls. */
+  private readonly owned: Material[] = [];
 
-  constructor(private readonly opts: PuppetApplicatorOptions) {}
+  constructor(private readonly opts: PuppetApplicatorOptions) {
+    // Seuls les nœuds que cet applicateur va TEINTER sont clonés : le reste de
+    // la marionnette n'est jamais muté, donc rien ne justifierait de lui
+    // retirer le matériau partagé de l'asset.
+    const tinted = new Set<string>();
+    for (const names of Object.values(opts.surfaceTargets)) {
+      for (const name of names) tinted.add(name);
+    }
+    if (tinted.size === 0) return;
+    opts.rigRoot.traverse((node) => {
+      if (tinted.has(node.name)) cloneMaterials(node, this.owned);
+    });
+  }
 
   applyRestPose(compiled: CompiledCharacter): void {
     for (const bone of compiled.restPose) {
@@ -42,18 +58,21 @@ export class PuppetApplicator implements CharacterApplicator {
   applyMorphs(_morphs: Readonly<Record<string, number>>): void {}
 
   applySurface(surface: Readonly<Record<string, number>>): void {
-    for (const [key, value] of Object.entries(surface)) {
+    for (const key in surface) {
       const ramp = this.opts.ramps[key];
       const targets = this.opts.surfaceTargets[key];
       if (ramp === undefined || targets === undefined) continue;
-      this.colour.set(ramp[0]).lerp(new Color(ramp[1]), value);
+      rampColour(this.colour, ramp, surface[key]!);
       this.opts.rigRoot.traverse((node) => {
         if (!targets.includes(node.name)) return;
+        // Notre CLONE, posé par le constructeur sur ces mêmes nœuds.
         const material = (node as { material?: { color?: Color } }).material;
         material?.color?.copy(this.colour);
       });
     }
   }
 
-  dispose(): void {}
+  dispose(): void {
+    disposeMaterials(this.owned);
+  }
 }
