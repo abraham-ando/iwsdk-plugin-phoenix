@@ -77,6 +77,14 @@ export {
 } from './telemetry/TrajectoryRecorder';
 export { mockPlanResponse } from './telemetry/MockPlanner';
 export {
+  buildSystemPrompt,
+  extractPlanJson,
+  planEnvelope,
+  planWithTiers,
+  type Planner,
+  type PlanTier,
+} from './agents/deliberation';
+export {
   toChatSft,
   toWorldModelSft,
   splitTrainValid,

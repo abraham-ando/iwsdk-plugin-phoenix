@@ -1,3 +1,10 @@
+import {
+  buildSystemPrompt,
+  extractPlanJson,
+  planEnvelope,
+  mockPlanResponse,
+  type PlanRequest,
+} from '@iwsdk/cardinal-simulation';
 import http, { IncomingMessage, ServerResponse } from 'node:http';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
@@ -31,26 +38,9 @@ interface ResolvedLlm {
 
 /** Structural mirror of the engine's PlanRequest — the BFF never imports the
  * engine, it just relays and logs. */
-interface AgentPlanRequest {
-  requestId: string;
-  reason: 'dawn' | 'surprise' | 'dialogue' | 'reflection' | 'player_dialogue';
-  playerText?: string;
-  agentId: string;
-  participantIds?: string[];
-  tick?: number;
-  hour?: number;
-  persona?: string;
-  role?: string;
-  tribe?: string;
-  needs?: Record<string, number>;
-  place?: string | null;
-  memories?: string[];
-  beliefs?: Array<{ objectId: string; type: string; distance: number; state: Record<string, number> }>;
-  tools?: Array<{ verb: string; objectId?: string; type?: string; distance?: number }>;
-  currentPlan?: string[];
-}
+/** Le type appartient au moteur ; le BFF le reçoit tel quel sur le fil. */
+type AgentPlanRequest = PlanRequest;
 
-const MOCK_PLAN_VERB_PREFERENCE = ['gather_berries', 'gather_wood', 'gather_flint', 'light_fire'];
 
 export class CardinalBFFServer {
   private server: http.Server;
@@ -246,72 +236,12 @@ export class CardinalBFFServer {
     res.end(JSON.stringify(response));
   }
 
-  /** Deterministic offline planner: keeps dev, tests and demos alive with no
-   * API key. Chooses believable steps from the provided tool candidates. */
+  /** Planificateur hors-ligne : celui du moteur, pour que serveur, navigateur
+   * et exécutions sans tête produisent EXACTEMENT le même plan à vide. */
   private mockPlan(request: AgentPlanRequest): Record<string, unknown> {
-    const base = {
-      requestId: request.requestId,
-      reason: request.reason,
-      agentId: request.agentId,
-      ...(request.participantIds ? { participantIds: request.participantIds } : {}),
-    };
-
-    if (request.reason === 'dialogue') {
-      const [a, b] = request.participantIds ?? [request.agentId, 'inconnu'];
-      const firstBelief = request.beliefs?.[0];
-      const topic = firstBelief ? firstBelief.type.replace('_', ' ') : 'la journée';
-      return {
-        ...base,
-        lines: [
-          { speaker: a, text: `As-tu vu ? Près d'ici, ${topic} nous attend.` },
-          { speaker: b, text: 'Bien vu — la tribu en profitera.' },
-        ],
-        sharedFacts: firstBelief
-          ? [
-              {
-                objectId: firstBelief.objectId,
-                type: firstBelief.type,
-                x: 0,
-                z: 0,
-                state: firstBelief.state,
-              },
-            ]
-          : [],
-      };
-    }
-
-    if (request.reason === 'reflection') {
-      return { ...base, insights: ['Jour vécu: besoins gérés, tribu soudée.'] };
-    }
-
-    if (request.reason === 'player_dialogue') {
-      return { ...base, reply: 'Bienvenue près de notre feu, étranger.' };
-    }
-
-    const withObject = (request.tools ?? [])
-      .filter((t) => t.objectId !== undefined)
-      .sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0));
-    const steps: Array<{ goal: string; verb: string; objectId?: string; predicted: string }> = [];
-    for (const preferred of MOCK_PLAN_VERB_PREFERENCE) {
-      if (steps.length >= 3) break;
-      const tool = withObject.find((t) => t.verb === preferred);
-      if (tool) {
-        steps.push({
-          goal: `faire ${tool.verb}`,
-          verb: tool.verb,
-          objectId: tool.objectId,
-          predicted: `réussite de ${tool.verb}`,
-        });
-      }
-    }
-    if ((request.tools ?? []).some((t) => t.verb === 'eat_berries')) {
-      steps.push({ goal: 'me nourrir', verb: 'eat_berries', predicted: 'faim restaurée' });
-    }
-    return { ...base, steps };
+    return mockPlanResponse(request);
   }
 
-  /** Resolve the upstream LLM: custom OpenAI-compatible endpoint first
-   * (local MLX/exo/ollama), then OpenAI, then Groq; null = mock mode. */
   private resolveLlm(): ResolvedLlm | null {
     const customBase = this.config.llmBaseUrl || process.env.LLM_BASE_URL;
     if (customBase) {
@@ -343,18 +273,8 @@ export class CardinalBFFServer {
     return null;
   }
 
-  /** Small local models wrap JSON in prose or markdown fences — extract the
-   * outermost object leniently. */
-  private static extractJson(content: string): Record<string, unknown> {
-    const trimmed = content.trim();
-    const start = trimmed.indexOf('{');
-    const end = trimmed.lastIndexOf('}');
-    if (start < 0 || end <= start) throw new Error('no json object in completion');
-    return JSON.parse(trimmed.slice(start, end + 1)) as Record<string, unknown>;
-  }
-
   private async llmPlan(request: AgentPlanRequest, llm: ResolvedLlm): Promise<Record<string, unknown>> {
-    const system = this.buildSystemPrompt(request);
+    const system = buildSystemPrompt(request);
     const upstream = await fetch(`${llm.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${llm.apiKey}` },
@@ -375,14 +295,7 @@ export class CardinalBFFServer {
     };
     const content = data.choices?.[0]?.message?.content;
     if (typeof content !== 'string') throw new Error('empty completion');
-    const parsed = CardinalBFFServer.extractJson(content);
-    return {
-      requestId: request.requestId,
-      reason: request.reason,
-      agentId: request.agentId,
-      ...(request.participantIds ? { participantIds: request.participantIds } : {}),
-      ...parsed,
-    };
+    return planEnvelope(request, extractPlanJson(content));
   }
 
   private buildSystemPrompt(request: AgentPlanRequest): string {
