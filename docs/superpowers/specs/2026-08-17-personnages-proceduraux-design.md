@@ -31,7 +31,7 @@ Chaque affirmation ci-dessous a été vérifiée contre le code réellement pré
 | `Types.Integer` | N'existe pas. Le jeu réel est `Float32/64`, `Int8/16/32`, `Boolean`, `String`, `FilePath`, `Vec2/3/4`, `Color`, `Entity`, `Enum`, `Object`. | Les styles de cheveux deviennent des `Types.Enum`, ce qui rend l'inspecteur meilleur que prévu. |
 | « Meta Spatial Editor » | C'est l'outil du Spatial SDK Android. IWSDK a son propre éditeur managé (`iwsdk dev up`). | Le vocabulaire est corrigé partout ; le pilotage IA change de mécanisme (§9.4). |
 | « exposées automatiquement en curseurs » | Vrai, mais uniquement si le composant figure dans le `defineComponents()` **de l'application**. Les métadonnées `label`, `min`, `max`, `step`, `enum`, `help`, `widget` pilotent l'inspecteur. | Une partie de « l'éditeur » demandé est déjà fournie. Le paquet d'UI est redimensionné en conséquence (§9). |
-| `bone.scale.y = torsoHeight` | **Ne fonctionne pas.** Un `Bone` est un `Object3D` : l'échelle descend dans toute la chaîne, donc allonger le buste allonge la tête et les bras. Une échelle non uniforme dans une chaîne d'os rotés produit du cisaillement au skinning et casse les normales. | Remplacé par le compilateur à rebake de bind pose (§7). C'est la correction structurante de ce design. |
+| `bone.scale.y = torsoHeight` | **Ne fonctionne pas.** Un `Bone` est un `Object3D` : l'échelle descend dans toute la chaîne, donc allonger le buste allonge la tête et les bras. Une échelle non uniforme dans une chaîne d'os rotés produit du cisaillement au skinning et casse les normales. | Remplacé par le compilateur à translations d'os (§7). C'est la correction structurante de ce design. |
 | `getObjectByName()` dans `update()` | Une recherche d'arbre par chaîne, par entité, par frame. Exactement ce que le budget de 11,1 ms interdit. | Résolution unique à la liaison, conservée dans une `Map` possédée par le système (§8). |
 | `ShaderMaterial` brut avec `gl_FragColor` | Perd l'IBL, les ombres, le tone mapping et la gestion des couleurs que `packages/world` a mis trois phases à établir. | Extension de `MeshStandardMaterial` via `onBeforeCompile`, ou entrée supplémentaire dans `MATERIAL_DEFINITIONS`. |
 | « millions de combinaisons » | Exact, mais chaque individu unique impose son propre `Skeleton` et son propre matériau, et un `SkinnedMesh` ne s'instancie pas dans Three. | Le partage est explicité et budgété (§7.3, §11). |
@@ -60,7 +60,7 @@ packages/character        @iwsdk/cardinal-character        PUR — ni Three, ni 
 
 packages/character-three  @iwsdk/cardinal-character-three  PONT
   ├── binding/            résolution d'un glTF contre un descripteur, rapport d'import
-  ├── apply/              rebake de bind pose, morphs, matériaux
+  ├── apply/              application de la pose, morphs, matériaux
   ├── components/         CharacterIdentity, Structure, Face, Surface, Selection
   └── systems/            CharacterCompileSystem (60), CharacterExpressionSystem (70)
 
@@ -189,7 +189,6 @@ interface CompiledBone {
 interface CompiledCharacter {
   family:         string;
   restPose:       CompiledBone[];
-  rebindSkeleton: boolean;
   morphs:         Record<string, number>;
   surface:        Record<string, number>; // un ton par gène du groupe `surface`, scalaires normalisés
   stats:          { nominalHeightMeters: number };
@@ -209,15 +208,27 @@ Les types sont des tuples de nombres, jamais des objets Three : c'est ce qui
 permet de sérialiser un `CompiledCharacter` en vecteur doré et de le comparer
 octet pour octet entre deux exécutions.
 
-### 7.2 Le rebake de bind pose
+### 7.2 Pourquoi une translation d'os suffit, et pourquoi il ne faut surtout pas rebaker
 
-Un `SkinnedMesh` déforme avec `boneMatrix = bone.matrixWorld × boneInverse`, où `boneInverse` est figée à l'export du glTF. Déplacer un os **sans** toucher à cette matrice, c'est ce que fait une animation : la peau s'étire par rapport à la pose de repos. Or allonger un bras n'est pas étirer la peau — c'est déplacer le repos lui-même.
+Un `SkinnedMesh` déforme avec `boneMatrix = bone.matrixWorld × boneInverse`, où `boneInverse` est figée à l'export du glTF.
 
-D'où la règle qui gouverne tout le compilateur :
+**Cette section affirmait le contraire de la vérité, et la correction vient d'une mesure faite à l'étape 2.** Elle prescrivait de recalculer les matrices inverses depuis la nouvelle pose. Sur une chaîne hanche → genou → cheville, avec un sommet pondéré au genou :
 
-> **Les longueurs passent par des translations d'os, les volumes par des morphs, jamais par une échelle.** Les matrices inverses sont ensuite recalculées depuis la nouvelle pose de repos.
+| Geste | genou | cheville |
+| :--- | ---: | ---: |
+| repos | −1,000 | −2,000 |
+| cuisse allongée, sans rebake | **−1,500** | **−2,500** |
+| …puis `skeleton.calculateInverses()` | −1,000 | −2,000 |
 
-Le cisaillement de la spécification d'origine devient impossible **par construction**, et non par vigilance. Les clips d'animation, qui encodent des deltas par rapport au repos, continuent de fonctionner sur la nouvelle morphologie.
+Déplacer l'os **est** la déformation : la peau suit parce que la matrice d'os diffère de la matrice de liaison, ce qui est exactement le travail du skinning. Recalculer les inverses rend la pose courante neutre et **annule** la morphologie — le maillage revient à sa géométrie de base.
+
+D'où la règle, corrigée :
+
+> **Les longueurs passent par des translations d'os, les volumes par des morphs, jamais par une échelle non uniforme. Les matrices inverses ne sont jamais recalculées.**
+
+Le cisaillement devient impossible **par construction**, et non par vigilance.
+
+Ce qui fait tenir la morphologie sous animation n'est donc pas un rebake, mais l'assainissement des clips : une piste de rotation ne touche pas la translation locale et compose proprement, tandis qu'une piste de position sur un os non racine l'écraserait à chaque frame. La règle livrée avec l'étape 1 n'est pas une précaution — c'est la condition de tout le mécanisme.
 
 ### 7.3 Ce qui se partage entre individus
 
@@ -449,7 +460,7 @@ Chaque étape aura son plan d'implémentation dédié.
 | :--- | :--- | :--- |
 | **0. Sondes** | les deux incertitudes de la §13 | deux réponses écrites, aucun code conservé |
 | **1. Noyau** | `@iwsdk/cardinal-character` — contrat, génome, hérédité, compilateur | rien à l'écran, tout en tests headless |
-| **2. Pont** | `@iwsdk/cardinal-character-three` — liaison, rebake, composants, deux systèmes | premier villageois avec une morphologie réelle |
+| **2. Pont** | `@iwsdk/cardinal-character-three` — liaison, application, composants, deux systèmes | premier villageois avec une morphologie réelle |
 | **3. Intégration** | branchement sur `cardinal-simulation`, familles des huit métiers | `AgentAvatarFactory` supprimé |
 | **4. Panneaux** | `@iwsdk/cardinal-character-ui` — routeur, puis Persona, Réglages, Archétypes, Hérédité | atelier utilisable dans le casque |
 | **5. Réplication** | `CharacterGenome` au schéma Cardinal, régénération | avatars distincts entre pairs |

@@ -18,7 +18,7 @@
 
 Vérifié avant de concevoir : **le dépôt ne contient aucun personnage skinné.** Pas un `Bone`, pas un `SkinnedMesh`, pas un `Skeleton` dans tout le code. Les cinq avatars Ready Player Me sont déclarés dans `apps/demo/src/assets.ts` mais **jamais instanciés**. Ce qui s'affiche vient de `createRPMAvatar` (`packages/ai/src/avatar/RPMAvatarRig.ts`), qui assemble une hiérarchie de `Group` et de primitives portant des noms humanoïdes — une marionnette articulée, pas une peau attachée à un squelette.
 
-Conséquence : le rebake de bind pose, mécanisme central du compilateur, n'a **rien dans ce dépôt sur quoi s'appliquer**. Sur une marionnette, appliquer la pose compilée revient à écrire des `position` sur des nœuds nommés, et le recalcul des matrices inverses ne sert à rien.
+Conséquence : l'application d'une morphologie à une peau n'a **rien dans ce dépôt sur quoi s'appliquer**. Sur une marionnette, appliquer la pose compilée revient à écrire des `position` sur des nœuds nommés, et aucune matrice inverse n'entre en jeu.
 
 Ni la spec de l'étape 1 ni son plan n'avaient vu ce point.
 
@@ -96,7 +96,13 @@ Le compilateur compose translation, rotation et échelle uniforme le long de la 
 
 `validateDescriptor` gagne deux règles : un gène de surface doit porter sa rampe, et `groundRole`, s'il est déclaré, doit nommer un os connu.
 
-### 5.4 Note sur la croissance du descripteur
+### 5.4 Le retrait de `rebindSkeleton`
+
+`CompiledCharacter` porte un champ `rebindSkeleton: boolean`, toujours vrai, livré à l'étape 1. Il nomme une opération que le §7.2 démontre nuisible : recalculer les matrices inverses annule la morphologie au lieu de la fixer. Un champ qui prescrit le contraire de ce qu'il faut faire est pire qu'un champ absent — le premier consommateur l'aurait honoré.
+
+Il est retiré. Les vecteurs dorés l'enregistrent.
+
+### 5.5 Note sur la croissance du descripteur
 
 C'est le quatrième élargissement de `FamilyDescriptor` depuis sa création — après `limb`, `rootRole` et `headRole`. C'est la direction voulue : tout ce qui est propre à une espèce est de la donnée, et créer une famille reste un acte d'écriture de données. Mais la tendance mérite d'être nommée plutôt que subie, et la deuxième famille (`canid`) sera le test de savoir si elle s'arrête.
 
@@ -174,15 +180,31 @@ export interface CharacterApplicator {
 }
 ```
 
-### 7.2 `SkinnedApplicator` — le rebake, en trois gestes ordonnés
+### 7.2 `SkinnedApplicator` — deux gestes, et surtout un troisième à ne pas faire
 
 1. Écrire les translations et échelles uniformes locales sur les os.
 2. `root.updateMatrixWorld(true)`.
-3. `skeleton.calculateInverses()`, qui recalcule les matrices inverses depuis la pose courante et **fait de la nouvelle pose la pose de repos**.
 
-L'ordre n'est pas négociable : inverser les deux derniers gestes fige les anciennes matrices sur la nouvelle géométrie, et la peau se déchire.
+**Et ne jamais appeler `skeleton.calculateInverses()`.**
 
-**L'ancrage se pose sur l'`Object3D` conteneur, pas sur l'os racine.** Décaler l'os avant le rebake cuirait l'offset dans la pose de repos et mêlerait deux choses distinctes : la morphologie du personnage et l'endroit où il se tient.
+C'est l'inverse de ce que les deux premières rédactions de cette conception affirmaient, et la correction vient d'une mesure. Sur une chaîne hanche → genou → cheville, avec un sommet pondéré au genou et un autre à la cheville :
+
+| Geste | genou | cheville |
+| :--- | ---: | ---: |
+| repos | −1,000 | −2,000 |
+| cuisse allongée, sans rebake | **−1,500** | **−2,500** |
+| …puis `calculateInverses()` | −1,000 | −2,000 |
+| + rotation de clip sur le genou | −1,500 | −1,500 |
+
+La deuxième ligne **est** la jambe allongée : la peau suit l'os parce que la matrice d'os diffère de la matrice de liaison, ce qui est précisément le travail du skinning. La troisième montre que recalculer les inverses **annule** la morphologie — la pose courante devient neutre et le maillage revient à sa géométrie de base.
+
+Un rebake aurait donc produit un personnage rigoureusement inchangé, et le défaut se serait présenté comme « le compilateur ne fait rien », très loin de sa cause.
+
+**La quatrième ligne porte l'autre moitié du mécanisme.** Une rotation de clip sur le genou laisse la cuisse allongée intacte, parce qu'une piste de rotation ne touche pas la translation locale. C'est ce qui rend la morphologie durable sous animation — et ce qui donne à l'assainisseur de clips (§8) son vrai statut : il n'est pas une précaution, il est la condition pour qu'une piste de position sur un os non racine n'écrase pas la longueur du membre à chaque frame.
+
+**`CompiledCharacter.rebindSkeleton` devient donc faux.** Le champ, livré à l'étape 1, promet une opération qu'il ne faut surtout pas faire. Il est retiré dans les amendements du §5.
+
+**L'ancrage se pose sur l'`Object3D` conteneur, pas sur l'os racine** : la morphologie du personnage et l'endroit où il se tient sont deux choses distinctes, et les mêler rendrait l'une invisible dans le débogage de l'autre.
 
 Les morphs s'écrivent dans `mesh.morphTargetInfluences` aux index que la liaison porte — résolus une fois, jamais recherchés par frame.
 
@@ -245,7 +267,7 @@ Elle instancie l'asset, mesure la **boîte englobante de l'asset entier dans sa 
 
 ## 11. Vérification
 
-**La bonne nouvelle : le rebake est testable sans navigateur.** Les mathématiques de squelette de Three — matrices monde, matrices inverses, `calculateInverses` — ne touchent pas WebGL ; seul le rendu en a besoin. On peut donc construire en Node un `SkinnedMesh` à deux os, allonger l'un, rebaker, et **vérifier qu'un sommet pondéré atterrit là où il doit**. C'est une preuve géométrique de la promesse centrale du projet, dans une suite headless.
+**La bonne nouvelle : la déformation est testable sans navigateur.** Les mathématiques de squelette de Three — matrices monde, matrices inverses, `calculateInverses` — ne touchent pas WebGL ; seul le rendu en a besoin. On peut donc construire en Node un `SkinnedMesh` à deux os, allonger l'un, et **vérifier qu'un sommet pondéré atterrit là où il doit**. C'est une preuve géométrique de la promesse centrale du projet, dans une suite headless.
 
 | Objet | Méthode |
 | :--- | :--- |
@@ -253,7 +275,7 @@ Elle instancie l'asset, mesure la **boîte englobante de l'asset entier dans sa 
 | Rapport d'import | l'alias ayant matché est nommé, morphs et surfaces absents figurent |
 | Assainisseur de clips | réplique de `F_Dances_001` : dix-sept pistes de translation, seize retirées, celle des hanches gardée |
 | Applicateur marionnette | hiérarchie factice, translations et échelles vérifiées |
-| **Applicateur skinné** | **vrai `SkinnedMesh` en Node : sommet pondéré vérifié après rebake** |
+| **Applicateur skinné** | **vrai `SkinnedMesh` en Node : sommet pondéré vérifié après allongement** |
 | Ancrage | l'os d'appui repose à zéro, à tous les âges testés |
 | Budget d'application | médiane sous le plafond, mesurée et consignée |
 | Chargement IWSDK → `SkinnedMesh` | **seul point exigeant un vrai runtime** |
@@ -279,7 +301,7 @@ La spec amont §14 les promettait ; l'étape 1 ne les a pas touchées faute de s
 | Étape | Contenu | Livrable |
 | :--- | :--- | :--- |
 | **1. Amendements au noyau** | `groundRole`, rotations de repos, rampes, `groundOffsetMeters`, validation | vecteurs dorés régénérés |
-| **2. Applicateur skinné** | **en premier, délibérément** : c'est l'hypothèse non vérifiée | sommet pondéré correct après rebake, en Node |
+| **2. Applicateur skinné** | **en premier, délibérément** : c'est l'hypothèse non vérifiée | sommet pondéré déplacé par l'allongement, en Node |
 | **3. Résolveur et rapport** | alias d'os, morphs, cibles de surface, rejet précis | asset incomplet refusé avec sa liste |
 
 **Pourquoi l'applicateur précède le résolveur.** L'applicateur consomme une
