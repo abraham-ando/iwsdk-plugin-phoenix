@@ -45,11 +45,23 @@ describe('les archétypes restent ce qu ils prétendent être', () => {
   const compileMétier = (id: string, age: number) =>
     compile(HUMANOID, genomeFromPreset(HUMANOID, METIERS[id]!), age, BINDING);
 
-  it('le ferronnier est plus large d épaules et plus massif que le chercheur', () => {
-    const ferronnier = METIERS['ferronnier']!;
-    const chercheur = METIERS['chercheur']!;
-    expect(ferronnier.genes['shoulderWidth']!).toBeGreaterThan(chercheur.genes['shoulderWidth']!);
-    expect(ferronnier.genes['bodyMass']!).toBeGreaterThan(chercheur.genes['bodyMass']!);
+  it('le ferronnier a réellement les épaules plus larges que le chercheur', () => {
+    // Sur la sortie COMPILÉE et non sur la fiche : comparer les gènes entre eux
+    // ne teste que la cohérence du fichier de données, et laisserait passer un
+    // compilateur qui ignore le gène — ce qui était le cas avant l'ajout de la
+    // chaîne d'épaules.
+    const épaule = (id: string) => {
+      const b = compileMétier(id, 40).restPose.find((x) => x.role === 'shoulderL')!;
+      return Math.hypot(b.position[0], b.position[1], b.position[2]);
+    };
+    expect(épaule('ferronnier')).toBeGreaterThan(épaule('chercheur'));
+  });
+
+  it('le ferronnier est réellement plus massif que le chercheur', () => {
+    // `bodyMass` devient un morph : la même logique s'applique — comparer la
+    // sortie compilée et non la fiche.
+    const masse = (id: string) => compileMétier(id, 40).morphs['bodyMass']!;
+    expect(masse('ferronnier')).toBeGreaterThan(masse('chercheur'));
   });
 
   it('aucun métier ne produit un adulte hors de la stature humaine', () => {
@@ -76,6 +88,10 @@ describe('genomeFromPreset', () => {
   it('complète les gènes absents par la valeur médiane', () => {
     const genome = genomeFromPreset(HUMANOID, METIERS['enseignant']!);
     expect(Object.keys(genome.genes).sort()).toEqual(Object.keys(HUMANOID.genes).sort());
+    // `enseignant` ne déclare ni armLength ni skinTone : ils doivent tomber
+    // sur la valeur médiane de la famille, pas sur un autre remplissage.
+    expect(genome.genes['armLength']).toBe(0.5);
+    expect(genome.genes['skinTone']).toBe(0.5);
   });
 
   it('refuse un preset d une autre famille', () => {

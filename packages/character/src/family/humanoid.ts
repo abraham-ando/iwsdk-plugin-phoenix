@@ -48,6 +48,15 @@ export const HUMANOID: FamilyDescriptor = {
       limb: true,
     },
     torso: { from: 'root', to: 'neck', gene: 'torsoLength', limb: false },
+    // Les épaules appartiennent au tronc et non aux membres : chez l'enfant
+    // elles suivent le buste, pas le rapport membres/tronc. La chaîne ne
+    // contient qu'un os de chaque côté — mettre à l'échelle la translation
+    // locale de la clavicule l'éloigne du sternum, ce qui EST la largeur
+    // d'épaules.
+    shoulder: {
+      from: 'chest', to: 'shoulderL', gene: 'shoulderWidth', limb: false,
+      mirror: ['chest', 'shoulderR'],
+    },
   },
 
   morphs: {
