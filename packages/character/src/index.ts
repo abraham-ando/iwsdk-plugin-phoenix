@@ -28,6 +28,9 @@ export type {
 export { compile } from './compile/compile';
 export { CompileCache, genomeKey } from './compile/memo';
 
+export type { TranslationTrack } from './compile/clips';
+export { classifyTranslationTrack, CONSTANT_TRACK_EPSILON } from './compile/clips';
+
 import { HUMANOID } from './family/humanoid';
 import { registerFamily } from './family/registry';
 
