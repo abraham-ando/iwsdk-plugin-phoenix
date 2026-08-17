@@ -322,7 +322,45 @@ function worldYOf(
 }
 ```
 
-Note : ce test recompose sans rotation parce que la fixture n'en porte pas ; la tâche 3 en ajoutera une et le test de l'implémentation la couvrira.
+Note : ce test recompose sans rotation parce que la fixture n'en porte pas.
+
+**Et c'est insuffisant.** Toutes les fixtures de ce plan — celle-ci, celle du
+résolveur en tâche 3, celle du générateur — portent des quaternions identité.
+Aucun test n'exercerait donc l'ordre de composition, et une inversion entre
+« mettre à l'échelle puis tourner » et « tourner puis mettre à l'échelle »
+resterait verte. Il faut un cas qui **discrimine** : une famille minimale à deux
+os dont la racine porte un quart de tour autour de X, où une somme naïve de
+translations donnerait `0` et la composition correcte `−1`.
+
+```ts
+const RX90 = [Math.SQRT1_2, 0, 0, Math.SQRT1_2] as const;
+
+const PLIE: FamilyDescriptor = {
+  id: 'plie', adultAge: 18, rootRole: 'root', headRole: 'root', groundRole: 'pied',
+  bones: { root: ['Root'], pied: ['Pied'] },
+  chains: {}, morphs: {}, slots: {},
+  proportions: { headToBody: [[0, 1]], limbToTorso: [[0, 1]], bodyScale: [[0, 1]] },
+  genes: { stature: { group: 'structure', heritability: 1, dominance: 0.5, mutationRate: 0 } },
+};
+
+it('compose les ROTATIONS de la chaîne, pas seulement les translations', () => {
+  // La racine tourne d'un quart de tour autour de X, donc le -Y local du pied
+  // part sur -Z et ne descend pas : l'appui reste à y = 1, l'offset vaut -1.
+  // Une somme naïve de translations donnerait 1 + (-1) = 0.
+  const binding: RigBinding = {
+    family: 'plie', restHeightMeters: 1, morphIndex: {},
+    bones: {
+      root: { role: 'root', parentRole: null, position: [0, 1, 0], rotation: [...RX90] },
+      pied: { role: 'pied', parentRole: 'root', position: [0, -1, 0], rotation: [0, 0, 0, 1] },
+    },
+  };
+  const c = compile(PLIE, { family: 'plie', genes: { stature: 0.5 } }, 18, binding);
+  expect(c.stats.groundOffsetMeters).toBeCloseTo(-1, 6);
+});
+```
+
+Le prouver : remplacer temporairement `quatRotate(rot, …)` par le vecteur non
+tourné dans `groundHeight`, constater que ce test échoue seul, puis restaurer.
 
 - [ ] **Step 7: Lancer le test pour le voir échouer**
 
