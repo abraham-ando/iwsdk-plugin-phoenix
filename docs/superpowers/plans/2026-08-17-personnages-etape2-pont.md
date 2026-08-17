@@ -1077,21 +1077,6 @@ export interface ImportReport {
 import type { BoneRest, FamilyDescriptor, RigBinding } from '@iwsdk/cardinal-character';
 import type { ImportReport, RigNode } from './types';
 
-/** Les rôles sans lesquels un personnage ne peut pas être compilé. */
-function requiredRoles(family: FamilyDescriptor): Set<string> {
-  const roles = new Set<string>([family.rootRole, family.headRole]);
-  if (family.groundRole !== undefined) roles.add(family.groundRole);
-  for (const chain of Object.values(family.chains)) {
-    roles.add(chain.from);
-    roles.add(chain.to);
-    if (chain.mirror !== undefined) {
-      roles.add(chain.mirror[0]);
-      roles.add(chain.mirror[1]);
-    }
-  }
-  return roles;
-}
-
 export function resolveBinding(
   family: FamilyDescriptor,
   root: RigNode,
@@ -1125,8 +1110,12 @@ export function resolveBinding(
     report.matched.push({ role, nodeName: hit.found!.node.name, viaAlias: hit.alias });
   }
 
-  const required = requiredRoles(family);
-  const fatal = report.missingBones.filter((role) => required.has(role));
+  // TOUT rôle déclaré est structurel. Ne rendre obligatoires que les extrémités
+  // de chaîne laisserait un os intermédiaire non apparié être sauté en silence
+  // par la marche de `chainRoles`, qui remonte de rôle en rôle : son segment ne
+  // serait jamais mis à l'échelle pendant que ses voisins le seraient — le
+  // personnage difforme sans erreur que ce résolveur existe pour empêcher.
+  // Une famille déclare un rôle parce qu'elle en a besoin.
 
   // 2. Les morphs : absents, ils sont dits mais ne bloquent pas.
   const morphIndex: Record<string, number> = {};
