@@ -518,21 +518,15 @@ export function applyRootMotionPolicy(
   const v = copy.values;
   // Rebasage sur la PREMIÈRE clé, pas sur zéro. Les hanches sont à ~1 m au-
   // dessus de l'origine de l'armature et rarement à x = z = 0 ; les y ramener
-  // téléporterait le bassin. On soustrait l'offset de départ, ce qui retire le
-  // voyage et garde la pose.
+  // téléporterait le bassin. Chaque clé reçoit donc l'horizontale de DÉPART :
+  // le voyage disparaît, la pose reste.
   const baseX = v[0] ?? 0;
   const baseZ = v[2] ?? 0;
   for (let i = 0; i < v.length; i += 3) {
-    v[i] = v[i]! - baseX;
-    v[i + 2] = v[i + 2]! - baseZ;
+    v[i] = baseX;
+    v[i + 2] = baseZ;
     // v[i + 1], l'axe vertical, reste intact : c'est le balancement de la
     // marche et l'accroupissement du repos.
-  }
-  // Le rebasage a mis la première clé à (0, y, 0) ; on rétablit l'offset
-  // constant pour que le bassin reste où le rig le pose.
-  for (let i = 0; i < v.length; i += 3) {
-    v[i] = v[i]! + baseX;
-    v[i + 2] = v[i + 2]! + baseZ;
   }
   return copy;
 }
@@ -1324,7 +1318,7 @@ git commit -m "feat(demo): eleven village genomes, two of them bred"
 
 **Interfaces :**
 - Consumes : `createAgentAvatar`, `applyAvatarPose` de `AgentAvatarFactory` ; `createCharacterFromAsset`, `loadCharacterClips`, `CharacterAnimationSystem`, `installCharacterThree` ; `buildVillagerGenomes` (tâche 6).
-- Produces : `interface VillagerBody`, `PuppetBody`, `RiggedBody`, `upgradeVillagers(world, bodies, agents, genomes)`.
+- Produces : `interface VillagerBody` (`node`, `setPose`, `dispose`) ; `class PuppetBody` ; `upgradeVillagers(options: UpgradeOptions): Promise<void>` ; `hashIndex(id, modulo): number` ; `makeRiggedBody(world, entity, clips): VillagerBody`. Il n'y a PAS de classe `RiggedBody` : le corps riggé est un objet rendu par `makeRiggedBody`.
 
 - [ ] **Step 1 : Écrire les tests qui échouent**
 
@@ -1428,7 +1422,10 @@ Create `apps/demo/src/simulation/VillagerBody.ts` :
  * `CardinalSimulationSystem.projectScene` ne doit PAS apprendre à distinguer un
  * rig d'une marionnette : il appelle `setPose` et ne change plus jamais.
  */
-import type { Object3D } from '@iwsdk/core';
+import {
+  CharacterAnimationSystem,
+} from '@iwsdk/cardinal-character-three';
+import type { AnimationClip, Entity, Group, Object3D, World } from '@iwsdk/core';
 import type { AgentView } from '@iwsdk/cardinal-simulation';
 import { applyAvatarPose } from './AgentAvatarFactory';
 
@@ -1446,15 +1443,16 @@ export interface VillagerBody {
  * qui resterait sinon une implémentation d'interface que personne n'appelle.
  */
 export class PuppetBody implements VillagerBody {
-  constructor(readonly node: Object3D, private readonly agentId: string) {}
+  // `Group` et non `Object3D` : `applyAvatarPose` en exige un, et typer le
+  // champ ici évite un transtypage à chaque appel.
+  constructor(readonly node: Group, readonly agentId: string) {}
 
   setPose(animation: AgentView['animation'], elapsedSeconds: number): void {
-    applyAvatarPose(this.node as never, animation, elapsedSeconds);
+    applyAvatarPose(this.node, animation, elapsedSeconds);
   }
 
   dispose(): void {
     this.node.removeFromParent();
-    void this.agentId;
   }
 }
 
