@@ -40,6 +40,9 @@ export interface PrehistoricSceneResult {
   root: Group;
   campfires: Map<string, Group>;
   shelters: Map<string, Group>;
+  berryBushes: Map<string, Group>;
+  flintDeposits: Map<string, Group>;
+  campStorages: Map<string, Group>;
   agentAvatars: Map<string, Group>;
   entities: Entity[];
   grassField: ProceduralGrassField;
@@ -56,6 +59,9 @@ export class PrehistoricEnvironment3D {
     root.name = 'Procedural_Nature_World_3D';
     const campfires = new Map<string, Group>();
     const shelters = new Map<string, Group>();
+    const berryBushes = new Map<string, Group>();
+    const flintDeposits = new Map<string, Group>();
+    const campStorages = new Map<string, Group>();
     const agentAvatars = new Map<string, Group>();
     const entities: Entity[] = [];
 
@@ -104,65 +110,9 @@ export class PrehistoricEnvironment3D {
     // exploitables, et scatterAt observe une réserve autour du plateau — sans
     // quoi les agents bûcheronneraient des arbres invisibles.
 
-    // 5b. Volumetric Broadleaf Oak Trees (Reference Images 1 & 5)
-    const oakLocations: [number, number][] = layout.objects
-      .filter((o) => o.type === 'oak_tree')
-      .map((o) => [o.x, o.z]);
-
-    oakLocations.forEach(([ox, oz]) => {
-      const oy = terrain.getHeight(ox, oz);
-      const oak = ProceduralVegetation.createOakTree(0.9 + Math.random() * 0.25, materials);
-      oak.position.set(ox, oy, oz);
-      root.add(oak);
-
-      const oakEntity = world.createEntity();
-      oakEntity.addComponent(Transform, { position: [ox, oy, oz] });
-      oakEntity.addComponent(PhysicsShape, {
-        shape: PhysicsShapeType.Cylinder,
-        dimensions: [0.35, 3.2, 0],
-        friction: 0.8,
-        restitution: 0.1,
-      });
-      oakEntity.addComponent(PhysicsBody, { state: PhysicsState.Static });
-      entities.push(oakEntity);
-    });
-
-    // 5c. Wildflower Meadow Patches (Reference Image 5)
-    const flowerLocations: [number, number][] = [
-      [0.5, -1.5], [-2.5, -1.0], [3.0, -0.5], [-1.0, 2.5],
-      [2.5, 2.0], [-4.0, 0.5], [5.0, 1.5], [-3.0, -7.0],
-    ];
-
-    flowerLocations.forEach(([fx, fz]) => {
-      const fy = terrain.getHeight(fx, fz);
-      const patch = ProceduralVegetation.createWildflowerPatch();
-      patch.position.set(fx, fy, fz);
-      root.add(patch);
-    });
-
-    // 5d. Mossy Field Boulders & Shoreline Stones (Reference Images 1, 3, 5)
-    const boulderLocations: [number, number][] = [
-      [-3.8, -2.5], [4.2, -4.8], [-1.5, -8.5], [6.5, -7.0],
-      [-5.5, -11.0], [2.8, -10.5], [-9.0, 1.5], [8.0, 6.0],
-    ];
-
-    boulderLocations.forEach(([bx, bz]) => {
-      const by = terrain.getHeight(bx, bz);
-      const boulder = ProceduralVegetation.createMossyBoulder(0.8 + Math.random() * 0.4, materials);
-      boulder.position.set(bx, by, bz);
-      root.add(boulder);
-
-      const boulderEntity = world.createEntity();
-      boulderEntity.addComponent(Transform, { position: [bx, by, bz] });
-      boulderEntity.addComponent(PhysicsShape, {
-        shape: PhysicsShapeType.Box,
-        dimensions: [0.8, 0.5, 0.8],
-        friction: 0.7,
-        restitution: 0.2,
-      });
-      boulderEntity.addComponent(PhysicsBody, { state: PhysicsState.Static });
-      entities.push(boulderEntity);
-    });
+    // Plus de chênes posés à la main : l'écologie E1 les a retirés du
+    // village au profit du semis, et FloraSystem instancie la forêt.
+    // Le filtre qui vivait ici rendait une liste vide depuis lors.
 
     // 6. The 3 Tribal Settlements on the Natural Landscape (from the layout —
     // the same entries the simulation engine spawns its smart objects from).
@@ -226,6 +176,7 @@ export class PrehistoricEnvironment3D {
       const bush = this.createBerryBush();
       bush.position.set(1.5, 0, 0.6);
       tribeGroup.add(bush);
+      berryBushes.set(settlement.tribe, bush);
 
       const bushEntity = world.createEntity();
       bushEntity.addComponent(Transform, { position: [pos[0] + 1.5, pos[1], pos[2] + 0.6] });
@@ -242,6 +193,13 @@ export class PrehistoricEnvironment3D {
       const rock = this.createFlintRock(materials);
       rock.position.set(-1.4, 0, 0.8);
       tribeGroup.add(rock);
+      flintDeposits.set(settlement.tribe, rock);
+
+      // Le cellier, calé à l'OUEST du foyer comme le scénario le place.
+      const storage = this.createCampStorage(materials);
+      storage.position.set(-0.9, 0, -0.7);
+      tribeGroup.add(storage);
+      campStorages.set(settlement.tribe, storage);
 
       const rockEntity = world.createEntity();
       rockEntity.addComponent(Transform, { position: [pos[0] - 1.4, pos[1], pos[2] + 0.8] });
@@ -271,7 +229,18 @@ export class PrehistoricEnvironment3D {
       agentAvatars.set(agent.id, avatar);
     }
 
-    return { root, campfires, shelters, agentAvatars, entities, grassField, terrain };
+    return {
+      root,
+      campfires,
+      shelters,
+      berryBushes,
+      flintDeposits,
+      campStorages,
+      agentAvatars,
+      entities,
+      grassField,
+      terrain,
+    };
   }
 
   public static createCampfire(tribeName: string): Group {
@@ -352,6 +321,11 @@ export class PrehistoricEnvironment3D {
     core.position.set(0, 0.48, 0);
     bush.add(core);
 
+    // Les baies vivent sous un enfant nommé `fill` : c'est la convention que
+    // SmartObjectVisualSystem met à l'échelle, et qui masque à zéro. Sans ce
+    // groupe, un buisson cueilli gardait toutes ses baies.
+    const fill = new Group();
+    fill.name = 'fill';
     for (let i = 0; i < 10; i++) {
       const b = new Mesh(new SphereGeometry(0.05, 6, 6), berryMat);
       b.position.set(
@@ -359,10 +333,39 @@ export class PrehistoricEnvironment3D {
         0.32 + Math.random() * 0.38,
         (Math.random() - 0.5) * 0.65
       );
-      bush.add(b);
+      fill.add(b);
     }
+    bush.add(fill);
 
     return bush;
+  }
+
+  /**
+   * Le tas de provisions du campement. Le moteur le connaît depuis toujours
+   * (`camp_storage`, baies et bois mis de côté) ; rien ne le dessinait, si
+   * bien qu'une journée de cueillette n'avait aucun retour visible.
+   */
+  public static createCampStorage(materials?: MaterialLibrary): Group {
+    const storage = new Group();
+    const woodMat = materials
+      ? materials.get('bark')
+      : new MeshStandardMaterial({ color: 0x6b4423, roughness: 0.9 });
+
+    // Le panier reste ; ce qu'il contient monte et descend.
+    const basket = new Mesh(new CylinderGeometry(0.34, 0.28, 0.26, 10), woodMat);
+    basket.position.set(0, 0.13, 0);
+    storage.add(basket);
+
+    const fill = new Group();
+    fill.name = 'fill';
+    const heapMat = new MeshStandardMaterial({ color: 0xb45309, roughness: 0.75 });
+    const heap = new Mesh(new SphereGeometry(0.26, 10, 8), heapMat);
+    heap.position.set(0, 0.3, 0);
+    heap.scale.set(1, 0.6, 1);
+    fill.add(heap);
+    storage.add(fill);
+
+    return storage;
   }
 
   public static createFlintRock(materials?: MaterialLibrary): Group {
@@ -376,9 +379,14 @@ export class PrehistoricEnvironment3D {
     mainRock.position.set(0, 0.18, 0);
     rockGroup.add(mainRock);
 
+    // L'éclat détachable porte l'état : c'est lui qui s'amenuise à mesure
+    // qu'on taille, le socle restant.
+    const fill = new Group();
+    fill.name = 'fill';
     const smallRock = new Mesh(new SphereGeometry(0.14, 6, 6), rockMat);
     smallRock.position.set(0.32, 0.1, 0.12);
-    rockGroup.add(smallRock);
+    fill.add(smallRock);
+    rockGroup.add(fill);
 
     return rockGroup;
   }

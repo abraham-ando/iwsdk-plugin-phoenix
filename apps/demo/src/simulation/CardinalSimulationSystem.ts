@@ -107,6 +107,12 @@ export class CardinalSimulationSystem extends createSystem({}) {
     };
     bind(sceneData.campfires, 'campfire');
     bind(sceneData.shelters, 'shelter');
+    // Les ressources aussi montrent leur état : un buisson cueilli, un silex
+    // entamé, un cellier qui se remplit. C'était le seul retour visible que
+    // l'économie du village n'avait pas.
+    bind(sceneData.berryBushes, 'berry_bush');
+    bind(sceneData.flintDeposits, 'flint_deposit');
+    bind(sceneData.campStorages, 'camp_storage');
 
     // Le loup se projette comme n'importe quel animal : le rendu ignore qu'il
     // s'agit d'un loup (spec §8).
