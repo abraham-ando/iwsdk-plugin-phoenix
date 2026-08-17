@@ -27,3 +27,10 @@ export * from './mr';
 export * from './cache';
 export * from './types';
 export * from './plugin';
+export {
+  LOCAL_MODELS,
+  LOCAL_MODEL_VRAM_CEILING_MB,
+  DEFAULT_LOCAL_MODEL,
+  localModel,
+  type LocalModelChoice,
+} from './models/catalogue';

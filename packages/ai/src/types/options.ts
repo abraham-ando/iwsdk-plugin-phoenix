@@ -8,7 +8,18 @@ export type InferenceProviderType = 'local-webgpu' | 'cloud' | 'self-hosted';
 export type CacheStorageType = 'opfs' | 'cache-storage' | 'indexeddb' | 'none';
 
 export interface LLMModelConfig {
-  /** Identifier of the quantized model (e.g. 'llama-3.2-1b-it-q4f16-MLC', 'qwen2.5-1.5b-it-q4f16', 'gemma-2b-it-q4f16_1-MLC') */
+  /**
+   * Identifiant MLC du modèle quantifié. Il doit figurer dans la liste
+   * pré-établie de WebLLM : `llama-3.2-1b-it-q4f16-MLC`, longtemps inscrit
+   * ici en exemple, n'existe pas — le chemin local ne tournait jamais, donc
+   * personne ne l'a vu.
+   *
+   * Connus et légers, VRAM annoncée par WebLLM à contexte égal (4 096) :
+   * 'gemma3-1b-it-q4f16_1-MLC' (0,7 Go), 'Llama-3.2-1B-Instruct-q4f16_1-MLC'
+   * (0,9 Go), 'Qwen3-0.6B-q4f16_1-MLC' (1,4 Go — le plus lourd des petits,
+   * et son mode « thinking » émet des accolades avant la réponse),
+   * 'SmolLM2-360M-Instruct-q4f16_1-MLC' (0,4 Go, mais faible en français).
+   */
   modelId: string;
   /** Max output tokens per inference cycle (default: 128 for VR budget) */
   maxTokens?: number;

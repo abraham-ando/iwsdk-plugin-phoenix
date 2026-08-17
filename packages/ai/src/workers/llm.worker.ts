@@ -6,6 +6,8 @@
 
 export {};
 
+import { DEFAULT_LOCAL_MODEL } from '../models/catalogue';
+
 interface WebLLMEngine {
   chat: {
     completions: {
@@ -27,7 +29,7 @@ self.onmessage = async (event: MessageEvent) => {
 
   switch (type) {
     case 'LOAD_MODEL': {
-      const modelId = payload?.modelId ?? 'llama-3.2-1b-it-q4f16-MLC';
+      const modelId = payload?.modelId ?? DEFAULT_LOCAL_MODEL;
       if (engine && currentModelId === modelId) {
         self.postMessage({ type: 'MODEL_READY', payload: { modelId } });
         return;
@@ -41,43 +43,25 @@ self.onmessage = async (event: MessageEvent) => {
           payload: { text: `Initializing WebGPU context for ${modelId}...`, progress: 0.05 },
         });
 
-        // Dynamic import or WebLLM initialization if available in environment
-        try {
-          const dynamicImport = new Function('m', 'return import(m)');
-          const webllm = await dynamicImport('@mlc-ai/web-llm');
-          if (webllm && webllm.CreateMLCEngine) {
-            const appConfig = payload?.appConfig;
-            engine = await webllm.CreateMLCEngine(modelId, {
-              appConfig,
-              initProgressCallback: (progress: { text: string; progress: number }) => {
-                self.postMessage({
-                  type: 'MODEL_PROGRESS',
-                  payload: { text: progress.text, progress: progress.progress },
-                });
-              },
+        // Import dynamique : WebLLM et son WASM ne se chargent qu'au moment
+        // où quelqu'un demande un modèle, dans un morceau à part.
+        //
+        // Il n'y a plus de moteur de substitution. Il y en avait un, qui
+        // rendait une phrase française fabriquée quand l'import échouait —
+        // c'est-à-dire TOUJOURS, puisque `@mlc-ai/web-llm` n'était pas
+        // installé. L'adaptateur se croyait prêt et ne touchait jamais le GPU.
+        // Mieux vaut échouer et le dire : l'appelant n'offrira pas une
+        // délibération qu'il ne peut pas tenir.
+        const webllm = await import('@mlc-ai/web-llm');
+        engine = (await webllm.CreateMLCEngine(modelId, {
+          ...(payload?.appConfig ? { appConfig: payload.appConfig } : {}),
+          initProgressCallback: (progress: { text: string; progress: number }) => {
+            self.postMessage({
+              type: 'MODEL_PROGRESS',
+              payload: { text: progress.text, progress: progress.progress },
             });
-          }
-        } catch {
-          // Responsive fallback engine when WebLLM is not installed/mocked
-          engine = {
-            chat: {
-              completions: {
-                async create(opts) {
-                  const userMsg = opts.messages.find((m) => m.role === 'user')?.content ?? '';
-                  return {
-                    choices: [
-                      {
-                        message: {
-                          content: `[Cardinal AI - ${modelId}]: Réponse locale simulée à "${userMsg}".`,
-                        },
-                      },
-                    ],
-                  };
-                },
-              },
-            },
-          };
-        }
+          },
+        })) as unknown as WebLLMEngine;
 
         currentModelId = modelId;
         isInitializing = false;

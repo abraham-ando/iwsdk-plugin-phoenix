@@ -38,6 +38,13 @@ export default defineConfig({
     target: 'esnext',
     rollupOptions: { input: './index.html' },
   },
+  // Le worker d'inférence charge WebLLM par import dynamique, pour que le
+  // runtime et son WASM ne descendent qu'au moment où quelqu'un active le
+  // modèle local. Cela impose un découpage à l'intérieur du worker, dont le
+  // format `iife` par défaut de Vite est incapable — la construction échoue
+  // alors sur « UMD and IIFE output formats are not supported for
+  // code-splitting builds ». Les workers sont déjà créés en `type: 'module'`.
+  worker: { format: 'es' },
   esbuild: { target: 'esnext' },
   optimizeDeps: {
     // The plugin ships as ESM with its worker resolved through
