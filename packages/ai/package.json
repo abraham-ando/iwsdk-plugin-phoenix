@@ -69,5 +69,8 @@
   },
   "engines": {
     "node": ">=20.19.0"
+  },
+  "dependencies": {
+    "@mlc-ai/web-llm": "^0.2.84"
   }
 }
