@@ -1,28 +1,16 @@
 import type { BoneRest, FamilyDescriptor, RigBinding } from '@iwsdk/cardinal-character';
 import type { ImportReport, RigNode } from './types';
 
-/** Les rôles sans lesquels un personnage ne peut pas être compilé. */
-function requiredRoles(family: FamilyDescriptor): Set<string> {
-  const roles = new Set<string>([family.rootRole, family.headRole]);
-  if (family.groundRole !== undefined) roles.add(family.groundRole);
-  for (const chain of Object.values(family.chains)) {
-    roles.add(chain.from);
-    roles.add(chain.to);
-    if (chain.mirror !== undefined) {
-      roles.add(chain.mirror[0]);
-      roles.add(chain.mirror[1]);
-    }
-  }
-  return roles;
-}
-
 export function resolveBinding(
   family: FamilyDescriptor,
   root: RigNode,
   restHeightMeters: number,
 ): { binding: RigBinding | null; report: ImportReport } {
   // Index des nœuds par nom minuscule : `mixamorig:Hips` et `mixamorig:hips`
-  // désignent le même os selon l'exportateur.
+  // désignent le même os selon l'exportateur. Deux noms RÉELLEMENT distincts
+  // qui ne diffèrent que par la casse entreraient en collision ici — le
+  // dernier rencontré par la marche gagnerait en silence. Un rig cohérent ne
+  // fait pas ça ; ce n'est pas une garantie que ce résolveur donne.
   const byName = new Map<string, { node: RigNode; parent: RigNode | null }>();
   const walk = (node: RigNode, parent: RigNode | null): void => {
     byName.set(node.name.toLowerCase(), { node, parent });
@@ -49,9 +37,6 @@ export function resolveBinding(
     report.matched.push({ role, nodeName: hit.found!.node.name, viaAlias: hit.alias });
   }
 
-  const required = requiredRoles(family);
-  const fatal = report.missingBones.filter((role) => required.has(role));
-
   // 2. Les morphs : absents, ils sont dits mais ne bloquent pas.
   const morphIndex: Record<string, number> = {};
   for (const [key, def] of Object.entries(family.morphs)) {
@@ -69,19 +54,24 @@ export function resolveBinding(
     if (!found) report.missingMorphs.push(key);
   }
 
-  // 3. Les cibles de surface, sur le même mécanisme d'alias.
-  const surfaceTargets: Record<string, readonly string[]> = {};
+  // 3. Les cibles de surface, sur le même mécanisme d'alias. Seule leur
+  //    absence intéresse ce rapport : `ImportReport` ne déclare pas de champ
+  //    pour les noms trouvés, donc ils ne sont pas conservés ici. Un appelant
+  //    Three qui en a besoin (l'applicateur skinné) les retrouvera lui-même
+  //    sur le graphe réel, avec le même mécanisme d'alias.
   for (const [key, gene] of Object.entries(family.genes)) {
     if (gene.group !== 'surface') continue;
     const aliases = family.surfaces?.[key]?.aliases ?? [];
-    const hits = aliases
-      .map((a) => byName.get(a.toLowerCase())?.node.name)
-      .filter((n): n is string => n !== undefined);
-    if (hits.length === 0) report.missingSurfaces.push(key);
-    else surfaceTargets[key] = hits;
+    const found = aliases.some((a) => byName.has(a.toLowerCase()));
+    if (!found) report.missingSurfaces.push(key);
   }
 
-  if (fatal.length > 0) return { binding: null, report };
+  // TOUT rôle déclaré est structurel. Ne rendre obligatoires que les extrémités
+  // de chaîne laisserait un os intermédiaire non apparié être sauté en silence
+  // par la marche de `chainRoles`, qui remonte de rôle en rôle : son segment ne
+  // serait jamais mis à l'échelle pendant que ses voisins le seraient. Une
+  // famille déclare un rôle parce qu'elle en a besoin.
+  if (report.missingBones.length > 0) return { binding: null, report };
 
   // 4. La parenté est exprimée en RÔLES : le nœud parent immédiat peut très
   //    bien n'avoir aucun rôle, il faut remonter jusqu'au premier qui en a un.

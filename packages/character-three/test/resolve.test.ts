@@ -69,6 +69,24 @@ describe('resolveBinding — rig complet', () => {
     expect(binding!.bones['root']!.parentRole).toBeNull();
   });
 
+  it('saute un nœud sans rôle pour remonter au premier ancêtre qui en a un', () => {
+    // Un rig réel intercale des os de torsion ou des locators qui ne portent
+    // aucun rôle. Sans ce cas, la marche multi-sauts n'est jamais exercée et un
+    // simple `parent.role` passerait tous les autres tests : dans rigComplet(),
+    // chaque rôle est directement l'enfant d'un autre rôle.
+    const avecTorsion = (n: RigNode): RigNode => {
+      if (n.name !== 'mixamorig:LeftArm') return { ...n, children: n.children.map(avecTorsion) };
+      return {
+        ...n,
+        children: [node('mixamorig:LeftArmTwist', n.children.map(avecTorsion))],
+      };
+    };
+    const { binding, report } = resolveBinding(HUMANOID, avecTorsion(rigComplet()), 1.75);
+    expect(report.accepted).toBe(true);
+    // foreArmL est désormais petit-enfant d'upperArmL, via un nœud sans rôle.
+    expect(binding!.bones['foreArmL']!.parentRole).toBe('upperArmL');
+  });
+
   it('résout les index de morphs', () => {
     expect(binding!.morphIndex['jawWidth']).toBe(0);
     expect(binding!.morphIndex['bodyMass']).toBe(4);
@@ -80,18 +98,24 @@ describe('resolveBinding — rig complet', () => {
 });
 
 describe('resolveBinding — rejets et tolérances', () => {
-  it('refuse un rig auquel il manque un os de chaîne, en le nommant', () => {
-    const casse = rigComplet();
-    // On retire l avant-bras gauche en reconstruisant sans lui.
-    const sansAvantBras = JSON.parse(JSON.stringify(casse)) as RigNode;
-    const strip = (n: RigNode): RigNode => ({
+  it('refuse dès qu UN SEUL rôle déclaré manque, et le nomme', () => {
+    // Un seul os retiré, sans effet de bord sur ses descendants : c'est le rôle
+    // manquant lui-même qui refuse l'asset, pas la perte collatérale d'un autre.
+    // `spine` n'est l'extrémité d'aucune chaîne — sous l'ancienne règle (seules
+    // les extrémités de chaîne étaient structurelles) ce rig aurait été accepté
+    // avec un tronc partiellement mis à l'échelle, exactement le défaut visé.
+    const sansSpine = (n: RigNode): RigNode => ({
       ...n,
-      children: n.children.filter((c) => c.name !== 'mixamorig:LeftForeArm').map(strip),
+      children: n.children.flatMap((c) =>
+        c.name === 'mixamorig:Spine'
+          ? c.children.map(sansSpine) // on remonte ses enfants d'un cran
+          : [sansSpine(c)],
+      ),
     });
-    const { binding, report } = resolveBinding(HUMANOID, strip(sansAvantBras), 1.75);
+    const { binding, report } = resolveBinding(HUMANOID, sansSpine(rigComplet()), 1.75);
     expect(report.accepted).toBe(false);
     expect(binding).toBeNull();
-    expect(report.missingBones).toContain('foreArmL');
+    expect(report.missingBones).toEqual(['spine']);
   });
 
   it('accepte un rig sans morphs, mais le dit', () => {
