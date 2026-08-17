@@ -31,6 +31,9 @@ export { CompileCache, genomeKey } from './compile/memo';
 export type { TranslationTrack } from './compile/clips';
 export { classifyTranslationTrack, CONSTANT_TRACK_EPSILON } from './compile/clips';
 
+export type { Preset } from './presets/types';
+export { METIERS, genomeFromPreset } from './presets/metiers';
+
 import { HUMANOID } from './family/humanoid';
 import { registerFamily } from './family/registry';
 
