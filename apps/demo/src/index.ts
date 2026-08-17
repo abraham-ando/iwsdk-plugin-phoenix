@@ -67,8 +67,17 @@ World.create(container, projectOptions)
       simSystem.attachScene(sceneData);
       const microphone = new PlayerMicrophone(world, (text) => simSystem.playerSpeak(text));
       new SimulationHud(document.body, simSystem, microphone);
-      // Mode-2 deliberation: pump plan requests to the BFF (LLM or mock).
-      new Mode2Client(simSystem);
+      // Mode-2 deliberation: pump plan requests to the BFF (LLM or mock), with
+      // a local WebGPU model as second tier once someone activates it.
+      const mode2 = new Mode2Client(simSystem);
+      // Sonde de contention GPU, sur demande explicite : elle télécharge un
+      // modèle et mesure ce qu'une génération coûte au temps d'image.
+      const env = (import.meta as unknown as { env?: Record<string, string> }).env ?? {};
+      if (new URLSearchParams(location.search).has('probe-gpu') || env.VITE_PROBE_GPU) {
+        void import('./simulation/GpuContentionProbe.js').then((m) =>
+          m.runGpuContentionProbe(mode2)
+        );
+      }
       // Dataset capture: ship recorded trajectories to the BFF periodically.
       new TrajectoryUploader(simSystem);
     }

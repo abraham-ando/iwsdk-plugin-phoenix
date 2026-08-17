@@ -81,6 +81,7 @@ export {
   extractPlanJson,
   planEnvelope,
   planWithTiers,
+  maxTokensFor,
   type Planner,
   type PlanTier,
 } from './agents/deliberation';

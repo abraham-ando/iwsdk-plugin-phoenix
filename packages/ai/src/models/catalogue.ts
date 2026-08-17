@@ -10,6 +10,13 @@
  * La VRAM est celle qu'annonce WebLLM, à contexte égal (4 096 jetons). Elle
  * compte plus que le poids téléchargé : sur un casque, le rendu se dispute la
  * même mémoire.
+ *
+ * `gemma3-1b-it-q4f16_1-MLC` a figuré ici, et paraissait le meilleur choix :
+ * 711 Mo de VRAM pour plus de paramètres que les autres. Il ne CHARGE PAS.
+ * Sa configuration déclare une fenêtre glissante de 512 jetons que la
+ * surcharge à 4 096 de WebLLM contredit, et le moteur refuse :
+ * « Only one of context_window_size and sliding_window_size can be positive ».
+ * On ne s'en aperçoit qu'après 537 Mo téléchargés — d'où son absence.
  */
 
 export interface LocalModelChoice {
@@ -33,22 +40,16 @@ export const LOCAL_MODELS: readonly LocalModelChoice[] = [
     note: 'Le plus léger, et de loin. Français faible et JSON fragile : à réserver aux machines contraintes.',
   },
   {
-    id: 'gemma3-1b-it-q4f16_1-MLC',
-    label: 'Gemma 3 1B',
-    vramMB: 711,
-    note: 'Le meilleur compromis : multilingue par conception, et moitié moins de VRAM que Qwen3-0.6B pour davantage de paramètres.',
-  },
-  {
     id: 'Llama-3.2-1B-Instruct-q4f16_1-MLC',
     label: 'Llama 3.2 1B',
     vramMB: 879,
-    note: 'Solide et éprouvé, multilingue officiel. Le repli naturel si Gemma déçoit.',
+    note: 'Solide et éprouvé, multilingue officiel, contexte plein de 4 096 jetons. Le choix par défaut.',
   },
   {
     id: 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC',
     label: 'Qwen2.5 0.5B',
     vramMB: 945,
-    note: 'Deux fois moins de paramètres que Gemma 3 pour PLUS de VRAM : peu de raisons de le préférer.',
+    note: 'Deux fois moins de paramètres que Llama 3.2 pour PLUS de VRAM : peu de raisons de le préférer.',
   },
 ];
 
@@ -57,7 +58,7 @@ export const LOCAL_MODELS: readonly LocalModelChoice[] = [
  * pas sur une mesure de qualité — celle-ci reste à faire, sur nos propres
  * consignes et notre propre monde.
  */
-export const DEFAULT_LOCAL_MODEL = 'gemma3-1b-it-q4f16_1-MLC';
+export const DEFAULT_LOCAL_MODEL = 'Llama-3.2-1B-Instruct-q4f16_1-MLC';
 
 export function localModel(id: string): LocalModelChoice | undefined {
   return LOCAL_MODELS.find((m) => m.id === id);

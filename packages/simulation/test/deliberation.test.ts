@@ -4,6 +4,7 @@ import {
   extractPlanJson,
   planEnvelope,
   planWithTiers,
+  maxTokensFor,
 } from '../src/agents/deliberation';
 import type { PlanRequest } from '../src/agents/Mode2';
 
@@ -159,5 +160,31 @@ describe('planWithTiers', () => {
 
   it('rend null sans étage configuré', async () => {
     expect(await planWithTiers(request(), [])).toBeNull();
+  });
+});
+
+describe('maxTokensFor', () => {
+  it("LAISSE LA PLACE D'UN PLAN ENTIER, pas d'une bulle de dialogue", () => {
+    // Mesuré : à 128 jetons — le défaut de l'adaptateur — Llama-3.2-1B
+    // coupait le JSON au milieu du deuxième pas, et l'étage local échouait
+    // sans que rien ne dise pourquoi.
+    for (const reason of ['dawn', 'surprise', 'dialogue'] as const) {
+      expect(maxTokensFor(request({ reason })), reason).toBeGreaterThanOrEqual(512);
+    }
+  });
+
+  it('donne moins à ce qui demande moins', () => {
+    expect(maxTokensFor(request({ reason: 'player_dialogue' }))).toBeLessThan(
+      maxTokensFor(request({ reason: 'dialogue' }))
+    );
+    expect(maxTokensFor(request({ reason: 'reflection' }))).toBeLessThan(
+      maxTokensFor(request({ reason: 'dawn' }))
+    );
+  });
+
+  it('ne rend jamais zéro, quelle que soit la raison', () => {
+    for (const reason of ['dawn', 'surprise', 'dialogue', 'reflection', 'player_dialogue'] as const) {
+      expect(maxTokensFor(request({ reason })), reason).toBeGreaterThan(0);
+    }
   });
 });
