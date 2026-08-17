@@ -622,6 +622,15 @@ export const HUMANOID: FamilyDescriptor = {
     arm: { from: 'shoulderL', to: 'handL', gene: 'armLength', limb: true, mirror: ['shoulderR', 'handR'] },
     leg: { from: 'upLegL', to: 'footL', gene: 'legLength', limb: true, mirror: ['upLegR', 'footR'] },
     torso: { from: 'root', to: 'neck', gene: 'torsoLength', limb: false },
+    // Les épaules appartiennent au tronc et non aux membres : chez l'enfant
+    // elles suivent le buste, pas le rapport membres/tronc. Mettre à l'échelle
+    // la translation locale de la clavicule l'éloigne du sternum — c'est
+    // exactement ce qu'est une largeur d'épaules. Sans cette chaîne le gène
+    // `shoulderWidth` serait déclaré et consommé par rien.
+    shoulder: {
+      from: 'chest', to: 'shoulderL', gene: 'shoulderWidth', limb: false,
+      mirror: ['chest', 'shoulderR'],
+    },
   },
 
   morphs: {
