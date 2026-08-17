@@ -3,6 +3,8 @@ import { HUMANOID } from '../src/family/humanoid';
 import { defaultGenome } from '../src/genome/create';
 import { compile } from '../src/compile/compile';
 import { humanoidBinding } from './fixtures/humanoid-binding';
+import type { FamilyDescriptor } from '../src/family/types';
+import type { RigBinding } from '../src/compile/types';
 
 describe('groundOffsetMeters', () => {
   it('place l os d appui exactement à zéro, à tous les âges', () => {
@@ -31,7 +33,48 @@ describe('groundOffsetMeters', () => {
     // L offset compense une descente : plus le corps est grand, plus il est grand.
     expect(adulte).toBeGreaterThan(bebe);
   });
+
+  it('compose les ROTATIONS de la chaîne, pas seulement les translations', () => {
+    // La racine tourne d'un quart de tour autour de X, donc le -Y local du pied
+    // part sur -Z et ne descend pas : l'appui reste à y = 1, et l'offset vaut -1.
+    // Une somme naïve de translations donnerait 1 + (-1) = 0.
+    const c = compile(PLIE, { family: 'plie', genes: { stature: 0.5 } }, 18, plieBinding());
+    expect(c.stats.groundOffsetMeters).toBeCloseTo(-1, 6);
+  });
 });
+
+/**
+ * Famille minimale à deux os, dont la racine porte un quart de tour autour de X.
+ * Sans composition des rotations, une simple somme de translations donnerait 0 ;
+ * avec, la hauteur de l'appui reste 1. C'est le seul test qui distingue les deux.
+ */
+const PLIE: FamilyDescriptor = {
+  id: 'plie',
+  adultAge: 18,
+  rootRole: 'root',
+  headRole: 'root',
+  groundRole: 'pied',
+  bones: { root: ['Root'], pied: ['Pied'] },
+  chains: {},
+  morphs: {},
+  proportions: { headToBody: [[0, 1]], limbToTorso: [[0, 1]], bodyScale: [[0, 1]] },
+  slots: {},
+  genes: { stature: { group: 'structure', heritability: 1, dominance: 0.5, mutationRate: 0 } },
+};
+
+const RX90 = [Math.SQRT1_2, 0, 0, Math.SQRT1_2] as const;
+
+function plieBinding(): RigBinding {
+  return {
+    family: 'plie',
+    restHeightMeters: 1,
+    morphIndex: {},
+    bones: {
+      root: { role: 'root', parentRole: null, position: [0, 1, 0], rotation: [...RX90] },
+      pied: { role: 'pied', parentRole: 'root', position: [0, -1, 0], rotation: [0, 0, 0, 1] },
+    },
+  };
+}
 
 /** Recompose la chaîne dans le test, indépendamment de l implémentation. */
 function worldYOf(

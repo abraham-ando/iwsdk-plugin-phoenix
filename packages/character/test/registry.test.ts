@@ -35,12 +35,29 @@ const broken: FamilyDescriptor = {
   chains: { bras: { from: 'inconnu', to: 'handL', gene: 'absent', limb: true } },
 };
 
+/** Descripteur cassé sur les DEUX règles ajoutées à l'étape 2. */
+const brokenEtape2: FamilyDescriptor = {
+  ...HUMANOID,
+  id: 'cassé-étape2',
+  groundRole: 'nageoire',
+  genes: {
+    ...HUMANOID.genes,
+    skinTone: { group: 'surface', heritability: 0.9, dominance: 0.5, mutationRate: 0.02 },
+  },
+};
+
 describe('validateDescriptor', () => {
   it('nomme précisément ce qui manque, sans dégrader en silence', () => {
     const problems = validateDescriptor(broken);
     expect(problems).toHaveLength(2);
     expect(problems.join(' ')).toContain('inconnu');
     expect(problems.join(' ')).toContain('absent');
+  });
+
+  it('signale un groundRole inconnu et un gène de surface sans rampe', () => {
+    const problems = validateDescriptor(brokenEtape2);
+    expect(problems.join(' ')).toContain('nageoire');
+    expect(problems.join(' ')).toContain('skinTone');
   });
 });
 
