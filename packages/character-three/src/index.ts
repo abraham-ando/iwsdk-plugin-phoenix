@@ -4,3 +4,5 @@ export { PuppetApplicator, type PuppetApplicatorOptions } from './apply/PuppetAp
 
 export type { RigNode, ImportReport } from './resolve/types';
 export { resolveBinding } from './resolve/resolveBinding';
+
+export { sanitizeClip } from './clips/sanitize';
