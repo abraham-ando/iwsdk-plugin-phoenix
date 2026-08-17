@@ -44,7 +44,10 @@ import type { CardinalAIOptions } from './types/options';
 export const AISystemPriority = {
   AI_LOD: 115,
   GRABBABLE_REACTION: 118,
-  GAZE_IK: 120,
+  // 121 et non 120 : NetworkInterpolationSystem occupe déjà 120, et deux
+  // systèmes à la même priorité s'ordonnent selon l'ordre d'installation des
+  // plugins, ce qui n'est pas une décision.
+  GAZE_IK: 121,
   VOICE_INPUT: 125,
   SPATIAL_RAG: 128,
   INTELLIGENCE: 130,

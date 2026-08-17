@@ -80,32 +80,39 @@ export function installCardinalWorld(
     .registerComponent(SmartObjectVisual)
     .registerComponent(AnimalVisual);
 
-  world.registerSystem(CelestialTimeSystem);
-  world.registerSystem(SkyRenderSystem, { configData: { quality } });
-  world.registerSystem(StarFieldSystem);
-  world.registerSystem(ExposureSystem);
-  world.registerSystem(MaterialSystem, { configData: { library: materials } });
+  // Priorités explicites, bande 10-50, en amont des personnages (60) :
+  // atmosphère, puis matériaux, puis terrain, puis eau, puis flore, puis
+  // projection des objets et de la faune.
+  world.registerSystem(CelestialTimeSystem, { priority: 10 });
+  world.registerSystem(SkyRenderSystem, { priority: 12, configData: { quality } });
+  world.registerSystem(StarFieldSystem, { priority: 14 });
+  world.registerSystem(ExposureSystem, { priority: 16 });
+  world.registerSystem(MaterialSystem, { priority: 20, configData: { library: materials } });
 
   // Le matériau du terrain est un CLONE de `grass` : les tuiles ont besoin de
   // vertexColors, ce que les autres usagers de `grass` ne veulent pas. Le
   // clone partage les mêmes textures — seul l'objet matériau est neuf.
   const terrainMaterial = materials.get('grass').clone();
   terrainMaterial.vertexColors = true;
-  world.registerSystem(TerrainStreamingSystem, { configData: { material: terrainMaterial } });
-  world.registerSystem(TerrainMeshSystem);
-  world.registerSystem(WaterSystem);
+  world.registerSystem(TerrainStreamingSystem, {
+    priority: 30,
+    configData: { material: terrainMaterial },
+  });
+  world.registerSystem(TerrainMeshSystem, { priority: 32 });
+  world.registerSystem(WaterSystem, { priority: 34 });
 
   // La flore partage le matériau de feuillage : une seule instance pour tout
   // le monde, comme la bibliothèque le prévoit.
   world.registerSystem(FloraSystem, {
+    priority: 36,
     configData: {
       assets: null,
       barkMaterial: materials.get('bark'),
       leafMaterial: materials.get('foliage'),
     },
   });
-  world.registerSystem(SmartObjectVisualSystem);
-  world.registerSystem(FaunaSystem);
+  world.registerSystem(SmartObjectVisualSystem, { priority: 40 });
+  world.registerSystem(FaunaSystem, { priority: 42 });
 
   // Les géométries arrivent du réseau. Le système reste inerte jusque-là, ce
   // qui est correct : une tuile non plantée le sera au passage suivant.

@@ -34,9 +34,10 @@ const hud = new DemoHud(document.body, { target: describeConfig(network) });
 
 World.create(container, projectOptions)
   .then((world) => {
-    world.registerSystem(RobotSystem);
-    world.registerSystem(PanelSystem);
-    world.registerSystem(PhysicsSimulationSystem);
+    // Priorités explicites, bande 50-58, en amont des personnages (60).
+    world.registerSystem(RobotSystem, { priority: 50 });
+    world.registerSystem(PanelSystem, { priority: 52 });
+    world.registerSystem(PhysicsSimulationSystem, { priority: 54 });
 
     // 1. Mount Cardinal AI Engine, NPCs & Interactive HUD
     setupCardinalVillage(world);
@@ -59,7 +60,7 @@ World.create(container, projectOptions)
     });
 
     // 2. Mount the Cardinal simulation engine + its VR projection & HUD
-    world.registerSystem(CardinalSimulationSystem);
+    world.registerSystem(CardinalSimulationSystem, { priority: 58 });
     const simSystem = world.getSystem(CardinalSimulationSystem);
     if (simSystem) {
       const sceneData = PrehistoricEnvironment3D.createWorldScene(world, VILLAGE_LAYOUT, materials);

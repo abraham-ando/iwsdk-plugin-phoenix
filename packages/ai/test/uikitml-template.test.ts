@@ -30,4 +30,9 @@ describe('UIKitMLTemplateBuilder', () => {
     expect(speakingXml).toContain('class="word-active">aventurier');
     expect(speakingXml).toContain('class="word-normal">dans');
   });
+
+  it('n emploie aucune unité px : UIKitML compte en centimètres', () => {
+    const xml = UIKitMLTemplateBuilder.buildSpeechBubble({ npcName: 'Test' });
+    expect(xml).not.toMatch(/\d+px/);
+  });
 });
