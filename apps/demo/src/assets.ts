@@ -55,6 +55,34 @@ export default defineAssets({
     priority: 'lazy',
   },
 
+  // Clips d'animation Ready Player Me. Les fichiers sont récupérés par
+  // `pnpm clips` et ne sont pas dans le dépôt : leur licence interdit la
+  // redistribution. Absents, la démo reste en marionnettes.
+  'clip-idle-masculine': {
+    url: publicAssetUrl('characters/idle-masculine.glb'),
+    type: AssetType.GLTF,
+    name: 'RPM Idle (masculine rig)',
+    priority: 'lazy',
+  },
+  'clip-idle-feminine': {
+    url: publicAssetUrl('characters/idle-feminine.glb'),
+    type: AssetType.GLTF,
+    name: 'RPM Idle (feminine rig)',
+    priority: 'lazy',
+  },
+  'clip-walk-masculine': {
+    url: publicAssetUrl('characters/walk-masculine.glb'),
+    type: AssetType.GLTF,
+    name: 'RPM Walk (masculine rig)',
+    priority: 'lazy',
+  },
+  'clip-walk-feminine': {
+    url: publicAssetUrl('characters/walk-feminine.glb'),
+    type: AssetType.GLTF,
+    name: 'RPM Walk (feminine rig)',
+    priority: 'lazy',
+  },
+
   // Interactive Props & UI
   'plant-sansevieria': {
     url: stockAssetUrl('plant-sansevieria', 'plantSansevieria.gltf'),
