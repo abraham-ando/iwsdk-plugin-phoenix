@@ -5,25 +5,29 @@ import { genomeFromComponents, needsRecompile } from '../src/systems/CharacterCo
 describe('genomeFromComponents', () => {
   const base = { family: 'humanoid', genes: { ...defaultGenome(HUMANOID).genes, skinTone: 0.8 } };
 
-  it('laisse les composants recouvrir le génome de départ', () => {
+  it('laisse la structure recouvrir le génome de départ', () => {
     const g = genomeFromComponents(HUMANOID, base, {
       structure: { stature: 0.7, shoulderWidth: 0.9 },
-      face: { jawWidth: 0.2 },
     });
     expect(g.genes['stature']).toBe(0.7);
-    expect(g.genes['jawWidth']).toBe(0.2);
+    expect(g.genes['shoulderWidth']).toBe(0.9);
   });
 
-  it('garde du génome de départ les gènes qu aucun composant n expose', () => {
-    // Les gènes de surface n ont pas de champ réglable : CharacterSurface porte
-    // des COULEURS, qui sont la sortie de la rampe et non son entrée. Ils ne
-    // peuvent donc venir que du génome posé à la création.
-    const g = genomeFromComponents(HUMANOID, base, { structure: {}, face: {} });
+  it('garde du génome de départ tout ce que la structure n expose pas — visage COMPRIS', () => {
+    // Le visage n'entre JAMAIS dans `genomeFromComponents` : c'est le cœur de
+    // l'architecture à deux étages. `CharacterExpressionSystem` applique les
+    // morphs directement depuis `CharacterFace`, à chaque image, sans jamais
+    // recompiler. Les faire entrer ici ferait recompiler le squelette entier
+    // à chaque cran de curseur de mâchoire.
+    const g = genomeFromComponents(HUMANOID, base, { structure: {} });
     expect(g.genes['skinTone']).toBe(0.8);
+    // jawWidth n'a jamais été recouvert : il vaut toujours le défaut de
+    // `defaultGenome`, 0.5 — jamais lu depuis un composant `CharacterFace`.
+    expect(g.genes['jawWidth']).toBe(0.5);
   });
 
   it('rend un génome complet, un gène par gène de la famille', () => {
-    const g = genomeFromComponents(HUMANOID, base, { structure: {}, face: {} });
+    const g = genomeFromComponents(HUMANOID, base, { structure: {} });
     expect(Object.keys(g.genes).sort()).toEqual(Object.keys(HUMANOID.genes).sort());
   });
 });

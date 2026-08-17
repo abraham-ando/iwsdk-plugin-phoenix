@@ -28,11 +28,32 @@ export interface CreateCharacterOptions {
  * graphe `Object3D` réel, que l'invariant doit être vérifié — et il doit
  * échouer bruyamment, en nommant l'os fautif, plutôt que produire un
  * personnage dont le sol ne bouge jamais en silence.
+ *
+ * Cas à part : `rigRoot` porte LUI-MÊME un rôle d'os. `HUMANOID.bones.root`
+ * liste `'Armature'` parmi ses alias — le nom que Blender donne justement à
+ * l'ancêtre commun qu'on recommande de passer comme conteneur — donc ce cas
+ * se présente pour un rig tout à fait correctement formé, pas pour une
+ * erreur d'appelant. On le refuse quand même : `applyRestPose` écrirait
+ * D'ABORD la position locale de repos de l'os racine sur `rigRoot.position`
+ * (X et Z compris, pas seulement Y), puis le décalage au sol par-dessus,
+ * mêlant la morphologie du personnage à l'endroit où l'appelant l'a placé.
  */
 export function assertBonesAreDescendants(
   rigRoot: Object3D,
   bones: ReadonlyMap<string, Object3D>,
 ): void {
+  for (const [role, node] of bones) {
+    if (node === rigRoot) {
+      throw new Error(
+        `createCharacter: le conteneur "${rigRoot.name || '<sans nom>'}" porte lui-même le rôle ` +
+        `d'os "${role}" — c'est le cas d'une armature Blender passée directement comme rigRoot. ` +
+        `Enveloppez le rig dans un Group parent et passez-le comme rigRoot : l'ancrage au sol ` +
+        `s'écrit sur le conteneur, et l'écrire sur un os mêlerait la morphologie du personnage à ` +
+        `l'endroit où il se tient.`,
+      );
+    }
+  }
+
   for (const [role, node] of bones) {
     let cursor: Object3D | null = node.parent;
     let isDescendant = false;

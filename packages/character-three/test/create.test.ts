@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { Object3D, World } from '@iwsdk/core';
 import { HUMANOID, defaultGenome } from '@iwsdk/cardinal-character';
 import { assertBonesAreDescendants, createCharacter, installCharacterThree } from '../src/create';
@@ -6,7 +6,7 @@ import { CharacterCompileSystem } from '../src/systems/CharacterCompileSystem';
 import { CharacterExpressionSystem } from '../src/systems/CharacterExpressionSystem';
 import { CharacterIdentity, CharacterStructure, CharacterFace, CharacterSurface } from '../src/components/index';
 import { PuppetApplicator } from '../src/apply/PuppetApplicator';
-import { humanoidPuppet } from './fixtures/humanoidPuppet';
+import { humanoidPuppet, humanoidSkinned } from './fixtures/humanoidPuppet';
 
 /**
  * `assertBonesAreDescendants` est le garde-fou décrit par la revue de tâche :
@@ -49,6 +49,18 @@ describe('assertBonesAreDescendants', () => {
     expect(() => assertBonesAreDescendants(mesh, bones)).toThrow(/Hips/);
     expect(() => assertBonesAreDescendants(mesh, bones)).toThrow(/root/);
   });
+
+  it('lève et nomme le remède quand le conteneur porte lui-même un rôle d os', () => {
+    // `HUMANOID.bones.root` liste 'Armature' parmi ses alias — le nom que
+    // Blender donne justement à l'ancêtre commun qu'on recommande de passer
+    // comme conteneur. Ce rig est donc correctement FORMÉ, pas une erreur
+    // d'appelant : le refuser a besoin d'un message qui dise quoi faire.
+    const armature = new Object3D();
+    armature.name = 'Armature';
+    const bones = new Map([['root', armature]]);
+    expect(() => assertBonesAreDescendants(armature, bones)).toThrow(/Group/);
+    expect(() => assertBonesAreDescendants(armature, bones)).toThrow(/root/);
+  });
 });
 
 /**
@@ -61,14 +73,14 @@ describe('createCharacter — pont complet, marionnette', () => {
   const build = () => {
     const world = new World();
     installCharacterThree(world);
-    const { root } = humanoidPuppet();
+    const { root, body } = humanoidPuppet();
     const { entity, report } = createCharacter(world, {
       familyId: HUMANOID.id,
       genome: defaultGenome(HUMANOID),
       age: 34,
       rigRoot: root,
     });
-    return { world, root, entity, report };
+    return { world, root, body, entity, report };
   };
 
   it('accepte le rig et pose les quatre composants sur l entité', () => {
@@ -109,10 +121,104 @@ describe('createCharacter — pont complet, marionnette', () => {
     expect(compiler.compiledCount).toBe(afterFirst);
   });
 
+  it('recompile sur un changement de STRUCTURE, jamais sur un changement de VISAGE seul', () => {
+    // Le contrat central des deux étages : la priorité 60 (structure) et la
+    // priorité 70 (visage) existent précisément pour séparer ce qui recompile
+    // de ce qui ne recompile jamais. `genomeFromComponents` ne lit plus
+    // `CharacterFace` du tout.
+    const { world, entity } = build();
+    const compiler = world.getSystem(CharacterCompileSystem)!;
+    compiler.update();
+    const afterFirst = compiler.compiledCount;
+
+    entity.setValue(CharacterFace, 'jawWidth', 0.9);
+    compiler.update();
+    expect(compiler.compiledCount).toBe(afterFirst);
+
+    entity.setValue(CharacterStructure, 'stature', 0.9);
+    compiler.update();
+    expect(compiler.compiledCount).toBe(afterFirst + 1);
+  });
+
+  it('applique la teinte de peau compilée sur le maillage nommé par la cible de surface', () => {
+    const { world, body } = build();
+    const compiler = world.getSystem(CharacterCompileSystem)!;
+    const before = body.material.color.clone();
+    compiler.update();
+    // `Body` est un alias de `HUMANOID.surfaces.skinTone` : `applySurface`
+    // doit l'avoir repeint depuis la rampe, plus le blanc de MeshBasicMaterial.
+    expect(body.material.color.equals(before)).toBe(false);
+  });
+
   it('applique les morphs du visage via CharacterExpressionSystem sans lever', () => {
     const { world, entity } = build();
     const expression = world.getSystem(CharacterExpressionSystem)!;
     entity.setValue(CharacterFace, 'jawWidth', 0.9);
     expect(() => expression.update()).not.toThrow();
+  });
+
+  it('libère les entrées de l entité à sa destruction, sans laisser de résultat périmé pour un index recyclé', () => {
+    const { world, entity: entityA } = build();
+    const compiler = world.getSystem(CharacterCompileSystem)!;
+    const indexA = entityA.index;
+    compiler.update();
+    expect(compiler.applicators.has(indexA)).toBe(true);
+
+    const disposeSpy = vi.spyOn(compiler.applicators.get(indexA)!, 'dispose');
+    entityA.destroy();
+    expect(disposeSpy).toHaveBeenCalledOnce();
+    expect(compiler.applicators.has(indexA)).toBe(false);
+    expect(compiler.bindings.has(indexA)).toBe(false);
+    expect(compiler.genomes.has(indexA)).toBe(false);
+
+    // elics recycle les index d'entité en pile (LIFO, voir EntityManager) :
+    // le prochain créé récupère exactement le même index que A vient de
+    // libérer. Même génome et même âge, donc même clé de compilation — sans
+    // le nettoyage ci-dessus, `needsRecompile` verrait la clé laissée par A
+    // et sauterait B en silence : B resterait non posé pour toujours.
+    const { root: rootB } = humanoidPuppet();
+    const { entity: entityB } = createCharacter(world, {
+      familyId: HUMANOID.id, genome: defaultGenome(HUMANOID), age: 34, rigRoot: rootB,
+    });
+    expect(entityB.index).toBe(indexA);
+
+    compiler.update();
+    expect(rootB.position.y).not.toBe(0);
+  });
+});
+
+/**
+ * Le squelette compilé projette un gène `[0,1]` dans la plage de morph que la
+ * famille déclare (`[-1,1]` pour tous les morphs de visage de HUMANOID) — la
+ * même formule que `compile()`. Il faut un vrai `SkinnedMesh` porteur d'un
+ * `morphTargetDictionary` pour l'observer : `PuppetApplicator.applyMorphs`
+ * est un no-op délibéré, donc muet sur cette question.
+ */
+describe('CharacterExpressionSystem — projection de plage de morph', () => {
+  const build = () => {
+    const world = new World();
+    installCharacterThree(world);
+    const { root, mesh } = humanoidSkinned();
+    const { entity } = createCharacter(world, {
+      familyId: HUMANOID.id,
+      genome: defaultGenome(HUMANOID),
+      age: 34,
+      rigRoot: root,
+    });
+    return { world, entity, mesh };
+  };
+
+  it('un gène à 0 atteint le maillage à -1, un gène à 1 l atteint à +1', () => {
+    const { world, entity, mesh } = build();
+    const expression = world.getSystem(CharacterExpressionSystem)!;
+    const jawIndex = mesh.morphTargetDictionary!['jawWidth']!;
+
+    entity.setValue(CharacterFace, 'jawWidth', 0);
+    expression.update();
+    expect(mesh.morphTargetInfluences![jawIndex]).toBeCloseTo(-1, 6);
+
+    entity.setValue(CharacterFace, 'jawWidth', 1);
+    expression.update();
+    expect(mesh.morphTargetInfluences![jawIndex]).toBeCloseTo(1, 6);
   });
 });

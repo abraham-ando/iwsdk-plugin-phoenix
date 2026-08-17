@@ -1,16 +1,17 @@
-import { Bone, BoxGeometry, Mesh, MeshBasicMaterial, Object3D } from '@iwsdk/core';
+import {
+  Bone, BoxGeometry, BufferGeometry, Float32BufferAttribute, Mesh,
+  MeshBasicMaterial, Object3D, Skeleton, SkinnedMesh, Uint16BufferAttribute,
+} from '@iwsdk/core';
 
 /**
- * Hiérarchie HUMANOID complète, en vrais `Object3D`, alias Mixamo — les mêmes
- * noms que la fixture `RigNode` de `resolve.test.ts`, mais ici de vrais nœuds
- * de scène. Le conteneur rendu est un `Object3D` séparé qui ENGLOBE l'os
- * racine (`mixamorig:Hips`) : c'est le motif réaliste d'un import glTF, où le
- * nœud de scène qui reçoit `createCharacter` n'est PAS lui-même un os, mais
- * un ancêtre commun — exactement ce que `assertBonesAreDescendants` vérifie.
- * Aucun `SkinnedMesh` : c'est le cas marionnette, le plus simple des deux
- * applicateurs.
+ * Construit le squelette HUMANOID complet, en vrais `Object3D`, alias
+ * Mixamo — les mêmes noms que la fixture `RigNode` de `resolve.test.ts`, mais
+ * ici de vrais nœuds de scène. `hips` est l'os racine, pas le conteneur : les
+ * deux fabriques ci-dessous l'enveloppent dans un `Object3D` séparé, le motif
+ * réaliste d'un import glTF — exactement ce que `assertBonesAreDescendants`
+ * vérifie.
  */
-export function humanoidPuppet(): { root: Object3D; bones: Record<string, Object3D> } {
+function buildSkeleton(): { hips: Bone; bones: Record<string, Object3D> } {
   const bones: Record<string, Object3D> = {};
 
   const bone = (role: string, name: string, y = 0): Bone => {
@@ -58,20 +59,69 @@ export function humanoidPuppet(): { root: Object3D; bones: Record<string, Object
   hips.add(leg('Left'));
   hips.add(leg('Right'));
 
-  // Un maillage sans squelette, juste pour donner une boîte englobante finie
-  // à `createCharacter` — sans lui, `Box3.setFromObject` reste vide (aucun
-  // enfant n'a de géométrie) et la hauteur mesurée serait -Infinity.
-  const body = new Mesh(new BoxGeometry(0.4, 1.75, 0.3), new MeshBasicMaterial());
-  body.name = 'BodyPlaceholder';
-  body.position.set(0, 0.875, 0);
-  hips.add(body);
+  return { hips, bones };
+}
 
-  // Le conteneur rendu à `createCharacter` : un nœud de scène distinct de
-  // l'armature, comme le nœud racine d'un glTF importé qui porte à la fois
-  // le maillage et le squelette comme enfants.
+/** Enveloppe une racine d'armature dans le conteneur que `createCharacter` reçoit. */
+function wrap(hips: Bone): Object3D {
   const root = new Object3D();
   root.name = 'Character';
   root.add(hips);
+  return root;
+}
 
-  return { root, bones };
+/**
+ * Rig marionnette : aucun `SkinnedMesh`. Un simple `Mesh` nommé `Body` (un
+ * alias de `HUMANOID.surfaces.skinTone`) donne à `createCharacter` une boîte
+ * englobante finie et une cible de teinte — sans lui, `Box3.setFromObject`
+ * reste vide (aucun enfant n'a de géométrie) et la hauteur mesurée serait
+ * -Infinity.
+ */
+export function humanoidPuppet(): {
+  root: Object3D;
+  bones: Record<string, Object3D>;
+  body: Mesh<BoxGeometry, MeshBasicMaterial>;
+} {
+  const { hips, bones } = buildSkeleton();
+
+  const body = new Mesh(new BoxGeometry(0.4, 1.75, 0.3), new MeshBasicMaterial());
+  body.name = 'Body';
+  body.position.set(0, 0.875, 0);
+  hips.add(body);
+
+  return { root: wrap(hips), bones, body };
+}
+
+/**
+ * Même squelette, mais le maillage est un `SkinnedMesh` porteur d'un
+ * `morphTargetDictionary` pour chaque morph de visage de HUMANOID — de quoi
+ * vérifier que `CharacterExpressionSystem` projette le gène `[0,1]` dans la
+ * plage `[-1,1]` que la famille déclare, jusqu'à l'influence réellement
+ * écrite sur le maillage. Lié à un vrai `Skeleton([hips])` : `Box3.setFromObject`
+ * calcule la boîte englobante d'un `SkinnedMesh` via `applyBoneTransform`, qui
+ * lit `mesh.skeleton` — sans liaison, `createCharacter` lève avant même
+ * d'atteindre ce que ce test vérifie.
+ */
+export function humanoidSkinned(): {
+  root: Object3D;
+  bones: Record<string, Object3D>;
+  mesh: SkinnedMesh;
+} {
+  const { hips, bones } = buildSkeleton();
+
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new Float32BufferAttribute([0, 0, 0], 3));
+  geometry.setAttribute('skinIndex', new Uint16BufferAttribute([0, 0, 0, 0], 4));
+  geometry.setAttribute('skinWeight', new Float32BufferAttribute([1, 0, 0, 0], 4));
+
+  const mesh = new SkinnedMesh(geometry, new MeshBasicMaterial());
+  mesh.name = 'Body';
+  mesh.bind(new Skeleton([hips]));
+  mesh.morphTargetDictionary = {
+    jawWidth: 0, noseSize: 1, eyeScale: 2, cheekbone: 3, bodyMass: 4,
+  };
+  mesh.morphTargetInfluences = [0, 0, 0, 0, 0];
+  hips.add(mesh);
+
+  return { root: wrap(hips), bones, mesh };
 }

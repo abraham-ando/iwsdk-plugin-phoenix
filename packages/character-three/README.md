@@ -75,6 +75,16 @@ construire l'applicateur, que chaque os résolu remonte jusqu'à `rigRoot` par l
 chaîne `.parent` — et **lève**, en nommant l'os fautif, si ce n'est pas le cas.
 Passez l'ancêtre commun du maillage et de l'armature, pas le maillage seul.
 
+Second cas refusé, plus subtil : le conteneur porte **lui-même** un rôle d'os.
+`HUMANOID.bones.root` liste `'Armature'` parmi ses alias — le nom que Blender
+donne justement à l'ancêtre commun qu'on recommande de passer comme `rigRoot`
+— donc ce cas se présente pour un rig correctement formé, pas pour une erreur
+d'appelant. Il est refusé quand même : l'applicateur écrirait d'abord la
+position locale de repos de l'os racine sur `rigRoot.position` (X et Z
+compris, pas seulement Y), puis le décalage au sol par-dessus, mêlant la
+morphologie du personnage à l'endroit où l'appelant l'a placé. Enveloppez le
+rig dans un `Group` parent et passez-le comme `rigRoot`.
+
 ## Composants et systèmes
 
 | Composant | Rôle |
@@ -91,6 +101,17 @@ aucun champ réglable : ils ne peuvent venir que du génome posé à la créatio
 via `createCharacter`, qui reste la source de vérité pour tout ce qu'aucun
 curseur n'expose.
 
-`CharacterCompileSystem` (priorité 60) recompile le squelette sur changement de
-gène de structure ou d'âge. `CharacterExpressionSystem` (priorité 70) applique
-les morphs de visage chaque frame, sans jamais recompiler.
+`CharacterCompileSystem` (priorité 60) recompile le squelette **uniquement**
+sur changement de gène de STRUCTURE ou d'âge — `genomeFromComponents` ne lit
+jamais `CharacterFace`, précisément pour que traîner un curseur de mâchoire ne
+recompile pas le squelette entier à chaque cran. Cette même compilation
+applique aussi les tons de peau et de cheveux (`applicator.applySurface`) :
+comme les gènes de surface viennent du génome posé à la création et ne
+changent jamais entre deux compilations, la porte de recompilation est le bon
+endroit pour les écrire, pas une frame séparée.
+
+`CharacterExpressionSystem` (priorité 70) applique les morphs de visage chaque
+frame, sans jamais recompiler — et projette chaque gène `[0,1]` dans la plage
+que la famille déclare pour ce morph (souvent `[-1,1]`), la même formule que le
+compilateur : un gène à 0 ne veut pas dire « pas de morph », il peut vouloir
+dire « morph au maximum dans l'autre sens ».
