@@ -26,6 +26,7 @@ export type {
   CompiledCharacter,
 } from './compile/types';
 export { compile } from './compile/compile';
+export { CompileCache, genomeKey } from './compile/memo';
 
 import { HUMANOID } from './family/humanoid';
 import { registerFamily } from './family/registry';
