@@ -9,6 +9,7 @@ export { resolveBinding } from './resolve/resolveBinding';
 
 export { sanitizeClip } from './clips/sanitize';
 export { applyRootMotionPolicy, type RootMotionPolicy } from './clips/rootMotion';
+export { loadCharacterClips } from './clips/load';
 
 export {
   CharacterIdentity, CharacterStructure, CharacterFace,
@@ -22,5 +23,5 @@ export { CharacterExpressionSystem } from './systems/CharacterExpressionSystem';
 
 export {
   createCharacter, installCharacterThree, assertBonesAreDescendants,
-  type CreateCharacterOptions,
+  createCharacterFromAsset, type CreateCharacterOptions, type CreateCharacterFromAssetOptions,
 } from './create';

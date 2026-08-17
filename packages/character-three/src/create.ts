@@ -203,3 +203,43 @@ export function installCharacterThree(world: World): void {
   world.registerSystem(CharacterCompileSystem, { priority: 60 });
   world.registerSystem(CharacterExpressionSystem, { priority: 70 });
 }
+
+export interface CreateCharacterFromAssetOptions {
+  /** Identifiant du manifeste — jamais une URL : le chargement passe par `AssetManager`. */
+  assetId: string;
+  familyId: string;
+  genome: Genome;
+  age: number;
+}
+
+/**
+ * Instancie un rig depuis le manifeste et le fait entrer dans le pont.
+ *
+ * `world.assets.instantiate` rend `gltf.scene` d'un clone obtenu par
+ * `SkeletonUtils.clone` — donc un `Skeleton` et des os NEUFS à chaque appel,
+ * ce qui est la condition pour que onze villageois portent onze morphologies
+ * sur cinq assets de base. Géométries, matériaux et clips restent partagés par
+ * référence : c'est pourquoi l'applicateur clone ses matériaux et l'assainisseur
+ * rend un nouveau clip.
+ *
+ * Le nœud rendu est la racine de scène, c'est-à-dire l'ANCÊTRE COMMUN de
+ * l'armature et du `SkinnedMesh` — exactement ce que `createCharacter` exige.
+ * Un import glTF place souvent l'armature en frère du maillage ; passer le
+ * maillage seul ferait lever le pont.
+ *
+ * Deux échecs remontent, et ils doivent rester distinguables : le chargement
+ * (identifiant inconnu, réseau) lève depuis `AssetManager` ; le refus de rig
+ * lève depuis `createCharacter` avec la liste des os manquants.
+ */
+export async function createCharacterFromAsset(
+  world: World,
+  options: CreateCharacterFromAssetOptions,
+): Promise<{ entity: ReturnType<World['createTransformEntity']>; report: ImportReport }> {
+  const rigRoot = await world.assets.instantiate<Object3D>(options.assetId);
+  return createCharacter(world, {
+    familyId: options.familyId,
+    genome: options.genome,
+    age: options.age,
+    rigRoot,
+  });
+}
