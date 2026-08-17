@@ -1267,7 +1267,7 @@ git commit -m "feat(character): deterministic heredity with dominance, drift and
 
 ### Task 6: Sérialisation compacte
 
-Trente gènes en trente octets, pour que le génome tienne sur le fil binaire existant sans travail de protocole.
+Deux octets d en-tête plus un par gène, pour que le génome tienne sur le fil binaire existant sans travail de protocole.
 
 **Files:**
 - Create: `packages/character/src/genome/serialize.ts`
@@ -1301,7 +1301,8 @@ describe('packGenome', () => {
   });
 
   it('tient sous cinquante octets pour un humain', () => {
-    // Le budget annoncé : trente octets contre cent vingt en float32.
+    // Le budget : deux octets d'en-tête plus un par gène. HUMANOID en déclare
+    // treize, donc quinze octets contre cinquante-deux en float32.
     expect(packGenome(HUMANOID, defaultGenome(HUMANOID)).length).toBeLessThan(50);
   });
 });
@@ -1380,8 +1381,9 @@ export const GENOME_FORMAT_VERSION = 1;
  * Un gène tient sur un octet.
  *
  * 256 pas sur [0,1] placent l'erreur maximale à 0.2 % d'un gène, très en deçà
- * du seuil de perception sur une largeur d'épaules. Trente gènes tiennent donc
- * en trente octets contre cent vingt en float32 — la même arithmétique que les
+ * du seuil de perception sur une largeur d'épaules. Le format est `2 + un octet
+ * par gène` : les treize gènes d'HUMANOID tiennent donc en quinze octets contre
+ * cinquante-deux en float32 — la même arithmétique que les
  * trames de 33 octets et la compression de quaternion sur 32 bits.
  *
  * L'ordre est celui des clés triées du descripteur, jamais celui de l'objet :
