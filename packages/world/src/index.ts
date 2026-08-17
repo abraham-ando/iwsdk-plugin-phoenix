@@ -41,6 +41,8 @@ export { applyColorManagement } from './core/colorManagement';
 
 export { TerrainTile } from './terrain/components';
 export { TerrainStreamingSystem } from './terrain/TerrainStreamingSystem';
+export { GroundGuardSystem } from './terrain/GroundGuardSystem';
+export { groundGuardY, GROUND_GUARD_MARGIN } from './terrain/groundGuard';
 export { TerrainMeshSystem } from './terrain/TerrainMeshSystem';
 export {
   TILE_SIZE,

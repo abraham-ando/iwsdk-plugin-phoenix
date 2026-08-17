@@ -11,6 +11,7 @@ import { ExposureSystem } from './atmosphere/ExposureSystem';
 import { applyColorManagement } from './core/colorManagement';
 import { TerrainTile } from './terrain/components';
 import { TerrainStreamingSystem } from './terrain/TerrainStreamingSystem';
+import { GroundGuardSystem } from './terrain/GroundGuardSystem';
 import { TerrainMeshSystem } from './terrain/TerrainMeshSystem';
 import { WaterSurface } from './water/components';
 import { WaterSystem } from './water/WaterSystem';
@@ -99,6 +100,9 @@ export function installCardinalWorld(
     configData: { material: terrainMaterial },
   });
   world.registerSystem(TerrainMeshSystem, { priority: 32 });
+  // Juste après la construction des tuiles : si l'une manque encore sous les
+  // pieds du joueur, le sol analytique le rattrape avant qu'il ne tombe.
+  world.registerSystem(GroundGuardSystem, { priority: 33 });
   world.registerSystem(WaterSystem, { priority: 34 });
 
   // La flore partage le matériau de feuillage : une seule instance pour tout
