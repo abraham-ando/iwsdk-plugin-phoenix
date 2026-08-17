@@ -185,10 +185,19 @@ interface CompiledCharacter {
   restPose:       Array<{ role: string; position: Vec3; quaternion: Vec4 }>; // jamais de scale
   rebindSkeleton: boolean;
   morphs:         Record<string, number>;
-  surface:        { skin: Vec4; hair: Vec4; hairStyle: number; clothTint: Vec4 }; // RGBA
-  stats:          { heightMeters: number; compileMicros: number };
+  surface:        { skinTone: number; hairTone: number; hairStyle: number }; // scalaires normalisés
+  stats:          { nominalHeightMeters: number };
 }
 ```
+
+Deux précisions issues de l'implémentation. **`nominalHeightMeters` et non
+`heightMeters`** : le champ ne rend compte que de l'âge et de la stature, pas de la
+longueur des membres ni du tronc ; mesurée sur la pose réelle, la différence atteint
+0,43 m. La hauteur debout véritable exige de savoir quelle chaîne touche le sol — un
+fait de rig, donc le travail du pont (§8), qui doit aussi porter le **ré-ancrage au
+sol** : la pose compilée est exprimée dans le repère du rig source et peut placer les
+pieds sous zéro à certains âges. Et **les tons de surface restent des scalaires
+normalisés**, la conversion en couleur appartenant à `MaterialLibrary`.
 
 Les types sont des tuples de nombres, jamais des objets Three : c'est ce qui
 permet de sérialiser un `CompiledCharacter` en vecteur doré et de le comparer
