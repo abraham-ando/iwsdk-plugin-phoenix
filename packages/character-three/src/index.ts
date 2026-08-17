@@ -20,6 +20,7 @@ export {
   CharacterCompileSystem, genomeFromComponents, needsRecompile,
 } from './systems/CharacterCompileSystem';
 export { CharacterExpressionSystem } from './systems/CharacterExpressionSystem';
+export { CharacterAnimationSystem } from './systems/CharacterAnimationSystem';
 
 export {
   createCharacter, installCharacterThree, assertBonesAreDescendants,

@@ -10,6 +10,7 @@ import {
 } from './components/index';
 import { CharacterCompileSystem } from './systems/CharacterCompileSystem';
 import { CharacterExpressionSystem } from './systems/CharacterExpressionSystem';
+import { CharacterAnimationSystem } from './systems/CharacterAnimationSystem';
 
 export interface CreateCharacterOptions {
   familyId: string;
@@ -202,6 +203,8 @@ export function installCharacterThree(world: World): void {
     .registerComponent(CharacterSelection);
   world.registerSystem(CharacterCompileSystem, { priority: 60 });
   world.registerSystem(CharacterExpressionSystem, { priority: 70 });
+  // 80 : le mixer tourne APRÈS que la morphologie de la frame est posée.
+  world.registerSystem(CharacterAnimationSystem, { priority: 80 });
 }
 
 export interface CreateCharacterFromAssetOptions {
