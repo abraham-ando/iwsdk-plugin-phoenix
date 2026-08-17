@@ -35,6 +35,15 @@ export class SkinnedApplicator implements CharacterApplicator {
   constructor(private readonly opts: SkinnedApplicatorOptions) {
     // Un clone par individu, dès la construction et non au premier teintage :
     // l'appartenance ne doit pas dépendre de ce que l'appelant fera ensuite.
+    //
+    // TOUS les maillages, pas seulement ceux que `surfaceTargets` désigne — et
+    // c'est délibéré, là où la marionnette ne clone que ses cibles. Un maillage
+    // skinné non teinté aujourd'hui reste un maillage dont le matériau est
+    // partagé avec le reste du village ; le jour où une famille déclare une
+    // surface de plus, le partage se manifesterait comme « tout le monde a la
+    // même tenue », très loin de sa cause. Le surcoût est borné et connu : un
+    // `Material` par maillage non teinté, libéré par `dispose()` comme les
+    // autres, sans texture dupliquée.
     for (const mesh of opts.meshes) cloneMaterials(mesh, this.owned);
   }
 

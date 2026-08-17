@@ -327,11 +327,21 @@ describe('createCharacter — le rig refusé', () => {
     scene.add(mesh);
     scene.add(root);
 
-    expect(() =>
+    // `/root/` ne discriminerait RIEN : le conseil final du message contient
+    // déjà le mot « rigRoot ». C'est la LISTE des os manquants qui prouve que
+    // le rejet a bien constaté l'absence, donc c'est elle qu'on interroge.
+    let message = '';
+    try {
       createCharacter(world, {
         familyId: HUMANOID.id, genome: defaultGenome(HUMANOID), age: 34, rigRoot: mesh,
-      }),
-    ).toThrow(/root/);
+      });
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    expect(message).toContain(`famille "${HUMANOID.id}"`);
+    for (const role of Object.keys(HUMANOID.bones)) {
+      expect(message).toContain(role);
+    }
   });
 });
 

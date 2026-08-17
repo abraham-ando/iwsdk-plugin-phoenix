@@ -214,7 +214,9 @@ Les morphs s'écrivent dans `mesh.morphTargetInfluences` aux index que la liaiso
 
 ### 7.4 Matériaux
 
-Un **clone par individu**, pris sur `MaterialLibrary` de `cardinal-world` : les teintes sont des uniformes, et muter le matériau partagé recolorerait tout le village. Ce clone nous appartient, donc `dispose()` le libère ; la bibliothèque garde ses textures.
+Un **clone par individu** : les teintes sont des uniformes, et muter le matériau partagé recolorerait tout le village. Ce clone nous appartient, donc `dispose()` le libère.
+
+> **Écart assumé à l'implémentation.** Cette section prescrivait de prendre le clone sur `MaterialLibrary` de `cardinal-world`. Le pont clone en fait le matériau **que porte déjà l'asset**, dans `apply/materials.ts`. Deux raisons : `Object3D.clone()` de Three partage les matériaux, donc quarante villageois issus d'un même GLB partagent une instance qu'il faut dédoubler quelle qu'en soit l'origine ; et faire dépendre `cardinal-character-three` de `cardinal-world` pour cela lui imposerait un paquet entier là où `Material.clone()` suffit. Le clone appartient toujours à l'applicateur, et `dispose()` ne libère que ce qu'il a cloné — jamais un matériau reçu.
 
 Le ton normalisé devient une couleur par interpolation entre les deux bornes de la rampe déclarée par le gène.
 
