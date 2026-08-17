@@ -98,3 +98,58 @@ describe('la lame de silex sert enfin à quelque chose', () => {
     expect(checkAffordance(abattre, chene, bucheron).ok).toBe(false);
   });
 });
+
+describe('le javelot, deuxième chaîne', () => {
+  it("SE FABRIQUE D'UNE LAME ET D'UN BOIS, et les consomme", () => {
+    const berge = { id: 'river_bank_1', type: 'river_bank', x: 0, z: 0, state: { fishLeft: 6 } };
+    const artisan = acteur({ flint_blade: 1, wood: 1 });
+    const fabriquer = affordance('river_bank', 'craft_spear');
+
+    expect(checkAffordance(fabriquer, berge, artisan).ok).toBe(true);
+    applyAffordance(fabriquer, berge, artisan);
+
+    expect(artisan.inventory.spear).toBe(1);
+    expect(artisan.inventory.flint_blade).toBe(0);
+    expect(artisan.inventory.wood).toBe(0);
+  });
+
+  it('ne se fabrique pas avec une lame seule', () => {
+    const berge = { id: 'river_bank_1', type: 'river_bank', x: 0, z: 0, state: { fishLeft: 6 } };
+    const refus = checkAffordance(
+      affordance('river_bank', 'craft_spear'),
+      berge,
+      acteur({ flint_blade: 1 })
+    );
+    expect(refus.ok).toBe(false);
+    if (!refus.ok) expect(refus.reason).toContain('wood');
+  });
+
+  it('REND TROIS FOIS PLUS DE VIANDE POUR UNE MÊME BÊTE', () => {
+    // Le javelot ne donne pas plus d'animaux : il en tire davantage. Le stock
+    // du terrain baisse d'une unité dans les deux cas, ce qui interdit à
+    // l'outil de multiplier la ressource elle-même.
+    const terrain = { id: 'hunting_ground_1', type: 'hunting_ground', x: 0, z: 0, state: { gameLeft: 5 } };
+    const chasseur = acteur({ spear: 1 });
+    applyAffordance(affordance('hunting_ground', 'hunt_spear'), terrain, chasseur);
+
+    expect(chasseur.inventory.meat).toBe(3);
+    expect(chasseur.inventory.spear).toBe(0); // le javelot se brise
+    expect(terrain.state.gameLeft).toBe(4);
+  });
+
+  it('LAISSE TOUJOURS CHASSER À MAINS NUES', () => {
+    const terrain = { id: 'hunting_ground_1', type: 'hunting_ground', x: 0, z: 0, state: { gameLeft: 5 } };
+    const nu = acteur();
+    expect(checkAffordance(affordance('hunting_ground', 'hunt'), terrain, nu).ok).toBe(true);
+    applyAffordance(affordance('hunting_ground', 'hunt'), terrain, nu);
+    expect(nu.inventory.meat).toBe(1);
+  });
+
+  it('refuse le javelot sur un terrain vide, comme la chasse à mains nues', () => {
+    const vide = { id: 'hunting_ground_1', type: 'hunting_ground', x: 0, z: 0, state: { gameLeft: 0 } };
+    expect(
+      checkAffordance(affordance('hunting_ground', 'hunt_spear'), vide, acteur({ spear: 1 })).ok
+    ).toBe(false);
+    expect(checkAffordance(affordance('hunting_ground', 'hunt'), vide, acteur()).ok).toBe(false);
+  });
+});

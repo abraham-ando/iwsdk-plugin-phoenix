@@ -123,6 +123,17 @@ export function registerDefaultContent(registry: SmartObjectRegistry): void {
         preconditions: { actorDistance: '<2', actorInventory: { flint: '>=1' } },
         effects: { actorInventory: { flint_blade: 3, flint: -1 } },
       },
+      {
+        // Assembler se fait là où l'on taille. Aucun établi : le lieu suffit,
+        // et un objet de plus dans le monde n'apporterait rien au modèle.
+        verb: 'craft_spear',
+        durationTicks: 90,
+        preconditions: {
+          actorDistance: '<2',
+          actorInventory: { flint_blade: '>=1', wood: '>=1' },
+        },
+        effects: { actorInventory: { spear: 1, flint_blade: -1, wood: -1 } },
+      },
     ],
     // Deux berges à +2 par jour font 4 poissons soutenables, pour une demande
     // mesurée de 4,6 par jour à onze agents : la rivière contribue sans plus
@@ -164,6 +175,19 @@ export function registerDefaultContent(registry: SmartObjectRegistry): void {
         durationTicks: 80,
         preconditions: { objectState: { gameLeft: '>0' }, actorDistance: '<3' },
         effects: { object: { gameLeft: -1 }, actorInventory: { meat: 1 } },
+      },
+      {
+        // Le javelot ne donne pas plus de bêtes : il en tire davantage. Le
+        // stock baisse d'une unité comme à mains nues, ce qui interdit à
+        // l'outil de multiplier la ressource elle-même.
+        verb: 'hunt_spear',
+        durationTicks: 80,
+        preconditions: {
+          objectState: { gameLeft: '>0' },
+          actorDistance: '<3',
+          actorInventory: { spear: '>=1' },
+        },
+        effects: { object: { gameLeft: -1 }, actorInventory: { meat: 3, spear: -1 } },
       },
     ],
     state: { gameLeft: 5 },
