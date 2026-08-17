@@ -26,6 +26,9 @@ importers:
 
   apps/bff-server:
     devDependencies:
+      '@iwsdk/cardinal-simulation':
+        specifier: workspace:*
+        version: link:../../packages/simulation
       '@types/node':
         specifier: ^22.13.0
         version: 22.20.1
