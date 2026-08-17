@@ -101,15 +101,43 @@ describe('createCharacter — pont complet, marionnette', () => {
     expect(compiler.genomes.get(entity.index)).toBeDefined();
   });
 
-  it('compile à la première frame et applique un décalage au sol au conteneur', () => {
+  it('compile à la première frame et applique un décalage au sol à l ancre', () => {
     const { world, root } = build();
     const compiler = world.getSystem(CharacterCompileSystem)!;
     const before = compiler.compiledCount;
     compiler.update();
     expect(compiler.compiledCount).toBe(before + 1);
     // Le sol de HUMANOID est `footL` : la compilation pose un décalage vertical
-    // non nul sur le conteneur — c'est l'ancrage, distinct de la morphologie.
-    expect(root.position.y).not.toBe(0);
+    // non nul sur l'ANCRE — c'est l'ancrage, distinct de la morphologie et
+    // distinct du placement que l'application donne au nœud d'entité.
+    const anchor = root.parent!;
+    expect(anchor.name).toBe('CharacterGroundAnchor');
+    expect(anchor.position.y).not.toBe(0);
+  });
+
+  it('laisse intact le placement de l entité, même après une recompilation', () => {
+    // La régression que l'ancre supprime : l'applicateur écrit le décalage au
+    // sol par AFFECTATION. Sans nœud intermédiaire, il tombait sur
+    // `entity.object3D` — donc sur la hauteur de terrain ou le point
+    // d'apparition que l'application venait de poser — à la première
+    // compilation, puis à chacune des suivantes.
+    const { world, root, entity } = build();
+    const compiler = world.getSystem(CharacterCompileSystem)!;
+    const node = entity.object3D!;
+    // Les trois niveaux : nœud d'entité → ancre → rig de l'appelant.
+    expect(root.parent!.parent).toBe(node);
+    node.position.set(3, 12.5, -7);
+
+    compiler.update();
+    expect(node.position.y).toBe(12.5);
+
+    // Un gène de STRUCTURE force une vraie recompilation, pas un simple
+    // passage à vide de la porte.
+    entity.setValue(CharacterStructure, 'stature', 0.9);
+    compiler.update();
+    expect([node.position.x, node.position.y, node.position.z]).toEqual([3, 12.5, -7]);
+    // …et l'ancre, elle, porte bien le décalage.
+    expect(root.parent!.position.y).not.toBe(0);
   });
 
   it('ne recompile pas une deuxième frame sans changement de génome', () => {
@@ -183,7 +211,7 @@ describe('createCharacter — pont complet, marionnette', () => {
     expect(entityB.index).toBe(indexA);
 
     compiler.update();
-    expect(rootB.position.y).not.toBe(0);
+    expect(rootB.parent!.position.y).not.toBe(0);
   });
 });
 

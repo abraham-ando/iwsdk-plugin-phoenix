@@ -26,8 +26,11 @@ export class PuppetApplicator implements CharacterApplicator {
       node.position.set(bone.position[0], bone.position[1], bone.position[2]);
       node.scale.setScalar(bone.scale);
     }
-    this.opts.rigRoot.updateMatrixWorld(true);
+    // Même ordre que `SkinnedApplicator` : l'ancrage d'abord, la mise à jour
+    // des matrices ensuite, pour que les matrices rendues à l'appelant portent
+    // déjà le décalage au sol.
     this.opts.rigRoot.position.y = compiled.stats.groundOffsetMeters;
+    this.opts.rigRoot.updateMatrixWorld(true);
   }
 
   /**

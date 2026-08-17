@@ -42,11 +42,14 @@ export class SkinnedApplicator implements CharacterApplicator {
       target.scale.setScalar(bone.scale);
     }
 
-    this.opts.rigRoot.updateMatrixWorld(true);
-
-    // L'ancrage se pose sur le conteneur, pas sur l'os racine : la morphologie
-    // du personnage et l'endroit où il se tient sont deux choses distinctes.
+    // L'ancrage se pose sur l'ancre, pas sur l'os racine : la morphologie du
+    // personnage et l'endroit où il se tient sont deux choses distinctes. Il
+    // s'écrit AVANT `updateMatrixWorld` — l'écrire après rendait à l'appelant
+    // des matrices monde périmées d'un décalage, et un `getWorldPosition()`
+    // pris juste après `applyRestPose` lisait la valeur d'avant l'ancrage.
     this.opts.rigRoot.position.y = compiled.stats.groundOffsetMeters;
+
+    this.opts.rigRoot.updateMatrixWorld(true);
   }
 
   applyMorphs(morphs: Readonly<Record<string, number>>): void {

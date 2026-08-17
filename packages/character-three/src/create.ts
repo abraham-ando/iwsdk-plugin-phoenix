@@ -1,4 +1,4 @@
-import { Box3, Vector3, type Object3D, type World } from '@iwsdk/core';
+import { Box3, Group, Vector3, type Object3D, type World } from '@iwsdk/core';
 import { getFamily, type Genome } from '@iwsdk/cardinal-character';
 import { resolveBinding } from './resolve/resolveBinding';
 import type { ImportReport } from './resolve/types';
@@ -87,7 +87,28 @@ export function createCharacter(
   const height = new Box3().setFromObject(options.rigRoot).getSize(new Vector3()).y;
   const { binding, report } = resolveBinding(family, options.rigRoot as never, height);
 
-  const entity = world.createTransformEntity(options.rigRoot);
+  // TROIS niveaux, et le niveau du milieu est la raison de cette fonction.
+  //
+  //   CharacterEntity        ← `entity.object3D`, donc la vue `Transform` :
+  //     └ CharacterGroundAnchor    l'endroit où l'application pose le
+  //         └ options.rigRoot      personnage (hauteur du terrain, point
+  //             └ os…              d'apparition).
+  //
+  // L'applicateur écrit `position.y = groundOffsetMeters` par AFFECTATION, et
+  // non par addition — l'ancrage est une propriété de la morphologie, pas un
+  // delta. Sans ce nœud intermédiaire, cette affectation tomberait sur le nœud
+  // d'entité et détruirait le placement de l'application à la première
+  // compilation, puis à chacune des suivantes. C'est exactement le mélange que
+  // le §7.2 de la conception refuse : « la morphologie du personnage et
+  // l'endroit où il se tient sont deux choses distinctes ».
+  const anchor = new Group();
+  anchor.name = 'CharacterGroundAnchor';
+  anchor.add(options.rigRoot);
+  const outer = new Group();
+  outer.name = 'CharacterEntity';
+  outer.add(anchor);
+
+  const entity = world.createTransformEntity(outer);
   if (binding === null) return { entity, report };
 
   const bones = new Map<string, Object3D>();
@@ -98,7 +119,7 @@ export function createCharacter(
 
   // Doit précéder la construction de l'applicateur : un no-op silencieux sur
   // le décalage au sol est précisément le défaut que ce projet refuse.
-  assertBonesAreDescendants(options.rigRoot, bones);
+  assertBonesAreDescendants(anchor, bones);
 
   const meshes: any[] = [];
   options.rigRoot.traverse((node) => {
@@ -117,13 +138,14 @@ export function createCharacter(
 
   // Le choix se fait sur ce qu'on a TROUVÉ, pas sur une option : un asset qui
   // porte un SkinnedMesh est skinné, point.
+  // `rigRoot` de l'applicateur = l'ANCRE, jamais le nœud d'entité.
   const applicator =
     meshes.length > 0
       ? new SkinnedApplicator({
-          rigRoot: options.rigRoot, bones, meshes,
+          rigRoot: anchor, bones, meshes,
           morphIndex: binding.morphIndex, surfaceTargets, ramps,
         })
-      : new PuppetApplicator({ rigRoot: options.rigRoot, nodes: bones, surfaceTargets, ramps });
+      : new PuppetApplicator({ rigRoot: anchor, nodes: bones, surfaceTargets, ramps });
 
   entity.addComponent(CharacterIdentity, { family: family.id, age: options.age });
   entity.addComponent(CharacterStructure, {});
