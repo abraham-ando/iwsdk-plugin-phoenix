@@ -32,6 +32,9 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "esbuild"
-    ]
+    ],
+    "patchedDependencies": {
+      "@pmndrs/uikit@1.0.75": "patches/@pmndrs__uikit@1.0.75.patch"
+    }
   }
 }

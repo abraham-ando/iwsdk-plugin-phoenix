@@ -9,13 +9,11 @@
   Panel, Divider, Button, ButtonIcon et ButtonLabel viennent du kit Horizon.
   BrainCircuit, TriangleAlert et Power sont des icônes Lucide.
 
-  ATTENTION — LES ACCENTS NE S'AFFICHENT PAS. Les atlas MSDF de @pmndrs/uikit
-  portent 104 caractères, dont les seuls non-ASCII sont ° Ä Ö Ü ä ö ü ß §.
-  Les seize polices fournies ont exactement le même jeu. Le fichier DM Sans,
-  lui, CONTIENT les glyphes accentués : c'est l'atlas qui les ignore. Le point
-  exact est @pmndrs/uikit/dist/loaders/ttf.js, dont la ligne 3 fixe le jeu par
-  défaut et la ligne 61 accepte pourtant un `opts.charset` — que rien, dans la
-  chaîne UIKitML, ne permet de renseigner.
+Les accents s'affichent grâce à un correctif de @pmndrs/uikit, déclaré dans
+  `patchedDependencies` : son atlas MSDF ne portait que 104 caractères, tous
+  ASCII plus quelques lettres allemandes. Le fichier DM Sans contenait bien
+  les glyphes accentués — c'est l'atlas qui les ignorait. Un test de
+  `scripts/__tests__/uikit-charset.test.mjs` tombe si le correctif se perd.
 -->
 <style>
   @font-face {
