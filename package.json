@@ -9,9 +9,9 @@
     "node": ">=20.19.0"
   },
   "scripts": {
-    "build": "pnpm --filter @iwsdk/cardinal-simulation build && pnpm --filter @iwsdk/cardinal-world build && pnpm --filter @iwsdk/plugin-phoenix build && pnpm --filter @iwsdk/plugin-cardinal-ai build && pnpm --filter @iwsdk/cardinal-bff-server build",
-    "test": "node scripts/check-single-three.mjs && node scripts/check-cardinal-drift.mjs && node --test 'scripts/__tests__/**/*.test.mjs' && pnpm --filter @iwsdk/cardinal-simulation test && pnpm --filter @iwsdk/cardinal-world test && pnpm --filter @iwsdk/plugin-phoenix test && pnpm --filter @iwsdk/plugin-cardinal-ai test && pnpm --filter @iwsdk/cardinal-bff-server test",
-    "typecheck": "pnpm --filter @iwsdk/cardinal-simulation typecheck && pnpm --filter @iwsdk/cardinal-world typecheck && pnpm --filter @iwsdk/plugin-phoenix typecheck && pnpm --filter @iwsdk/plugin-cardinal-ai typecheck && pnpm --filter @iwsdk/cardinal-bff-server typecheck && pnpm --filter @iwsdk/plugin-phoenix-demo typecheck",
+    "build": "pnpm --filter @iwsdk/cardinal-character build && pnpm --filter @iwsdk/cardinal-simulation build && pnpm --filter @iwsdk/cardinal-world build && pnpm --filter @iwsdk/plugin-phoenix build && pnpm --filter @iwsdk/plugin-cardinal-ai build && pnpm --filter @iwsdk/cardinal-bff-server build",
+    "test": "node scripts/check-single-three.mjs && node scripts/check-cardinal-drift.mjs && node --test 'scripts/__tests__/**/*.test.mjs' && pnpm --filter @iwsdk/cardinal-character test && pnpm --filter @iwsdk/cardinal-simulation test && pnpm --filter @iwsdk/cardinal-world test && pnpm --filter @iwsdk/plugin-phoenix test && pnpm --filter @iwsdk/plugin-cardinal-ai test && pnpm --filter @iwsdk/cardinal-bff-server test && pnpm --filter @iwsdk/cardinal-character build && node scripts/generate-character-vectors.mjs && git diff --exit-code fixtures/character_vectors.tsv",
+    "typecheck": "pnpm --filter @iwsdk/cardinal-character typecheck && pnpm --filter @iwsdk/cardinal-simulation typecheck && pnpm --filter @iwsdk/cardinal-world typecheck && pnpm --filter @iwsdk/plugin-phoenix typecheck && pnpm --filter @iwsdk/plugin-cardinal-ai typecheck && pnpm --filter @iwsdk/cardinal-bff-server typecheck && pnpm --filter @iwsdk/plugin-phoenix-demo typecheck",
     "test:ai": "pnpm --filter @iwsdk/plugin-cardinal-ai test",
     "test:bff": "pnpm --filter @iwsdk/cardinal-bff-server test",
     "test:server": "cd packages/server && mix test",
