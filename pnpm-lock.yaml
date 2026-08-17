@@ -7,6 +7,11 @@ settings:
 overrides:
   three: npm:super-three@0.181.0
 
+patchedDependencies:
+  '@pmndrs/uikit@1.0.75':
+    hash: 3bec41289bfb7b02672172cd6c1f39eb6ff09abcd8816f0380dca79507e9fe7e
+    path: patches/@pmndrs__uikit@1.0.75.patch
+
 importers:
 
   .:
@@ -74,7 +79,7 @@ importers:
         version: 0.5.3(zod@4.4.3)
       '@iwsdk/vite-plugin-dev':
         specifier: 0.5.3
-        version: 0.5.3(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))(@pmndrs/uikit@1.0.75(super-three@0.181.0))(@types/node@22.20.1)(react@19.2.8)(use-sync-external-store@1.6.0(react@19.2.8))(vite@7.3.6(@types/node@22.20.1)(tsx@4.23.12))
+        version: 0.5.3(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))(@pmndrs/uikit@1.0.75(patch_hash=3bec41289bfb7b02672172cd6c1f39eb6ff09abcd8816f0380dca79507e9fe7e)(super-three@0.181.0))(@types/node@22.20.1)(react@19.2.8)(use-sync-external-store@1.6.0(react@19.2.8))(vite@7.3.6(@types/node@22.20.1)(tsx@4.23.12))
       '@meta-quest/metavr':
         specifier: ^1.3.2
         version: 1.3.2
@@ -2489,10 +2494,10 @@ snapshots:
 
   '@dimforge/rapier3d-compat@0.12.0': {}
 
-  '@drawcall/uikitml@0.1.8(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))(@pmndrs/uikit@1.0.75(super-three@0.181.0))(super-three@0.181.0)':
+  '@drawcall/uikitml@0.1.8(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))(@pmndrs/uikit@1.0.75(patch_hash=3bec41289bfb7b02672172cd6c1f39eb6ff09abcd8816f0380dca79507e9fe7e)(super-three@0.181.0))(super-three@0.181.0)':
     dependencies:
       '@pmndrs/msdfonts': 1.0.75
-      '@pmndrs/uikit': 1.0.75(super-three@0.181.0)
+      '@pmndrs/uikit': 1.0.75(patch_hash=3bec41289bfb7b02672172cd6c1f39eb6ff09abcd8816f0380dca79507e9fe7e)(super-three@0.181.0)
       '@pmndrs/uikit-horizon': 1.0.75(super-three@0.181.0)
       '@pmndrs/uikit-lucide': 1.0.75(super-three@0.181.0)
       '@preact/signals-core': 1.14.4
@@ -2926,13 +2931,13 @@ snapshots:
   '@iwsdk/core@0.5.3(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))(react@19.2.8)':
     dependencies:
       '@babylonjs/havok': 1.3.14
-      '@drawcall/uikitml': 0.1.8(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))(@pmndrs/uikit@1.0.75(super-three@0.181.0))(super-three@0.181.0)
+      '@drawcall/uikitml': 0.1.8(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))(@pmndrs/uikit@1.0.75(patch_hash=3bec41289bfb7b02672172cd6c1f39eb6ff09abcd8816f0380dca79507e9fe7e)(super-three@0.181.0))(super-three@0.181.0)
       '@iwsdk/locomotor': 0.5.3(super-three@0.181.0)(three-mesh-bvh@0.9.14(super-three@0.181.0))
       '@iwsdk/scene-composition': 0.5.3
       '@iwsdk/xr-input': 0.5.3(super-three@0.181.0)
       '@pmndrs/handle': 6.6.30(react@19.2.8)
       '@pmndrs/pointer-events': 6.6.30
-      '@pmndrs/uikit': 1.0.75(super-three@0.181.0)
+      '@pmndrs/uikit': 1.0.75(patch_hash=3bec41289bfb7b02672172cd6c1f39eb6ff09abcd8816f0380dca79507e9fe7e)(super-three@0.181.0)
       '@preact/signals-core': 1.14.4
       '@types/three': 0.181.0
       '@types/webxr': 0.5.24
@@ -2964,9 +2969,9 @@ snapshots:
 
   '@iwsdk/scene-composition@0.5.3': {}
 
-  '@iwsdk/vite-plugin-dev@0.5.3(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))(@pmndrs/uikit@1.0.75(super-three@0.181.0))(@types/node@22.20.1)(react@19.2.8)(use-sync-external-store@1.6.0(react@19.2.8))(vite@7.3.6(@types/node@22.20.1)(tsx@4.23.12))':
+  '@iwsdk/vite-plugin-dev@0.5.3(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))(@pmndrs/uikit@1.0.75(patch_hash=3bec41289bfb7b02672172cd6c1f39eb6ff09abcd8816f0380dca79507e9fe7e)(super-three@0.181.0))(@types/node@22.20.1)(react@19.2.8)(use-sync-external-store@1.6.0(react@19.2.8))(vite@7.3.6(@types/node@22.20.1)(tsx@4.23.12))':
     dependencies:
-      '@drawcall/uikitml': 0.1.8(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))(@pmndrs/uikit@1.0.75(super-three@0.181.0))(super-three@0.181.0)
+      '@drawcall/uikitml': 0.1.8(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))(@pmndrs/uikit@1.0.75(patch_hash=3bec41289bfb7b02672172cd6c1f39eb6ff09abcd8816f0380dca79507e9fe7e)(super-three@0.181.0))(super-three@0.181.0)
       '@iwer/devui': 2.3.0(iwer@2.3.0)(use-sync-external-store@1.6.0(react@19.2.8))
       '@iwer/sem': 2.3.0(iwer@2.3.0)
       '@iwsdk/core': 0.5.3(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))(react@19.2.8)
@@ -3108,7 +3113,7 @@ snapshots:
 
   '@pmndrs/uikit-horizon@1.0.75(super-three@0.181.0)':
     dependencies:
-      '@pmndrs/uikit': 1.0.75(super-three@0.181.0)
+      '@pmndrs/uikit': 1.0.75(patch_hash=3bec41289bfb7b02672172cd6c1f39eb6ff09abcd8816f0380dca79507e9fe7e)(super-three@0.181.0)
       '@pmndrs/uikit-lucide': 1.0.75(super-three@0.181.0)
       zod: 4.4.3
     transitivePeerDependencies:
@@ -3116,7 +3121,7 @@ snapshots:
 
   '@pmndrs/uikit-lucide@1.0.75(super-three@0.181.0)':
     dependencies:
-      '@pmndrs/uikit': 1.0.75(super-three@0.181.0)
+      '@pmndrs/uikit': 1.0.75(patch_hash=3bec41289bfb7b02672172cd6c1f39eb6ff09abcd8816f0380dca79507e9fe7e)(super-three@0.181.0)
     transitivePeerDependencies:
       - three
 
@@ -3124,7 +3129,7 @@ snapshots:
     dependencies:
       '@preact/signals-core': 1.14.4
 
-  '@pmndrs/uikit@1.0.75(super-three@0.181.0)':
+  '@pmndrs/uikit@1.0.75(patch_hash=3bec41289bfb7b02672172cd6c1f39eb6ff09abcd8816f0380dca79507e9fe7e)(super-three@0.181.0)':
     dependencies:
       '@pmndrs/msdfonts': 1.0.75
       '@pmndrs/uikit-pub-sub': 1.0.75

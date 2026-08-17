@@ -1,0 +1,17 @@
+diff --git a/dist/loaders/ttf.js b/dist/loaders/ttf.js
+index 3f42d0003e9a01b2f109d908d2882bed55d55818..5775340583489b30ca3c632289538c92f0f28134 100644
+--- a/dist/loaders/ttf.js
++++ b/dist/loaders/ttf.js
+@@ -1,8 +1,10 @@
+ import { FileLoader, Loader } from 'three';
+ const DEFAULT_OPTIONS = Object.freeze({
+-    charset: ' \tABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!?.,;:\'"()-[]{}@#$%&*+=/\\<>',
++    charset: ' \tABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!?.,;:\'"()-[]{}@#$%&*+=/\\<>'
++        + 'àâäçèéêëîïôöùûüÿœæÀÂÄÇÈÉÊËÎÏÔÖÙÛÜŸŒÆ'
++        + '°«»…€–—·’',
+     fontSize: 48,
+-    textureSize: [512, 512],
++    textureSize: [1024, 1024],
+     fieldRange: 4,
+     padding: 4,
+     fixOverlaps: true,

@@ -73,5 +73,10 @@ export default defineAssets({
     type: AssetType.UIKitML,
     name: 'Welcome Panel',
   },
+  'local-ai-panel': {
+    url: publicAssetUrl('ui/local-ai.uikitml'),
+    type: AssetType.UIKitML,
+    name: 'Local AI Panel',
+  },
 });
 

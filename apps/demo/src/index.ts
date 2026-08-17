@@ -20,6 +20,7 @@ import { PrehistoricEnvironment3D } from './simulation/PrehistoricEnvironment3D.
 import { VILLAGE_LAYOUT } from './simulation/layout.js';
 import { SimulationHud } from './simulation/simulation-hud.js';
 import { Mode2Client } from './simulation/Mode2Client.js';
+import { mountLocalAiPanel } from './simulation/mountLocalAiPanel.js';
 import { PlayerMicrophone } from './simulation/PlayerMicrophone.js';
 import { TrajectoryUploader } from './simulation/TrajectoryUploader.js';
 import { PhysicsSimulationSystem } from './simulation/PhysicsSimulationSystem.js';
@@ -80,6 +81,8 @@ World.create(container, projectOptions)
       }
       // Dataset capture: ship recorded trajectories to the BFF periodically.
       new TrajectoryUploader(simSystem);
+      // Panneau d'activation de l'IA locale, posé devant le point d'apparition.
+      void mountLocalAiPanel(world, mode2);
     }
 
     // Registers the plugin's components and its four systems, and starts
