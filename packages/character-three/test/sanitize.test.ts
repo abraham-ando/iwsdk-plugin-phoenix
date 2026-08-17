@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { AnimationClip, QuaternionKeyframeTrack, VectorKeyframeTrack } from '@iwsdk/core';
-import { HUMANOID } from '@iwsdk/cardinal-character';
+import { HUMANOID, type FamilyDescriptor } from '@iwsdk/cardinal-character';
 import { sanitizeClip } from '../src/clips/sanitize';
 
 const roleOf = (name: string): string | null =>
@@ -39,9 +39,38 @@ describe('sanitizeClip', () => {
     expect(original.tracks).toHaveLength(avant);
   });
 
-  it('rend le MÊME objet pour un clip déjà vu', () => {
+  it('rend le MÊME objet pour un clip déjà vu par la même liaison', () => {
     const c = danse();
     expect(sanitizeClip(c, HUMANOID, roleOf).clip).toBe(sanitizeClip(c, HUMANOID, roleOf).clip);
+  });
+
+  it('ne rend pas le verdict d une AUTRE famille pour le même objet clip', () => {
+    // La mémoïsation portait sur le seul clip. Deux familles qui ne nomment
+    // pas la même racine tirent pourtant des conclusions opposées de la même
+    // piste `Hips.position` : gardée pour l'une, en conflit pour l'autre.
+    const sansRacineHips: FamilyDescriptor = {
+      ...HUMANOID,
+      id: 'humanoid-sans-hanches',
+      rootRole: 'chest', // `Hips` n'est plus la racine
+    };
+    const c = danse();
+    expect(sanitizeClip(c, HUMANOID, roleOf).stripped).toHaveLength(16);
+    // `Hips.position` bouge de 21 cm et n'est plus la racine : conflit.
+    expect(() => sanitizeClip(c, sansRacineHips, roleOf)).toThrow('Hips');
+  });
+
+  it('ne rend pas le verdict d un AUTRE rig pour le même objet clip', () => {
+    // Le vrai cas, et celui qui se présente : quarante villageois, un seul GLB
+    // de danse, des noms de nœuds qui diffèrent d'un exportateur à l'autre.
+    // `roleOfNode` vient de la LIAISON, pas de la famille — deux rigs de la
+    // même espèce n'en ont pas le même.
+    const autreRig = (name: string): string | null =>
+      ({ 'mixamorig:Hips': 'root', LeftLeg: 'legL' } as Record<string, string>)[name] ?? null;
+    const c = danse();
+    expect(sanitizeClip(c, HUMANOID, roleOf).stripped).toHaveLength(16);
+    // Pour ce second rig, `Hips` ne remonte à aucun rôle : la piste bouge
+    // vraiment, et rien ne dit qu'elle est la racine — donc elle lève.
+    expect(() => sanitizeClip(c, HUMANOID, autreRig)).toThrow('Hips');
   });
 
   it('lève quand un os non racine bouge réellement', () => {

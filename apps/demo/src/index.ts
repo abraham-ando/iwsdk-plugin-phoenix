@@ -88,7 +88,11 @@ World.create(container, projectOptions)
     // Registered before `ready` resolves on purpose: the system has to be live
     // to receive the spawn frames the server sends immediately after the join,
     // which are how it learns about everyone already in the room.
-    world.registerSystem(MultiplayerSystem, { configData: { net, hud } });
+    // Priorité 56, dans la même bande 50-58 que les autres systèmes du demo.
+    // Sans elle, elics lui donnait le 0 implicite : elle tournait AVANT
+    // l'atmosphère, le terrain et la simulation, alors qu'elle tournait après
+    // tout le monde avant que les priorités ne soient déclarées.
+    world.registerSystem(MultiplayerSystem, { priority: 56, configData: { net, hud } });
 
     net.ready.catch((error: unknown) => {
       // A refused join must not take the scene down with it — single player is

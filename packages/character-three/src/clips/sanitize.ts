@@ -1,8 +1,44 @@
 import { AnimationClip, type KeyframeTrack } from '@iwsdk/core';
 import { classifyTranslationTrack, type FamilyDescriptor } from '@iwsdk/cardinal-character';
 
-/** Mémoïsé par identité d'objet : quarante villageois partagent le même clip source. */
-const cache = new WeakMap<AnimationClip, { clip: AnimationClip; stripped: string[] }>();
+interface Sanitized {
+  clip: AnimationClip;
+  stripped: string[];
+}
+
+/**
+ * Mémoïsé par identité de clip — quarante villageois partagent le même clip
+ * source — MAIS pas par elle SEULE.
+ *
+ * Le verdict ne dépend pas que du clip : il dépend aussi de `roleOfNode`, qui
+ * est construit par LIAISON, donc par rig. Quarante villageois, un seul GLB de
+ * danse, des noms de nœuds qui diffèrent d'un exportateur à l'autre : pour le
+ * rig A la piste `Hips.position` remonte au rôle `root` et se garde ; pour le
+ * rig B, dont la hanche s'appelle `mixamorig:Hips`, la même piste ne remonte à
+ * aucun rôle et devrait lever. Une clé sur le seul clip rendait au second
+ * appelant, en silence, le verdict rendu au premier.
+ *
+ * La clé est donc la famille ET la signature des rôles que `roleOfNode` donne
+ * aux nœuds de translation de CE clip. Cette signature coûte un appel par
+ * piste de position ; l'amplitude, elle, coûte une passe sur toutes les clés de
+ * toutes les pistes, et c'est elle qu'on mémoïse.
+ */
+const cache = new WeakMap<AnimationClip, Map<string, Sanitized>>();
+
+/** Famille + rôle de chaque nœud de translation, dans l'ordre des pistes. */
+function verdictKey(
+  clip: AnimationClip,
+  family: FamilyDescriptor,
+  roleOfNode: (nodeName: string) => string | null,
+): string {
+  let key = family.id;
+  for (const track of clip.tracks) {
+    if (!track.name.endsWith('.position')) continue;
+    const nodeName = track.name.slice(0, -'.position'.length);
+    key += `|${nodeName}=${roleOfNode(nodeName) ?? ''}`;
+  }
+  return key;
+}
 
 /** Amplitude maximale sur les trois axes, à travers toutes les clés. */
 function amplitude(track: KeyframeTrack): number {
@@ -37,8 +73,14 @@ export function sanitizeClip(
   clip: AnimationClip,
   family: FamilyDescriptor,
   roleOfNode: (nodeName: string) => string | null,
-): { clip: AnimationClip; stripped: string[] } {
-  const seen = cache.get(clip);
+): Sanitized {
+  let byVerdict = cache.get(clip);
+  if (byVerdict === undefined) {
+    byVerdict = new Map<string, Sanitized>();
+    cache.set(clip, byVerdict);
+  }
+  const key = verdictKey(clip, family, roleOfNode);
+  const seen = byVerdict.get(key);
   if (seen !== undefined) return seen;
 
   const kept: KeyframeTrack[] = [];
@@ -66,7 +108,7 @@ export function sanitizeClip(
     }
   }
 
-  const result = { clip: new AnimationClip(clip.name, clip.duration, kept), stripped };
-  cache.set(clip, result);
+  const result: Sanitized = { clip: new AnimationClip(clip.name, clip.duration, kept), stripped };
+  byVerdict.set(key, result);
   return result;
 }

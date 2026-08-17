@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { Types } from '@iwsdk/core';
 import {
   CharacterIdentity, CharacterStructure, CharacterFace,
   CharacterSurface, CharacterSelection,
@@ -21,11 +22,18 @@ describe('composants', () => {
   });
 
   it('déclarent la sélection comme une entité, pas comme un identifiant', () => {
-    expect(CharacterSelection.schema.target).toBeDefined();
+    // Le TYPE est l'affirmation, pas la présence du champ : un `Int32` passerait
+    // un `toBeDefined()` et perdrait la référence d'entité que `Types.Entity`
+    // emballe et déballe (`packEntityRef` / `getEntityByPackedRef`).
+    expect(CharacterSelection.schema.target.type).toBe(Types.Entity);
   });
 
   it('portent les teintes en Color, donc en champ vecteur', () => {
-    expect(CharacterSurface.schema.skin).toBeDefined();
-    expect(CharacterSurface.schema.hair).toBeDefined();
+    // Celui-ci compte plus encore : toute la règle `getVectorView` existe
+    // PARCE QUE le type est `Types.Color`. `setValue` lève sur un champ
+    // vecteur en elics 3.4.x ; sur un `Float32` il ne lèverait pas, et la
+    // règle deviendrait un folklore sans cause.
+    expect(CharacterSurface.schema.skin.type).toBe(Types.Color);
+    expect(CharacterSurface.schema.hair.type).toBe(Types.Color);
   });
 });

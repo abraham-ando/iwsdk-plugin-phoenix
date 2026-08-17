@@ -4,7 +4,10 @@ import { resolveBinding } from './resolve/resolveBinding';
 import type { ImportReport } from './resolve/types';
 import { SkinnedApplicator } from './apply/SkinnedApplicator';
 import { PuppetApplicator } from './apply/PuppetApplicator';
-import { CharacterFace, CharacterIdentity, CharacterStructure, CharacterSurface } from './components/index';
+import {
+  CharacterFace, CharacterIdentity, CharacterSelection,
+  CharacterStructure, CharacterSurface,
+} from './components/index';
 import { CharacterCompileSystem } from './systems/CharacterCompileSystem';
 import { CharacterExpressionSystem } from './systems/CharacterExpressionSystem';
 
@@ -192,7 +195,11 @@ export function installCharacterThree(world: World): void {
     .registerComponent(CharacterIdentity)
     .registerComponent(CharacterStructure)
     .registerComponent(CharacterFace)
-    .registerComponent(CharacterSurface);
+    .registerComponent(CharacterSurface)
+    // Le cinquième, oublié : un composant non enregistré n'a pas de bitmask,
+    // donc `addComponent` lève à la première tentative d'un panneau
+    // d'inspection — le seul code qui s'en sert, et qui n'existe pas encore.
+    .registerComponent(CharacterSelection);
   world.registerSystem(CharacterCompileSystem, { priority: 60 });
   world.registerSystem(CharacterExpressionSystem, { priority: 70 });
 }
