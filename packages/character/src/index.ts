@@ -20,6 +20,7 @@ export { GENOME_FORMAT_VERSION, packGenome, unpackGenome } from './genome/serial
 
 export type {
   Vec3,
+  Vec4,
   BoneRest,
   RigBinding,
   CompiledBone,

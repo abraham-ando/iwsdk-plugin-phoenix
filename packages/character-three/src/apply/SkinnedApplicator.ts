@@ -1,0 +1,111 @@
+import { Color, type Material, type Object3D, type SkinnedMesh } from '@iwsdk/core';
+import type { CompiledCharacter } from '@iwsdk/cardinal-character';
+import { cloneMaterials, disposeMaterials } from './materials';
+import { rampColour } from './ramp';
+import type { CharacterApplicator } from './types';
+
+export interface SkinnedApplicatorOptions {
+  rigRoot: Object3D;
+  /** `Object3D` et non `Bone` : l'applicateur n'écrit que `position` et
+   *  `scale`, que tout nœud possède. Exiger un `Bone` forcerait un cast chez
+   *  l'appelant sans rien garantir de plus. */
+  bones: Map<string, Object3D>;
+  meshes: SkinnedMesh[];
+  morphIndex: Readonly<Record<string, number>>;
+  surfaceTargets: Readonly<Record<string, readonly string[]>>;
+  ramps: Readonly<Record<string, readonly [string, string]>>;
+}
+
+/**
+ * Applique une morphologie compilée à un vrai squelette.
+ *
+ * DEUX gestes, et un troisième à ne surtout pas faire. Déplacer un os EST la
+ * déformation : la peau suit parce que la matrice d'os diffère de la matrice de
+ * liaison, ce qui est exactement le travail du skinning. Appeler
+ * `skeleton.calculateInverses()` rendrait la pose courante neutre et ANNULERAIT
+ * la morphologie — mesuré, pas supposé. Les deux premières rédactions de la
+ * conception prescrivaient ce rebake ; elles avaient tort.
+ */
+export class SkinnedApplicator implements CharacterApplicator {
+  private readonly lastMorphs = new Map<string, number>();
+  private readonly colour = new Color();
+  /** Les matériaux qui NOUS appartiennent : les clones, et eux seuls. */
+  private readonly owned: Material[] = [];
+
+  constructor(private readonly opts: SkinnedApplicatorOptions) {
+    // Un clone par individu, dès la construction et non au premier teintage :
+    // l'appartenance ne doit pas dépendre de ce que l'appelant fera ensuite.
+    //
+    // TOUS les maillages, pas seulement ceux que `surfaceTargets` désigne — et
+    // c'est délibéré, là où la marionnette ne clone que ses cibles. Un maillage
+    // skinné non teinté aujourd'hui reste un maillage dont le matériau est
+    // partagé avec le reste du village ; le jour où une famille déclare une
+    // surface de plus, le partage se manifesterait comme « tout le monde a la
+    // même tenue », très loin de sa cause. Le surcoût est borné et connu : un
+    // `Material` par maillage non teinté, libéré par `dispose()` comme les
+    // autres, sans texture dupliquée.
+    for (const mesh of opts.meshes) cloneMaterials(mesh, this.owned);
+  }
+
+  applyRestPose(compiled: CompiledCharacter): void {
+    for (const bone of compiled.restPose) {
+      const target = this.opts.bones.get(bone.role);
+      // Un rôle absent n'est pas une erreur ici : le résolveur a déjà rendu son
+      // verdict, et lever maintenant transformerait un import déjà jugé
+      // acceptable en plantage à l'instanciation.
+      if (target === undefined) continue;
+      target.position.set(bone.position[0], bone.position[1], bone.position[2]);
+      // Scalaire : une similitude ne cisaille pas, une échelle par axe si.
+      target.scale.setScalar(bone.scale);
+    }
+
+    // L'ancrage se pose sur l'ancre, pas sur l'os racine : la morphologie du
+    // personnage et l'endroit où il se tient sont deux choses distinctes. Il
+    // s'écrit AVANT `updateMatrixWorld` — l'écrire après rendait à l'appelant
+    // des matrices monde périmées d'un décalage, et un `getWorldPosition()`
+    // pris juste après `applyRestPose` lisait la valeur d'avant l'ancrage.
+    this.opts.rigRoot.position.y = compiled.stats.groundOffsetMeters;
+
+    this.opts.rigRoot.updateMatrixWorld(true);
+  }
+
+  applyMorphs(morphs: Readonly<Record<string, number>>): void {
+    // `for…in` et non `Object.entries` : celui-ci alloue un tableau de paires
+    // à chaque appel, et cette méthode est appelée par entité et par image.
+    for (const key in morphs) {
+      const value = morphs[key]!;
+      if (this.lastMorphs.get(key) === value) continue;
+      const index = this.opts.morphIndex[key];
+      if (index === undefined) continue;
+      for (const mesh of this.opts.meshes) {
+        if (mesh.morphTargetInfluences !== undefined) {
+          mesh.morphTargetInfluences[index] = value;
+        }
+      }
+      this.lastMorphs.set(key, value);
+    }
+  }
+
+  applySurface(surface: Readonly<Record<string, number>>): void {
+    for (const key in surface) {
+      const ramp = this.opts.ramps[key];
+      const targets = this.opts.surfaceTargets[key];
+      if (ramp === undefined || targets === undefined) continue;
+      rampColour(this.colour, ramp, surface[key]!);
+      for (const mesh of this.opts.meshes) {
+        if (!targets.includes(mesh.name)) continue;
+        // Le matériau écrit ici est notre CLONE, posé par le constructeur.
+        const material = mesh.material as { color?: Color };
+        material.color?.copy(this.colour);
+      }
+    }
+  }
+
+  dispose(): void {
+    // Ces matériaux sont les nôtres — le constructeur les a clonés — donc les
+    // libérer ici ne prive personne. Les textures restent celles de la
+    // bibliothèque : `Material.dispose()` ne les touche pas.
+    disposeMaterials(this.owned);
+    this.lastMorphs.clear();
+  }
+}

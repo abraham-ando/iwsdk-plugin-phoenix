@@ -22,10 +22,6 @@ describe('compile — génome neutre', () => {
     const c = compile(HUMANOID, defaultGenome(HUMANOID), 18, binding());
     expect(c.stats.nominalHeightMeters).toBeCloseTo(1.75, 3);
   });
-
-  it('demande toujours un recalcul des matrices inverses', () => {
-    expect(compile(HUMANOID, defaultGenome(HUMANOID), 18, binding()).rebindSkeleton).toBe(true);
-  });
 });
 
 describe('compile — invariants géométriques', () => {

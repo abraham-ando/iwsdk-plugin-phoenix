@@ -30,4 +30,13 @@ describe('UIKitMLTemplateBuilder', () => {
     expect(speakingXml).toContain('class="word-active">aventurier');
     expect(speakingXml).toContain('class="word-normal">dans');
   });
+
+  it('n emploie aucune unité px : UIKitML compte en centimètres', () => {
+    const xml = UIKitMLTemplateBuilder.buildSpeechBubble({ npcName: 'Test' });
+    // `/px\b/` et non `/\d+px/` : le motif précédent exigeait un chiffre
+    // COLLÉ au `px` et laissait donc passer toute unité qui n'en a pas juste
+    // avant — `calc(1rem + px)`, `"{size}px"` après interpolation, un `px`
+    // séparé de sa valeur par une espace. Ici on refuse l'unité elle-même.
+    expect(xml).not.toMatch(/px\b/);
+  });
 });

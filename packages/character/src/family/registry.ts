@@ -53,6 +53,16 @@ export function validateDescriptor(descriptor: FamilyDescriptor): string[] {
     }
   }
 
+  if (descriptor.groundRole !== undefined && descriptor.bones[descriptor.groundRole] === undefined) {
+    problems.push(`groundRole "${descriptor.groundRole}" n'est pas un rôle d'os déclaré`);
+  }
+
+  for (const [key, gene] of Object.entries(descriptor.genes)) {
+    if (gene.group === 'surface' && gene.ramp === undefined) {
+      problems.push(`gène de surface "${key}" : rampe de couleur absente`);
+    }
+  }
+
   return problems;
 }
 

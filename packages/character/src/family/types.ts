@@ -14,6 +14,13 @@ export interface GeneDef {
   mutationRate: number;
   /** Gène atténué chez l'autre sexe. Absent = non lié au sexe. */
   sexLinked?: 'f' | 'm';
+  /**
+   * Deux couleurs bornes, requises sur un gène de groupe `surface`. Le pont
+   * interpole entre elles. Déclarées ici et non dans le pont : créer une espèce
+   * doit rester un acte d'écriture de données, et une famille à fourrure a ses
+   * propres teintes.
+   */
+  ramp?: readonly [string, string];
 }
 
 export interface ChainDef {
@@ -64,4 +71,19 @@ export interface FamilyDescriptor {
   genes: Readonly<Record<string, GeneDef>>;
   /** Âge auquel les courbes valent leur référence adulte. */
   adultAge: number;
+
+  /**
+   * Rôle de l'os qui touche le sol. Optionnel, contrairement à `limb` : son
+   * absence a un sens — un poisson, un oiseau en vol ne s'ancrent à rien — là
+   * où un `limb` absent ne signifierait rien d'autre qu'un oubli.
+   */
+  groundRole?: string;
+
+  /**
+   * Gène de surface → alias de maillages qu'il teinte dans l'asset. Quel
+   * maillage porte la peau est une propriété de l'ASSET, pas de l'espèce — un
+   * rig RPM nomme `Wolf3D_Body` — mais c'est la famille qui sait quels noms
+   * chercher, sur le même mécanisme d'alias que les os.
+   */
+  surfaces?: Readonly<Record<string, { aliases: readonly string[] }>>;
 }

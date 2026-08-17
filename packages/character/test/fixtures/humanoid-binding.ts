@@ -12,11 +12,14 @@ import type { RigBinding } from '../../src/compile/types';
  */
 export function humanoidBinding(): RigBinding {
   const os = (role: string, parentRole: string | null, p: readonly [number, number, number]) =>
-    [role, { role, parentRole, position: p }] as const;
+    [role, { role, parentRole, position: p, rotation: [0, 0, 0, 1] as const }] as const;
   return {
     family: 'humanoid',
     restHeightMeters: 1.75,
     morphIndex: { jawWidth: 0, noseSize: 1, eyeScale: 2, cheekbone: 3, bodyMass: 4 },
+    // Noms de maillages RPM : `compile()` ne les lit pas — il rend des tons
+    // normalisés et laisse la couleur au pont — mais la liaison les porte.
+    surfaceTargets: { skinTone: ['Wolf3D_Body'], hairTone: ['Wolf3D_Hair'] },
     bones: Object.fromEntries([
       os('root', null, [0, 0.95, 0]),
       os('spine', 'root', [0, 0.12, 0]),

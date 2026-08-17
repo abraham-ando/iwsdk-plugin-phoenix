@@ -1,0 +1,33 @@
+{
+  "name": "@iwsdk/cardinal-character-three",
+  "version": "0.1.0",
+  "description": "Applique la morphologie compilée à des objets Three, et l'expose en ECS IWSDK",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "peerDependencies": { "@iwsdk/core": ">=0.5.0" },
+  "devDependencies": {
+    "@iwsdk/core": "0.5.3",
+    "@types/node": "^22.20.1",
+    "elics": "3.4.2",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  },
+  "dependencies": { "@iwsdk/cardinal-character": "workspace:*" },
+  "engines": { "node": ">=20.19.0" }
+}

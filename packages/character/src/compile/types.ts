@@ -1,10 +1,15 @@
 export type Vec3 = readonly [number, number, number];
+export type Vec4 = readonly [number, number, number, number];
 
 /** Un os tel que mesuré dans le rig source, avant toute morphologie. */
 export interface BoneRest {
   role: string;
   /** Translation locale par rapport au parent, en mètres. */
   position: Vec3;
+  /** Quaternion de repos, mesuré par le résolveur. Nécessaire pour composer
+   *  la chaîne : sans lui, l'ancrage serait juste pour un rig aligné sur Y et
+   *  faux pour tout autre. */
+  rotation: Vec4;
   parentRole: string | null;
 }
 
@@ -18,6 +23,17 @@ export interface RigBinding {
   bones: Readonly<Record<string, BoneRest>>;
   /** Clé de morph de la famille → index dans morphTargetInfluences. */
   morphIndex: Readonly<Record<string, number>>;
+  /**
+   * Gène de surface → noms RÉELS des nœuds qu'il teinte dans cet asset.
+   *
+   * Les noms tels que l'asset les porte, pas les alias de la famille : la
+   * comparaison d'alias est insensible à la casse, et un rig dont le maillage
+   * de peau s'appelle `body` plutôt que `Body` matche. Le pont, lui, compare
+   * ensuite `mesh.name` à cette liste, exactement. Laisser chaque appelant
+   * redériver ces noms lui-même a déjà produit le défaut que cette liste
+   * supprime : deux règles d'appariement pour une seule question.
+   */
+  surfaceTargets: Readonly<Record<string, readonly string[]>>;
   /** Hauteur du personnage adulte médian dans le rig source. */
   restHeightMeters: number;
 }
@@ -32,8 +48,6 @@ export interface CompiledBone {
 export interface CompiledCharacter {
   family: string;
   restPose: CompiledBone[];
-  /** Toujours vrai : la pose de repos a changé, les matrices inverses aussi. */
-  rebindSkeleton: boolean;
   morphs: Record<string, number>;
   /**
    * Un ton par gène du groupe `surface`, scalaires normalisés. Le type ne
@@ -42,13 +56,16 @@ export interface CompiledCharacter {
    * couleur appartient au pont.
    */
   surface: Record<string, number>;
-  /**
-   * Hauteur NOMINALE : `restHeightMeters × bodyScale × stature`. Elle rend
-   * compte de l'âge et de la stature, et de rien d'autre — ni la longueur des
-   * jambes, ni celle du tronc, ni le rapport membres/tronc, ni l'os racine qui
-   * n'est jamais mis à l'échelle. La hauteur réellement debout se mesure sur la
-   * pose composée, ce qui exige de savoir quelle chaîne touche le sol : un fait
-   * de rig que seul le pont possède.
-   */
-  stats: { nominalHeightMeters: number };
+  stats: {
+    /**
+     * Hauteur NOMINALE : `restHeightMeters × bodyScale × stature`. Elle ne rend
+     * compte que de l'âge et de la stature.
+     */
+    nominalHeightMeters: number;
+    /**
+     * Décalage vertical à appliquer au rig pour que l'os d'appui repose à zéro.
+     * Vaut 0 si la famille ne déclare pas de `groundRole`.
+     */
+    groundOffsetMeters: number;
+  };
 }

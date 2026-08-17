@@ -22,6 +22,18 @@ export class DialogueBubbleSystem extends createSystem(
   private bubbleStates = new Map<number, ActiveBubbleState>();
 
   /**
+   * La dernière horloge vue par `update`. `showSpeech` est appelé HORS de la
+   * boucle — depuis un gestionnaire de dialogue — et n'a donc pas d'autre accès
+   * au temps du monde. Elle estampillait `performance.now()`, qui compte depuis
+   * le chargement de la page, alors qu'`update` reçoit l'horloge d'elics, qui
+   * part de zéro : `elapsed` valait `tempsDuMonde − millisecondesDepuisLeChargement`,
+   * donc négatif pendant toute la session. Le mot surligné tombait sous zéro et
+   * l'auto-effacement ne se déclenchait jamais. Les deux estampilles lisent
+   * désormais la MÊME horloge.
+   */
+  private lastTime = 0;
+
+  /**
    * Set subtitle text to display in the 3D bubble.
    */
   public showSpeech(entity: Entity, text: string): void {
@@ -34,7 +46,7 @@ export class DialogueBubbleSystem extends createSystem(
       isThinking: false,
       visible: true,
     });
-    entity.setValue(SpatialDialogueUI, 'displayStartTime', performance.now());
+    entity.setValue(SpatialDialogueUI, 'displayStartTime', this.lastTime);
     entity.setValue(SpatialDialogueUI, 'activeWordIndex', 0);
   }
 
@@ -58,6 +70,9 @@ export class DialogueBubbleSystem extends createSystem(
   }
 
   override update(_delta: number, time: number): void {
+    // Retenue même quand le système est désactivé : `showSpeech` peut arriver
+    // pendant une désactivation, et son estampille doit rester comparable.
+    this.lastTime = time;
     if (!this.config.enabled.value) return;
 
     for (const entity of this.queries.bubbles.entities) {
@@ -94,9 +109,14 @@ export class DialogueBubbleSystem extends createSystem(
       }
 
       // Compute active karaoke word
-      const wordIdx = Math.min(
-        state.words.length - 1,
-        Math.floor((elapsed / 1000) * this.config.wordsPerSecond.value)
+      // Plancher à 0 : une bulle montrée après le dernier `update` de la frame
+      // a un `elapsed` légèrement négatif, et `words[-1]` n'existe pas.
+      const wordIdx = Math.max(
+        0,
+        Math.min(
+          state.words.length - 1,
+          Math.floor((elapsed / 1000) * this.config.wordsPerSecond.value)
+        )
       );
       state.currentWord = wordIdx;
       entity.setValue(SpatialDialogueUI, 'activeWordIndex', wordIdx);

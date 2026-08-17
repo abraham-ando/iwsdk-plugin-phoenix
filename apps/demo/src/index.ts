@@ -35,9 +35,10 @@ const hud = new DemoHud(document.body, { target: describeConfig(network) });
 
 World.create(container, projectOptions)
   .then((world) => {
-    world.registerSystem(RobotSystem);
-    world.registerSystem(PanelSystem);
-    world.registerSystem(PhysicsSimulationSystem);
+    // Priorités explicites, bande 50-58, en amont des personnages (60).
+    world.registerSystem(RobotSystem, { priority: 50 });
+    world.registerSystem(PanelSystem, { priority: 52 });
+    world.registerSystem(PhysicsSimulationSystem, { priority: 54 });
 
     // 1. Mount Cardinal AI Engine, NPCs & Interactive HUD
     setupCardinalVillage(world);
@@ -60,7 +61,7 @@ World.create(container, projectOptions)
     });
 
     // 2. Mount the Cardinal simulation engine + its VR projection & HUD
-    world.registerSystem(CardinalSimulationSystem);
+    world.registerSystem(CardinalSimulationSystem, { priority: 58 });
     const simSystem = world.getSystem(CardinalSimulationSystem);
     if (simSystem) {
       const sceneData = PrehistoricEnvironment3D.createWorldScene(world, VILLAGE_LAYOUT, materials);
@@ -99,7 +100,11 @@ World.create(container, projectOptions)
     // Registered before `ready` resolves on purpose: the system has to be live
     // to receive the spawn frames the server sends immediately after the join,
     // which are how it learns about everyone already in the room.
-    world.registerSystem(MultiplayerSystem, { configData: { net, hud } });
+    // Priorité 56, dans la même bande 50-58 que les autres systèmes du demo.
+    // Sans elle, elics lui donnait le 0 implicite : elle tournait AVANT
+    // l'atmosphère, le terrain et la simulation, alors qu'elle tournait après
+    // tout le monde avant que les priorités ne soient déclarées.
+    world.registerSystem(MultiplayerSystem, { priority: 56, configData: { net, hud } });
 
     net.ready.catch((error: unknown) => {
       // A refused join must not take the scene down with it — single player is

@@ -1,7 +1,8 @@
 import { evalCurve } from '../family/proportions';
 import type { FamilyDescriptor } from '../family/types';
 import { clamp01, type Genome } from '../genome/types';
-import type { BoneRest, CompiledBone, CompiledCharacter, RigBinding, Vec3 } from './types';
+import { quatMul, quatRotate } from './quat';
+import type { BoneRest, CompiledBone, CompiledCharacter, RigBinding, Vec3, Vec4 } from './types';
 
 /** Plage d'action d'un gène de longueur : ±25 % autour du rig source. */
 const LENGTH_SPAN = 0.5;
@@ -39,6 +40,44 @@ function chainRoles(binding: RigBinding, from: string, to: string, label: string
 
 function scaled(position: Vec3, factor: number): Vec3 {
   return [position[0] * factor, position[1] * factor, position[2] * factor];
+}
+
+/**
+ * Compose la chaîne de la racine jusqu'à l'os d'appui et rend la hauteur de ce
+ * dernier. Translation, rotation et échelle uniforme sont composées dans cet
+ * ordre — une somme de translations serait juste pour un rig aligné sur Y et
+ * fausse pour tout autre.
+ */
+function groundHeight(
+  family: FamilyDescriptor,
+  binding: RigBinding,
+  pose: readonly CompiledBone[],
+): number {
+  const role = family.groundRole;
+  if (role === undefined) return 0;
+
+  const byRole = new Map(pose.map((b) => [b.role, b]));
+  const chain: string[] = [];
+  let cursor: string | null = role;
+  while (cursor !== null) {
+    if (binding.bones[cursor] === undefined) return 0;
+    chain.unshift(cursor);
+    cursor = binding.bones[cursor]!.parentRole;
+  }
+
+  let pos: Vec3 = [0, 0, 0];
+  let rot: Vec4 = [0, 0, 0, 1];
+  let scale = 1;
+  for (const r of chain) {
+    const bone = byRole.get(r);
+    const rest = binding.bones[r]!;
+    const local: Vec3 = bone ? bone.position : rest.position;
+    const rotated = quatRotate(rot, [local[0] * scale, local[1] * scale, local[2] * scale]);
+    pos = [pos[0] + rotated[0], pos[1] + rotated[1], pos[2] + rotated[2]];
+    rot = quatMul(rot, rest.rotation);
+    scale *= bone ? bone.scale : 1;
+  }
+  return pos[1];
 }
 
 /**
@@ -127,12 +166,19 @@ export function compile(
     if (def.group === 'surface') surface[key] = gene(key);
   }
 
+  // Négation directe : sans os d'appui `groundHeight` rend 0 et `-0` en
+  // résulterait, un zéro négatif que `Object.is` distingue de 0 — surprenant
+  // pour un champ documenté comme valant zéro.
+  const height = groundHeight(family, binding, restPose);
+
   return {
     family: family.id,
     restPose,
-    rebindSkeleton: true,
     morphs,
     surface,
-    stats: { nominalHeightMeters: binding.restHeightMeters * bodyScale * stature },
+    stats: {
+      nominalHeightMeters: binding.restHeightMeters * bodyScale * stature,
+      groundOffsetMeters: height === 0 ? 0 : -height,
+    },
   };
 }

@@ -46,14 +46,17 @@ export class UIKitMLTemplateBuilder {
       ? `<badge class="emotion-badge">${emotionTag}</badge>`
       : '';
 
+    // Les tailles UIKitML sont en centimètres, pas en pixels : un panneau à
+    // 32 fait 32 cm de large, pas 320 px. Aucune unité ne doit apparaître —
+    // le nombre nu est déjà l'unité.
     return `<uikitml>
   <style>
     .panel-root {
       background-color: ${styles.bgColor};
       border: ${styles.border};
       border-radius: ${styles.borderRadius};
-      padding: 16px;
-      width: 320px;
+      padding: 1.6;
+      width: 32;
       color: ${styles.textColor};
       font-family: 'Inter', sans-serif;
     }
@@ -61,21 +64,21 @@ export class UIKitMLTemplateBuilder {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 8px;
+      margin-bottom: 0.8;
     }
     .npc-name {
-      font-size: 16px;
+      font-size: 1.6;
       font-weight: bold;
       color: ${styles.accentColor};
     }
     .emotion-badge {
-      font-size: 11px;
+      font-size: 1.1;
       background-color: ${styles.badgeBg};
-      padding: 2px 8px;
-      border-radius: 12px;
+      padding: 0.2 0.8;
+      border-radius: 1.2;
     }
     .dialogue-body {
-      font-size: 14px;
+      font-size: 1.4;
       line-height: 1.4;
     }
     .word-active {
@@ -86,7 +89,7 @@ export class UIKitMLTemplateBuilder {
       color: ${styles.textColor};
     }
     .thinking-text {
-      font-size: 13px;
+      font-size: 1.3;
       font-style: italic;
       color: ${styles.accentColor};
     }
@@ -106,8 +109,8 @@ export class UIKitMLTemplateBuilder {
       case 'cyberpunk':
         return {
           bgColor: 'rgba(10, 15, 30, 0.88)',
-          border: '1px solid #00ffcc',
-          borderRadius: '8px',
+          border: '0.1 solid #00ffcc',
+          borderRadius: '0.8',
           textColor: '#e0f7fa',
           accentColor: '#00ffcc',
           activeWordColor: '#ff007f',
@@ -116,8 +119,8 @@ export class UIKitMLTemplateBuilder {
       case 'minimal':
         return {
           bgColor: 'rgba(255, 255, 255, 0.15)',
-          border: '1px solid rgba(255, 255, 255, 0.3)',
-          borderRadius: '16px',
+          border: '0.1 solid rgba(255, 255, 255, 0.3)',
+          borderRadius: '1.6',
           textColor: '#ffffff',
           accentColor: '#60a5fa',
           activeWordColor: '#fbbf24',
@@ -127,8 +130,8 @@ export class UIKitMLTemplateBuilder {
       default:
         return {
           bgColor: 'rgba(38, 28, 20, 0.92)',
-          border: '2px solid #d4af37',
-          borderRadius: '12px',
+          border: '0.2 solid #d4af37',
+          borderRadius: '1.2',
           textColor: '#fef3c7',
           accentColor: '#d4af37',
           activeWordColor: '#f59e0b',

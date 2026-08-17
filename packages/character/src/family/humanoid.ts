@@ -96,6 +96,16 @@ export const HUMANOID: FamilyDescriptor = {
 
   slots: { rightHand: 'handR', leftHand: 'handL', back: 'chest', head: 'head' },
 
+  groundRole: 'footL',
+
+  // Les noms de maillages que le résolveur de la tâche 3 cherchera pour savoir
+  // quoi teinter. `hairStyle` n'y figure pas : c'est un indice de style, pas
+  // une teinte, et rien à colorer ne lui correspond.
+  surfaces: {
+    skinTone: { aliases: ['Wolf3D_Body', 'Wolf3D_Head', 'skin', 'Body'] },
+    hairTone: { aliases: ['Wolf3D_Hair', 'hair', 'Hair'] },
+  },
+
   genes: {
     stature: { group: 'structure', heritability: 0.9, dominance: 0.5, mutationRate: 0.04 },
     armLength: { group: 'structure', heritability: 0.85, dominance: 0.5, mutationRate: 0.04 },
@@ -113,8 +123,17 @@ export const HUMANOID: FamilyDescriptor = {
     eyeScale: { group: 'face', heritability: 0.7, dominance: 0.5, mutationRate: 0.06 },
     cheekbone: { group: 'face', heritability: 0.7, dominance: 0.5, mutationRate: 0.06 },
     bodyMass: { group: 'face', heritability: 0.5, dominance: 0.5, mutationRate: 0.1 },
-    skinTone: { group: 'surface', heritability: 0.95, dominance: 0.5, mutationRate: 0.02 },
-    hairTone: { group: 'surface', heritability: 0.9, dominance: 0.4, mutationRate: 0.03 },
-    hairStyle: { group: 'surface', heritability: 0.2, dominance: 0.5, mutationRate: 0.3 },
+    skinTone: {
+      group: 'surface', heritability: 0.95, dominance: 0.5, mutationRate: 0.02,
+      ramp: ['#f2d6bd', '#4a2c17'],
+    },
+    hairTone: {
+      group: 'surface', heritability: 0.9, dominance: 0.4, mutationRate: 0.03,
+      ramp: ['#e8d8a0', '#1a1008'],
+    },
+    hairStyle: {
+      group: 'surface', heritability: 0.2, dominance: 0.5, mutationRate: 0.3,
+      ramp: ['#000000', '#ffffff'],
+    },
   },
 };
