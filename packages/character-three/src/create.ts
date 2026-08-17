@@ -110,13 +110,10 @@ export function createCharacter(
     if (gene.group === 'surface' && gene.ramp !== undefined) ramps[key] = gene.ramp;
   }
 
-  const surfaceTargets: Record<string, readonly string[]> = {};
-  for (const key of Object.keys(ramps)) {
-    const aliases = family.surfaces?.[key]?.aliases ?? [];
-    const hits: string[] = [];
-    options.rigRoot.traverse((n) => { if (aliases.includes(n.name)) hits.push(n.name); });
-    if (hits.length > 0) surfaceTargets[key] = hits;
-  }
+  // Les cibles de teinte viennent de la LIAISON, jamais d'une seconde marche
+  // du graphe : le résolveur les a déjà appariées, insensiblement à la casse,
+  // et c'est la même comparaison qui a décidé de `missingSurfaces`.
+  const surfaceTargets = binding.surfaceTargets;
 
   // Le choix se fait sur ce qu'on a TROUVÉ, pas sur une option : un asset qui
   // porte un SkinnedMesh est skinné, point.

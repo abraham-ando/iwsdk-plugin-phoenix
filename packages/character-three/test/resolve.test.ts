@@ -95,6 +95,20 @@ describe('resolveBinding — rig complet', () => {
   it('reporte la hauteur qu on lui a donnée, sans l inventer', () => {
     expect(binding!.restHeightMeters).toBe(1.75);
   });
+
+  it('rend les cibles de surface, un maillage par alias trouvé', () => {
+    // `Wolf3D_Body` ET `Wolf3D_Head` sont deux alias de `skinTone` présents
+    // dans le rig : les deux sont teintés, pas seulement le premier.
+    expect(binding!.surfaceTargets['skinTone']).toEqual(['Wolf3D_Body', 'Wolf3D_Head']);
+    expect(binding!.surfaceTargets['hairTone']).toEqual(['Wolf3D_Hair']);
+  });
+
+  it('ne déclare jamais manquant un gène de surface sans alias de maillage', () => {
+    // `hairStyle` est un gène du groupe `surface` mais un indice de STYLE :
+    // `HUMANOID.surfaces` ne lui déclare aucun maillage. L'itérer avec les
+    // autres le ferait figurer comme manquant sur tout asset, pour toujours.
+    expect(report.missingSurfaces).toEqual([]);
+  });
 });
 
 describe('resolveBinding — rejets et tolérances', () => {
@@ -136,5 +150,28 @@ describe('resolveBinding — rejets et tolérances', () => {
     const bas = JSON.parse(JSON.stringify(rigComplet())) as RigNode;
     const lower = (n: RigNode): RigNode => ({ ...n, name: n.name.toLowerCase(), children: n.children.map(lower) });
     expect(resolveBinding(HUMANOID, lower(bas), 1.75).report.accepted).toBe(true);
+  });
+
+  it('rend le nom RÉEL du maillage de peau, même écrit en minuscules', () => {
+    // Le cas exact que la double résolution perdait : le résolveur déclarait
+    // la surface présente (comparaison insensible à la casse) pendant que le
+    // pont redérivait ses cibles à la casse près et n'en trouvait aucune. La
+    // teinte n'arrivait jamais, et le rapport disait que tout allait bien.
+    const bas = JSON.parse(JSON.stringify(rigComplet())) as RigNode;
+    const lower = (n: RigNode): RigNode => ({ ...n, name: n.name.toLowerCase(), children: n.children.map(lower) });
+    const { binding, report } = resolveBinding(HUMANOID, lower(bas), 1.75);
+    expect(report.missingSurfaces).toEqual([]);
+    expect(binding!.surfaceTargets['skinTone']).toEqual(['wolf3d_body', 'wolf3d_head']);
+    expect(binding!.surfaceTargets['hairTone']).toEqual(['wolf3d_hair']);
+  });
+
+  it('dit quelle surface manque quand aucun de ses alias n est présent', () => {
+    const sansCheveux = (n: RigNode): RigNode => ({
+      ...n,
+      children: n.children.filter((c) => c.name !== 'Wolf3D_Hair').map(sansCheveux),
+    });
+    const { binding, report } = resolveBinding(HUMANOID, sansCheveux(rigComplet()), 1.75);
+    expect(report.missingSurfaces).toEqual(['hairTone']);
+    expect(binding!.surfaceTargets['hairTone']).toBeUndefined();
   });
 });

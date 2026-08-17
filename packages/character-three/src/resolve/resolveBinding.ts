@@ -54,16 +54,28 @@ export function resolveBinding(
     if (!found) report.missingMorphs.push(key);
   }
 
-  // 3. Les cibles de surface, sur le même mécanisme d'alias. Seule leur
-  //    absence intéresse ce rapport : `ImportReport` ne déclare pas de champ
-  //    pour les noms trouvés, donc ils ne sont pas conservés ici. Un appelant
-  //    Three qui en a besoin (l'applicateur skinné) les retrouvera lui-même
-  //    sur le graphe réel, avec le même mécanisme d'alias.
-  for (const [key, gene] of Object.entries(family.genes)) {
-    if (gene.group !== 'surface') continue;
-    const aliases = family.surfaces?.[key]?.aliases ?? [];
-    const found = aliases.some((a) => byName.has(a.toLowerCase()));
-    if (!found) report.missingSurfaces.push(key);
+  // 3. Les cibles de surface, sur le même mécanisme d'alias.
+  //
+  //    On itère `family.surfaces` et NON tous les gènes du groupe `surface` :
+  //    `hairStyle` est un indice de style, pas une teinte, et ne déclare aucun
+  //    alias de maillage — le lister ici le ferait figurer comme « manquant »
+  //    sur tout asset, pour toujours, ce qui est un rapport faux.
+  //
+  //    Une SEULE règle d'appariement, dont sortent à la fois la présence et
+  //    les noms trouvés. Décider de la présence ici, insensiblement à la casse,
+  //    et laisser l'appelant redériver les cibles à la casse près donnait un
+  //    rig nommé `body` déclaré complet ET jamais teinté : le défaut se lisait
+  //    dans le rapport comme un succès.
+  const surfaceTargets: Record<string, readonly string[]> = {};
+  for (const [key, def] of Object.entries(family.surfaces ?? {})) {
+    const hits: string[] = [];
+    for (const alias of def.aliases) {
+      const found = byName.get(alias.toLowerCase());
+      // Le nom RÉEL du nœud, celui que le pont comparera à `mesh.name`.
+      if (found !== undefined && !hits.includes(found.node.name)) hits.push(found.node.name);
+    }
+    if (hits.length === 0) report.missingSurfaces.push(key);
+    else surfaceTargets[key] = hits;
   }
 
   // TOUT rôle déclaré est structurel. Ne rendre obligatoires que les extrémités
@@ -96,5 +108,8 @@ export function resolveBinding(
   }
 
   report.accepted = true;
-  return { binding: { family: family.id, bones, morphIndex, restHeightMeters }, report };
+  return {
+    binding: { family: family.id, bones, morphIndex, surfaceTargets, restHeightMeters },
+    report,
+  };
 }

@@ -35,6 +35,7 @@ const BINDING = {
   family: 'humanoid',
   restHeightMeters: 1.75,
   morphIndex: { jawWidth: 0, noseSize: 1, eyeScale: 2, cheekbone: 3, bodyMass: 4 },
+  surfaceTargets: { skinTone: ['Wolf3D_Body'], hairTone: ['Wolf3D_Hair'] },
   bones: {
     root: { role: 'root', parentRole: null, position: [0, 0.95, 0], rotation: [0, 0, 0, 1] },
     spine: { role: 'spine', parentRole: 'root', position: [0, 0.12, 0], rotation: [0, 0, 0, 1] },

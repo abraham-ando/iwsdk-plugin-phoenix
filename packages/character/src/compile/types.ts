@@ -23,6 +23,17 @@ export interface RigBinding {
   bones: Readonly<Record<string, BoneRest>>;
   /** Clé de morph de la famille → index dans morphTargetInfluences. */
   morphIndex: Readonly<Record<string, number>>;
+  /**
+   * Gène de surface → noms RÉELS des nœuds qu'il teinte dans cet asset.
+   *
+   * Les noms tels que l'asset les porte, pas les alias de la famille : la
+   * comparaison d'alias est insensible à la casse, et un rig dont le maillage
+   * de peau s'appelle `body` plutôt que `Body` matche. Le pont, lui, compare
+   * ensuite `mesh.name` à cette liste, exactement. Laisser chaque appelant
+   * redériver ces noms lui-même a déjà produit le défaut que cette liste
+   * supprime : deux règles d'appariement pour une seule question.
+   */
+  surfaceTargets: Readonly<Record<string, readonly string[]>>;
   /** Hauteur du personnage adulte médian dans le rig source. */
   restHeightMeters: number;
 }

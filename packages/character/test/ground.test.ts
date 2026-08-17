@@ -69,6 +69,7 @@ function plieBinding(): RigBinding {
     family: 'plie',
     restHeightMeters: 1,
     morphIndex: {},
+    surfaceTargets: {},
     bones: {
       root: { role: 'root', parentRole: null, position: [0, 1, 0], rotation: [...RX90] },
       pied: { role: 'pied', parentRole: 'root', position: [0, -1, 0], rotation: [0, 0, 0, 1] },
