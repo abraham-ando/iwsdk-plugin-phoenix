@@ -114,3 +114,27 @@ export async function planWithTiers(
   }
   return null;
 }
+
+/**
+ * Combien de jetons il faut laisser au modèle, selon ce qu'on lui demande.
+ *
+ * La valeur compte autant que la consigne : mesuré sur Llama-3.2-1B en local,
+ * un plafond de 128 jetons — le défaut d'un adaptateur conçu pour des bulles
+ * de dialogue — coupait le JSON au milieu du deuxième pas. L'extraction
+ * échouait, l'étage tombait, et rien ne disait pourquoi.
+ *
+ * Généreux : un plafond trop haut ne coûte que le temps réellement consommé,
+ * la génération s'arrêtant d'elle-même à la fin de l'objet.
+ */
+export function maxTokensFor(request: Readonly<PlanRequest>): number {
+  switch (request.reason) {
+    case 'player_dialogue':
+      return 192; // une ou deux phrases
+    case 'reflection':
+      return 320; // un à trois enseignements
+    case 'dialogue':
+      return 640; // deux à quatre répliques, plus les faits partagés
+    default:
+      return 640; // un plan de un à quatre pas, chacun avec son résultat attendu
+  }
+}

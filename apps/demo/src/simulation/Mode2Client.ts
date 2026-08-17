@@ -13,6 +13,7 @@ import {
   extractPlanJson,
   planEnvelope,
   planWithTiers,
+  maxTokensFor,
   type PlanRequest,
   type PlanTier,
   type Planner,
@@ -37,6 +38,7 @@ export interface LocalInference {
     systemPrompt: string;
     playerMessage: string;
     temperature?: number;
+    maxTokens?: number;
   }): Promise<{ text: string }>;
 }
 
@@ -83,11 +85,34 @@ export class Mode2Client {
         systemPrompt: buildSystemPrompt(request),
         playerMessage: JSON.stringify(request),
         temperature: 0.6,
+        maxTokens: maxTokensFor(request),
       });
       // Mêmes consigne et même extraction que le serveur : c'est ce qui rend
       // les deux étages comparables sur le même monde.
-      return planEnvelope(request, extractPlanJson(completion.text));
+      try {
+        return planEnvelope(request, extractPlanJson(completion.text));
+      } catch (err) {
+        // Un petit modèle rend parfois du texte au lieu du JSON demandé. La
+        // chaîne d'étages avale l'exception par conception ; sans cette trace,
+        // l'échec serait indiscernable d'une absence de modèle.
+        console.warn(
+          `[Mode2Client] réponse locale inexploitable (${String(err)}) :`,
+          completion.text.slice(0, 400)
+        );
+        throw err;
+      }
     };
+  }
+
+  /**
+   * Délibère tout de suite, hors file d'attente, et dit quel étage a répondu.
+   * Sert à sonder — le coût d'une génération, la validité d'un plan — sans
+   * attendre qu'un agent en demande une.
+   */
+  async deliberateNow(
+    request: Readonly<PlanRequest>
+  ): Promise<{ tier: string; payload: Record<string, unknown> } | null> {
+    return planWithTiers(request, this.tiers());
   }
 
   private async ensureToken(): Promise<string> {
