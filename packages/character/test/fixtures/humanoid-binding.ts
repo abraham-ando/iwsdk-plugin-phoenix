@@ -12,7 +12,7 @@ import type { RigBinding } from '../../src/compile/types';
  */
 export function humanoidBinding(): RigBinding {
   const os = (role: string, parentRole: string | null, p: readonly [number, number, number]) =>
-    [role, { role, parentRole, position: p }] as const;
+    [role, { role, parentRole, position: p, rotation: [0, 0, 0, 1] as const }] as const;
   return {
     family: 'humanoid',
     restHeightMeters: 1.75,

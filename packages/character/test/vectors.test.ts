@@ -12,25 +12,25 @@ const BINDING: RigBinding = {
   restHeightMeters: 1.75,
   morphIndex: { jawWidth: 0, noseSize: 1, eyeScale: 2, cheekbone: 3, bodyMass: 4 },
   bones: {
-    root: { role: 'root', parentRole: null, position: [0, 0.95, 0] },
-    spine: { role: 'spine', parentRole: 'root', position: [0, 0.12, 0] },
-    chest: { role: 'chest', parentRole: 'spine', position: [0, 0.14, 0] },
-    neck: { role: 'neck', parentRole: 'chest', position: [0, 0.16, 0] },
-    head: { role: 'head', parentRole: 'neck', position: [0, 0.09, 0] },
-    shoulderL: { role: 'shoulderL', parentRole: 'chest', position: [0.05, 0.05, 0] },
-    upperArmL: { role: 'upperArmL', parentRole: 'shoulderL', position: [0.13, 0, 0] },
-    foreArmL: { role: 'foreArmL', parentRole: 'upperArmL', position: [0.27, 0, 0] },
-    handL: { role: 'handL', parentRole: 'foreArmL', position: [0.25, 0, 0] },
-    shoulderR: { role: 'shoulderR', parentRole: 'chest', position: [-0.05, 0.05, 0] },
-    upperArmR: { role: 'upperArmR', parentRole: 'shoulderR', position: [-0.13, 0, 0] },
-    foreArmR: { role: 'foreArmR', parentRole: 'upperArmR', position: [-0.27, 0, 0] },
-    handR: { role: 'handR', parentRole: 'foreArmR', position: [-0.25, 0, 0] },
-    upLegL: { role: 'upLegL', parentRole: 'root', position: [0.09, -0.05, 0] },
-    legL: { role: 'legL', parentRole: 'upLegL', position: [0, -0.44, 0] },
-    footL: { role: 'footL', parentRole: 'legL', position: [0, -0.42, 0] },
-    upLegR: { role: 'upLegR', parentRole: 'root', position: [-0.09, -0.05, 0] },
-    legR: { role: 'legR', parentRole: 'upLegR', position: [0, -0.44, 0] },
-    footR: { role: 'footR', parentRole: 'legR', position: [0, -0.42, 0] },
+    root: { role: 'root', parentRole: null, position: [0, 0.95, 0], rotation: [0, 0, 0, 1] },
+    spine: { role: 'spine', parentRole: 'root', position: [0, 0.12, 0], rotation: [0, 0, 0, 1] },
+    chest: { role: 'chest', parentRole: 'spine', position: [0, 0.14, 0], rotation: [0, 0, 0, 1] },
+    neck: { role: 'neck', parentRole: 'chest', position: [0, 0.16, 0], rotation: [0, 0, 0, 1] },
+    head: { role: 'head', parentRole: 'neck', position: [0, 0.09, 0], rotation: [0, 0, 0, 1] },
+    shoulderL: { role: 'shoulderL', parentRole: 'chest', position: [0.05, 0.05, 0], rotation: [0, 0, 0, 1] },
+    upperArmL: { role: 'upperArmL', parentRole: 'shoulderL', position: [0.13, 0, 0], rotation: [0, 0, 0, 1] },
+    foreArmL: { role: 'foreArmL', parentRole: 'upperArmL', position: [0.27, 0, 0], rotation: [0, 0, 0, 1] },
+    handL: { role: 'handL', parentRole: 'foreArmL', position: [0.25, 0, 0], rotation: [0, 0, 0, 1] },
+    shoulderR: { role: 'shoulderR', parentRole: 'chest', position: [-0.05, 0.05, 0], rotation: [0, 0, 0, 1] },
+    upperArmR: { role: 'upperArmR', parentRole: 'shoulderR', position: [-0.13, 0, 0], rotation: [0, 0, 0, 1] },
+    foreArmR: { role: 'foreArmR', parentRole: 'upperArmR', position: [-0.27, 0, 0], rotation: [0, 0, 0, 1] },
+    handR: { role: 'handR', parentRole: 'foreArmR', position: [-0.25, 0, 0], rotation: [0, 0, 0, 1] },
+    upLegL: { role: 'upLegL', parentRole: 'root', position: [0.09, -0.05, 0], rotation: [0, 0, 0, 1] },
+    legL: { role: 'legL', parentRole: 'upLegL', position: [0, -0.44, 0], rotation: [0, 0, 0, 1] },
+    footL: { role: 'footL', parentRole: 'legL', position: [0, -0.42, 0], rotation: [0, 0, 0, 1] },
+    upLegR: { role: 'upLegR', parentRole: 'root', position: [-0.09, -0.05, 0], rotation: [0, 0, 0, 1] },
+    legR: { role: 'legR', parentRole: 'upLegR', position: [0, -0.44, 0], rotation: [0, 0, 0, 1] },
+    footR: { role: 'footR', parentRole: 'legR', position: [0, -0.42, 0], rotation: [0, 0, 0, 1] },
   },
 };
 
@@ -64,11 +64,12 @@ describe('vecteurs dorés', () => {
 
   it('sont reproduits exactement par le compilateur courant', () => {
     for (const row of rows) {
-      const [seed, age, height, bones, morphs] = row.split('\t');
+      const [seed, age, height, groundOffset, bones, morphs] = row.split('\t');
       const genome = createGenome(HUMANOID, rngFrom(Number(seed)));
       const c = compile(HUMANOID, genome, Number(age), BINDING);
 
       expect(f(c.stats.nominalHeightMeters)).toBe(height);
+      expect(f(c.stats.groundOffsetMeters)).toBe(groundOffset);
 
       const actualBones = c.restPose
         .map(
