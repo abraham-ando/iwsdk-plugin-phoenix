@@ -6,6 +6,8 @@
 
 export {};
 
+import { DEFAULT_LOCAL_MODEL } from '../models/catalogue';
+
 interface WebLLMEngine {
   chat: {
     completions: {
@@ -27,7 +29,7 @@ self.onmessage = async (event: MessageEvent) => {
 
   switch (type) {
     case 'LOAD_MODEL': {
-      const modelId = payload?.modelId ?? 'Qwen3-0.6B-q4f16_1-MLC';
+      const modelId = payload?.modelId ?? DEFAULT_LOCAL_MODEL;
       if (engine && currentModelId === modelId) {
         self.postMessage({ type: 'MODEL_READY', payload: { modelId } });
         return;

@@ -35,6 +35,7 @@ import { SelfHostedInferenceAdapter } from './adapters/SelfHostedInferenceAdapte
 import { RemoteInferenceAdapter } from './adapters/RemoteInferenceAdapter';
 import { PiperTTSAdapter } from './adapters/PiperTTSAdapter';
 import type { IInferenceAdapter, ITTSAdapter } from './adapters/types';
+import { DEFAULT_LOCAL_MODEL } from './models/catalogue';
 import type { CardinalAIOptions } from './types/options';
 
 /**
@@ -76,7 +77,7 @@ export function installCardinalAI(
 ): CardinalAIHandle {
   const {
     provider = 'local-webgpu',
-    llm = { modelId: 'Qwen3-0.6B-q4f16_1-MLC' },
+    llm = { modelId: DEFAULT_LOCAL_MODEL },
     cloud,
     selfHosted,
     tts = { voiceId: 'fr_FR-siwis-medium' },

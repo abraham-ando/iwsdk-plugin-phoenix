@@ -14,8 +14,11 @@ export interface LLMModelConfig {
    * ici en exemple, n'existe pas — le chemin local ne tournait jamais, donc
    * personne ne l'a vu.
    *
-   * Connus et légers : 'Qwen3-0.6B-q4f16_1-MLC' (1,4 Go de VRAM),
-   * 'Llama-3.2-1B-Instruct-q4f16_1-MLC' (0,9 Go).
+   * Connus et légers, VRAM annoncée par WebLLM à contexte égal (4 096) :
+   * 'gemma3-1b-it-q4f16_1-MLC' (0,7 Go), 'Llama-3.2-1B-Instruct-q4f16_1-MLC'
+   * (0,9 Go), 'Qwen3-0.6B-q4f16_1-MLC' (1,4 Go — le plus lourd des petits,
+   * et son mode « thinking » émet des accolades avant la réponse),
+   * 'SmolLM2-360M-Instruct-q4f16_1-MLC' (0,4 Go, mais faible en français).
    */
   modelId: string;
   /** Max output tokens per inference cycle (default: 128 for VR budget) */
