@@ -76,6 +76,7 @@ export {
   type TrajectoryBatch,
 } from './telemetry/TrajectoryRecorder';
 export { mockPlanResponse } from './telemetry/MockPlanner';
+export { contentVerbs } from './content/verbs';
 export {
   buildSystemPrompt,
   extractPlanJson,

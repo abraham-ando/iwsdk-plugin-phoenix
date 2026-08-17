@@ -38,7 +38,12 @@ const SIM_SEED = 20260815;
 const VERB_LABELS: Record<string, string> = {
   gather_berries: 'cueille des baies',
   gather_wood: 'ramasse du bois mort',
+  fell_tree: 'abat un chêne à la lame',
   gather_flint: 'extrait un éclat de silex',
+  knap_flint: 'taille des lames de silex',
+  craft_spear: 'monte un javelot',
+  hunt: 'chasse à mains nues',
+  hunt_spear: 'chasse au javelot',
   light_fire: 'allume le feu de camp',
   add_wood: 'nourrit le feu',
   rest_nearby: 'se repose près du feu',
@@ -46,15 +51,16 @@ const VERB_LABELS: Record<string, string> = {
   build: "renforce l'abri",
   drink: 'boit à la rivière',
   fish: 'pêche dans la rivière',
-  knap_flint: 'taille une lame de silex',
   deposit_berries: 'dépose des baies au campement',
   take_berries: 'prend des baies de la réserve',
   deposit_wood: 'dépose du bois au campement',
   take_wood: 'prend du bois de la réserve',
   eat_berries: 'mange des baies',
   eat_fish: 'mange un poisson',
+  eat_meat: 'mange de la viande',
   nap: 'fait une sieste',
 };
+
 
 const WEATHER_LABELS: Record<string, string> = {
   clear: '☀️ Le ciel se dégage, un soleil bienfaisant réchauffe la vallée.',
