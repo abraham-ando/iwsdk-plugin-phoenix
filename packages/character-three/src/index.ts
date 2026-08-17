@@ -8,6 +8,7 @@ export type { RigNode, ImportReport } from './resolve/types';
 export { resolveBinding } from './resolve/resolveBinding';
 
 export { sanitizeClip } from './clips/sanitize';
+export { applyRootMotionPolicy, type RootMotionPolicy } from './clips/rootMotion';
 
 export {
   CharacterIdentity, CharacterStructure, CharacterFace,

@@ -1,5 +1,6 @@
 import { AnimationClip, type KeyframeTrack } from '@iwsdk/core';
 import { classifyTranslationTrack, type FamilyDescriptor } from '@iwsdk/cardinal-character';
+import { applyRootMotionPolicy, type RootMotionPolicy } from './rootMotion';
 
 interface Sanitized {
   clip: AnimationClip;
@@ -25,13 +26,17 @@ interface Sanitized {
  */
 const cache = new WeakMap<AnimationClip, Map<string, Sanitized>>();
 
-/** Famille + rôle de chaque nœud de translation, dans l'ordre des pistes. */
+/** Famille + politique + rôle de chaque nœud de translation, dans l'ordre des pistes. */
 function verdictKey(
   clip: AnimationClip,
   family: FamilyDescriptor,
   roleOfNode: (nodeName: string) => string | null,
+  rootMotion: RootMotionPolicy,
 ): string {
-  let key = family.id;
+  // La politique entre dans la clé. Sans elle, le cache rendrait un clip
+  // aplati à un appelant qui demandait `keep` — le même défaut que la revue de
+  // l'étape 2 a trouvé sur une clé par famille seule.
+  let key = `${family.id}#${rootMotion}`;
   for (const track of clip.tracks) {
     if (!track.name.endsWith('.position')) continue;
     const nodeName = track.name.slice(0, -'.position'.length);
@@ -73,13 +78,16 @@ export function sanitizeClip(
   clip: AnimationClip,
   family: FamilyDescriptor,
   roleOfNode: (nodeName: string) => string | null,
+  options?: { rootMotion?: RootMotionPolicy },
 ): Sanitized {
+  const rootMotion = options?.rootMotion ?? 'keep';
+
   let byVerdict = cache.get(clip);
   if (byVerdict === undefined) {
     byVerdict = new Map<string, Sanitized>();
     cache.set(clip, byVerdict);
   }
-  const key = verdictKey(clip, family, roleOfNode);
+  const key = verdictKey(clip, family, roleOfNode, rootMotion);
   const seen = byVerdict.get(key);
   if (seen !== undefined) return seen;
 
@@ -98,8 +106,13 @@ export function sanitizeClip(
       amplitudeMeters: amplitude(track),
     });
 
-    if (verdict === 'keep') kept.push(track);
-    else if (verdict === 'strip') stripped.push(track.name);
+    if (verdict === 'keep') {
+      // Seule la racine reçoit `keep` : c'est donc la seule piste que la
+      // politique concerne.
+      const policed = applyRootMotionPolicy(track, rootMotion);
+      if (policed === null) stripped.push(track.name);
+      else kept.push(policed);
+    } else if (verdict === 'strip') stripped.push(track.name);
     else {
       throw new Error(
         `sanitizeClip: le clip "${clip.name}" déplace réellement "${nodeName}", ` +
