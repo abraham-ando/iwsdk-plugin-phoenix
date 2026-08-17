@@ -6,17 +6,17 @@
  */
 import { createSystem, Group, type Entity } from '@iwsdk/core';
 import {
-  SimKernel,
-  GroundTruthWorld,
-  SmartObjectRegistry,
-  AgentRuntime,
-  WeatherMachine,
+  buildVillageSim,
   WolfSystem,
   TrajectoryRecorder,
-  registerDefaultContent,
   hourOfDay,
   TICKS_PER_DAY,
   type ActionEvent,
+  type SimKernel,
+  type GroundTruthWorld,
+  type SmartObjectRegistry,
+  type AgentRuntime,
+  type WeatherMachine,
 } from '@iwsdk/cardinal-simulation';
 import { VILLAGE_LAYOUT } from './layout';
 import { applyAvatarPose } from './AgentAvatarFactory';
@@ -119,37 +119,18 @@ export class CardinalSimulationSystem extends createSystem({}) {
   }
 
   init(): void {
-    this.registry = new SmartObjectRegistry();
-    registerDefaultContent(this.registry);
-    this.kernel = new SimKernel({ seed: SIM_SEED });
-    this.simWorld = new GroundTruthWorld(this.registry);
-    this.simWorld.attachTo(this.kernel);
-    this.weather = new WeatherMachine();
-    this.weather.attachTo(this.kernel, this.simWorld);
-    this.runtime = new AgentRuntime(this.simWorld, this.registry);
-    this.runtime.attachTo(this.kernel);
-
-    for (const place of VILLAGE_LAYOUT.places) {
-      this.simWorld.definePlace(place.name, place.x, place.z, place.radius);
-    }
-    for (const obj of VILLAGE_LAYOUT.objects) {
-      this.simWorld.spawn(obj.type, obj.x, obj.z);
-    }
-    for (const agent of VILLAGE_LAYOUT.agents) {
-      this.runtime.addAgent(
-        {
-          id: agent.id,
-          name: agent.name,
-          tribe: agent.tribe,
-          role: agent.role,
-          persona: agent.persona,
-        },
-        agent.x,
-        agent.z
-      );
-    }
-    // Day one starts with the fires lit, as the village always did.
-    for (const fire of this.simWorld.objectsOfType('campfire')) fire.state.lit = 1;
+    // Le montage du monde appartient au SCÉNARIO, pas à la démo. Il était
+    // recopié ici, si bien que le semis de la forêt — ajouté côté moteur par
+    // l'écologie E1 — n'arrivait jamais jusqu'au casque : le rendu dessinait
+    // 2 143 arbres que le moteur ignorait, et les agents bûcheronnaient sur
+    // les seuls 19 objets calés à la main. Une source unique, comme la spec
+    // §3 l'exigeait depuis le début.
+    const sim = buildVillageSim(SIM_SEED);
+    this.registry = sim.registry;
+    this.kernel = sim.kernel;
+    this.simWorld = sim.world;
+    this.weather = sim.weather;
+    this.runtime = sim.runtime;
 
     this.weather.onChange((state, tick) => {
       this.emit({ tick, kind: 'weather', text: WEATHER_LABELS[state] ?? state });
