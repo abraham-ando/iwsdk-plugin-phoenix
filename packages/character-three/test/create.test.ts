@@ -149,6 +149,62 @@ describe('createCharacter — pont complet, marionnette', () => {
     expect(compiler.compiledCount).toBe(afterFirst);
   });
 
+  it('ne fait AUCUN travail sur une entité inchangée, cent images durant', () => {
+    // Le §10 de la conception budgète « coût par frame nul pour la structure »
+    // et `apps/demo/CLAUDE.md` dit « Treat per-frame allocation as a bug » /
+    // « Never allocate in update() ». D'où la forme du code : la porte compare
+    // les valeurs de gènes déjà appliquées, dans un génome-brouillon possédé
+    // par le système, et ne construit une clé `genomeKey` — une chaîne
+    // fraîche — que lorsque quelque chose a réellement bougé. Ce test compte
+    // le travail ; l'absence d'allocation, elle, se lit dans le fait qu'aucun
+    // objet neuf n'est nécessaire pour répondre « rien n'a changé ».
+    const { world, entity } = build();
+    const compiler = world.getSystem(CharacterCompileSystem)!;
+    const applicator = compiler.applicators.get(entity.index)!;
+    const rest = vi.spyOn(applicator, 'applyRestPose');
+    const surface = vi.spyOn(applicator, 'applySurface');
+
+    for (let i = 0; i < 100; i++) compiler.update();
+
+    expect(compiler.compiledCount).toBe(1);
+    expect(rest).toHaveBeenCalledTimes(1);
+    expect(surface).toHaveBeenCalledTimes(1);
+  });
+
+  it('ne recompile pas pour un vieillissement d un jour', () => {
+    // `genomeKey` quantifie l'âge à l'année ; la porte le quantifie de la même
+    // façon, pour ne même pas calculer la clé dans ce cas.
+    const { world, entity } = build();
+    const compiler = world.getSystem(CharacterCompileSystem)!;
+    compiler.update();
+    entity.setValue(CharacterIdentity, 'age', 34 + 1 / 365);
+    compiler.update();
+    expect(compiler.compiledCount).toBe(1);
+
+    entity.setValue(CharacterIdentity, 'age', 40);
+    compiler.update();
+    expect(compiler.compiledCount).toBe(2);
+  });
+
+  it('passe le MÊME enregistrement de morphs d une image à l autre', () => {
+    // La seule façon d'observer l'absence d'allocation sans profileur :
+    // l'objet passé à l'applicateur est possédé par le système et réécrit sur
+    // place. S'il était reconstruit par image, ces deux références
+    // diffèreraient — et quarante villageois alloueraient quarante objets par
+    // image pour ne rien changer.
+    const { world, entity } = build();
+    const compiler = world.getSystem(CharacterCompileSystem)!;
+    const expression = world.getSystem(CharacterExpressionSystem)!;
+    const applicator = compiler.applicators.get(entity.index)!;
+    const morphs = vi.spyOn(applicator, 'applyMorphs');
+
+    expression.update();
+    expression.update();
+
+    expect(morphs).toHaveBeenCalledTimes(2);
+    expect(morphs.mock.calls[1]![0]).toBe(morphs.mock.calls[0]![0]);
+  });
+
   it('recompile sur un changement de STRUCTURE, jamais sur un changement de VISAGE seul', () => {
     // Le contrat central des deux étages : la priorité 60 (structure) et la
     // priorité 70 (visage) existent précisément pour séparer ce qui recompile

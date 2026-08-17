@@ -53,7 +53,10 @@ export class SkinnedApplicator implements CharacterApplicator {
   }
 
   applyMorphs(morphs: Readonly<Record<string, number>>): void {
-    for (const [key, value] of Object.entries(morphs)) {
+    // `for…in` et non `Object.entries` : celui-ci alloue un tableau de paires
+    // à chaque appel, et cette méthode est appelée par entité et par image.
+    for (const key in morphs) {
+      const value = morphs[key]!;
       if (this.lastMorphs.get(key) === value) continue;
       const index = this.opts.morphIndex[key];
       if (index === undefined) continue;
