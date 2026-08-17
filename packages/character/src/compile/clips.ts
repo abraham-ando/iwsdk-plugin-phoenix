@@ -27,7 +27,7 @@ export function classifyTranslationTrack(
   family: FamilyDescriptor,
   track: TranslationTrack,
 ): 'keep' | 'strip' | 'conflict' {
-  const isRoot = track.boneRole === 'root' && family.bones['root'] !== undefined;
+  const isRoot = track.boneRole === family.rootRole && family.bones[family.rootRole] !== undefined;
   if (isRoot) return 'keep';
   return track.amplitudeMeters <= CONSTANT_TRACK_EPSILON ? 'strip' : 'conflict';
 }

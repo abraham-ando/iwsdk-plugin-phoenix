@@ -76,6 +76,13 @@ describe('budget', () => {
     durées.sort((a, b) => a - b);
     // Médiane et non maximum : une machine de CI partagée produit des pics que
     // l on ne veut pas transformer en test instable.
+    //
+    // 2 ms est le plafond PRODUIT de la spec §11 (30 à 40 personnages dans les
+    // 11,1 ms d un Quest 3 autonome), pas un seuil calibré sur la mesure. Sur
+    // cette machine la médiane vaut entre 0,006 et 0,014 ms, soit 150 à 300
+    // fois moins que le plafond : ce test ne détecte donc AUCUNE régression de
+    // performance avant qu elle ne devienne énorme. Il vérifie seulement que
+    // le budget produit tient, pas que le compilateur reste rapide.
     expect(durées[Math.floor(durées.length / 2)]!).toBeLessThan(2);
   });
 });

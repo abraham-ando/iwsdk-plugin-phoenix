@@ -178,14 +178,20 @@ Le compilateur est une fonction pure. Il ne touche jamais un objet Three : il pr
 compile(family: FamilyDescriptor, genome: Genome, age: number, binding: RigBinding)
   → CompiledCharacter
 
-type Vec3 = [number, number, number];
-type Vec4 = [number, number, number, number];
+type Vec3 = readonly [number, number, number];
+
+interface CompiledBone {
+  role: string;
+  position: Vec3;
+  scale: number; // UNIFORME, jamais par axe : une similitude ne cisaille pas, une échelle par axe si.
+}
 
 interface CompiledCharacter {
-  restPose:       Array<{ role: string; position: Vec3; quaternion: Vec4 }>; // jamais de scale
+  family:         string;
+  restPose:       CompiledBone[];
   rebindSkeleton: boolean;
   morphs:         Record<string, number>;
-  surface:        { skinTone: number; hairTone: number; hairStyle: number }; // scalaires normalisés
+  surface:        Record<string, number>; // un ton par gène du groupe `surface`, scalaires normalisés
   stats:          { nominalHeightMeters: number };
 }
 ```
@@ -300,6 +306,12 @@ const enfant = createCharacter(world, {
 
 La fabrique instancie l'asset depuis le manifeste, résout la liaison contre le descripteur, pose les composants et compile une fois. Côté simulation, `AgentView` porte une référence de génome et `CardinalSimulationSystem` appelle cette fabrique. `AgentAvatarFactory` disparaît, comme chaque phase de la spec environnement supprime son équivalent legacy.
 
+### 8.4 Ce que le compilateur tolère, et ce que ça déplace vers le pont
+
+`compile` accepte délibérément deux formes d'incomplétude : un génome auquel il manque un gène retombe sur `0.5` plutôt que de lever, et un morph du descripteur absent de la liaison (`morphIndex`) est simplement omis de la sortie plutôt que de bloquer la compilation. Aucun `validateBinding` n'existe dans ce paquet.
+
+Ce n'est pas un oubli. Un génome ou une liaison PARTIELS sont des cas normaux en cours d'édition — dans un panneau de réglage, une fabrique qui construit un personnage par étapes — et y répondre par une levée systématique gênerait ces usages sans rien garantir de plus : un descripteur de famille est déjà validé une fois pour toutes par `validateDescriptor` (§5), et c'est l'INTÉGRITÉ D'UN ASSET RÉEL contre le contrat de sa famille — les os que le rig source expose réellement, les morphs qu'il porte vraiment — qui reste à vérifier. Cette vérification est le travail du pont (`character-three`), au moment où il résout la liaison contre le descripteur, et non celui du compilateur pur qui ne voit jamais l'asset. Inventer un `validateBinding` ici, sans consommateur, serait ajouter une garantie que personne n'appelle.
+
 ## 9. Les panneaux spatiaux
 
 ### 9.1 Ce que le paquet n'a pas à être
@@ -377,7 +389,7 @@ Déclarer `CharacterGenome` dans `cardinal/components.mjs` suffit : le générat
 
 Deux décisions de dimensionnement :
 
-- **Un gène est un `uint8`, pas un `float32`.** 256 pas sur `[0,1]` sont très en deçà du seuil de perception sur une largeur d'épaules. Trente gènes tiennent en **30 octets** au lieu de 120 — même arithmétique que les trames de 33 octets et la compression de quaternion sur 32 bits.
+- **Un gène est un `uint8`, pas un `float32`.** 256 pas sur `[0,1]` sont très en deçà du seuil de perception sur une largeur d'épaules. Le format tient en **`2 + un octet par gène`** — deux octets d'en-tête puis un par gène — contre quatre octets par gène en float32, même arithmétique que les trames de 33 octets et la compression de quaternion sur 32 bits.
 - **Un génome se transmet une fois, à l'apparition.** Il ne change pas et n'a rien à faire dans le flux de snapshots.
 
 ## 11. Budget de performance

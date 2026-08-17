@@ -13,6 +13,16 @@ const families = new Map<string, FamilyDescriptor>();
 export function validateDescriptor(descriptor: FamilyDescriptor): string[] {
   const problems: string[] = [];
 
+  // `rootRole` et `headRole` nomment les deux os spéciaux du compilateur : sans
+  // cette vérification, une famille dont la racine ou la tête porte un rôle
+  // absent de `bones` verrait son échelle appliquée nulle part, en silence.
+  if (descriptor.bones[descriptor.rootRole] === undefined) {
+    problems.push(`rootRole "${descriptor.rootRole}" : rôle d'os non déclaré`);
+  }
+  if (descriptor.bones[descriptor.headRole] === undefined) {
+    problems.push(`headRole "${descriptor.headRole}" : rôle d'os non déclaré`);
+  }
+
   for (const [name, chain] of Object.entries(descriptor.chains)) {
     for (const role of [chain.from, chain.to]) {
       if (descriptor.bones[role] === undefined) {

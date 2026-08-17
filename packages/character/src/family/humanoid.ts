@@ -9,6 +9,8 @@ import type { FamilyDescriptor } from './types';
 export const HUMANOID: FamilyDescriptor = {
   id: 'humanoid',
   adultAge: 18,
+  rootRole: 'root',
+  headRole: 'head',
 
   bones: {
     root: ['Hips', 'Root', 'mixamorig:Hips', 'Armature'],

@@ -28,6 +28,12 @@ function chainRoles(binding: RigBinding, from: string, to: string, label: string
   if (cursor === null) {
     throw new Error(`compile: chaîne "${label}" — "${to}" ne descend pas de "${from}"`);
   }
+  // Le puits de la boucle : elle s'arrête DÈS QUE `cursor === from`, sans
+  // jamais déréférencer `from` lui-même. Une ancre absente de la liaison
+  // compilerait donc en silence sans ce garde-fou.
+  if (binding.bones[from] === undefined) {
+    throw new Error(`compile: chaîne "${label}" — os d'ancrage "${from}" absent de la liaison`);
+  }
   return roles;
 }
 
@@ -100,8 +106,10 @@ export function compile(
     restPose.push({
       role: bone.role,
       position: scaled(bone.position, factor),
-      // La racine porte l'échelle globale du corps, la tête son rapport propre.
-      scale: bone.role === 'root' ? bodyScale : bone.role === 'head' ? headRatio : 1,
+      // La racine (family.rootRole) porte l'échelle globale du corps, la tête
+      // (family.headRole) son rapport propre : ce sont les deux seuls rôles
+      // nommés dans la donnée, jamais devinés par un nom d'os en dur.
+      scale: bone.role === family.rootRole ? bodyScale : bone.role === family.headRole ? headRatio : 1,
     });
   }
 
@@ -112,16 +120,19 @@ export function compile(
     morphs[key] = lo + gene(key) * (hi - lo);
   }
 
+  // Un ton par gène du groupe `surface` : le compilateur ne connaît aucun nom
+  // de gène de surface, seulement le groupe auquel il appartient.
+  const surface: Record<string, number> = {};
+  for (const [key, def] of Object.entries(family.genes)) {
+    if (def.group === 'surface') surface[key] = gene(key);
+  }
+
   return {
     family: family.id,
     restPose,
     rebindSkeleton: true,
     morphs,
-    surface: {
-      skinTone: gene('skinTone'),
-      hairTone: gene('hairTone'),
-      hairStyle: gene('hairStyle'),
-    },
+    surface,
     stats: { nominalHeightMeters: binding.restHeightMeters * bodyScale * stature },
   };
 }

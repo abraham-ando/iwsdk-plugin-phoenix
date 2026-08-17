@@ -35,8 +35,13 @@ export interface CompiledCharacter {
   /** Toujours vrai : la pose de repos a changé, les matrices inverses aussi. */
   rebindSkeleton: boolean;
   morphs: Record<string, number>;
-  /** Scalaires normalisés. La conversion en couleur appartient au pont. */
-  surface: { skinTone: number; hairTone: number; hairStyle: number };
+  /**
+   * Un ton par gène du groupe `surface`, scalaires normalisés. Le type ne
+   * connaît donc aucun nom de gène : une famille à fourrure déclare `furTone`
+   * et le compilateur le porte sans rien savoir de lui. La conversion en
+   * couleur appartient au pont.
+   */
+  surface: Record<string, number>;
   /**
    * Hauteur NOMINALE : `restHeightMeters × bodyScale × stature`. Elle rend
    * compte de l'âge et de la stature, et de rien d'autre — ni la longueur des

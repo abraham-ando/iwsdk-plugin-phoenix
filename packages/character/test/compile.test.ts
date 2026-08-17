@@ -136,7 +136,7 @@ describe('compile — visage et surface', () => {
 
   it('reporte les tons de surface tels quels, sans les convertir en couleur', () => {
     const g = { family: 'humanoid', genes: { ...defaultGenome(HUMANOID).genes, skinTone: 0.8 } };
-    expect(compile(HUMANOID, g, 18, binding()).surface.skinTone).toBeCloseTo(0.8, 6);
+    expect(compile(HUMANOID, g, 18, binding()).surface['skinTone']!).toBeCloseTo(0.8, 6);
   });
 });
 
@@ -150,5 +150,16 @@ describe('compile — rejets', () => {
     const b = binding();
     delete (b.bones as Record<string, unknown>)['foreArmL'];
     expect(() => compile(HUMANOID, defaultGenome(HUMANOID), 18, b)).toThrow('foreArmL');
+  });
+
+  it('refuse une liaison à laquelle il manque l ancre d une chaîne', () => {
+    // `chainRoles` remonte de `to` jusqu'à `from` par nom et s'arrête DÈS QUE
+    // `cursor === from`, sans jamais déréférencer `from` lui-même. `root` est
+    // l'ancre de la chaîne torso et n'est referencé nulle part ailleurs dans
+    // les chaînes humanoïdes : sans le garde-fou, sa disparition compilerait
+    // en silence, restPose amputé d'un os plutôt qu'un rejet bruyant.
+    const b = binding();
+    delete (b.bones as Record<string, unknown>)['root'];
+    expect(() => compile(HUMANOID, defaultGenome(HUMANOID), 18, b)).toThrow('root');
   });
 });

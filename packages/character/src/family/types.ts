@@ -42,6 +42,14 @@ export interface FamilyDescriptor {
   id: string;
   /** Rôle sémantique → alias acceptés, dans l'ordre de préférence. */
   bones: Readonly<Record<string, readonly string[]>>;
+  /**
+   * Rôle de l'os qui porte l'échelle globale du corps, et rôle de celui qui
+   * porte le rapport tête/corps. Nommés dans la donnée et non devinés : une
+   * famille dont la racine s'appelle « pelvis » ou la tête « skull » verrait
+   * sinon son échelle appliquée nulle part, en silence.
+   */
+  rootRole: string;
+  headRole: string;
   chains: Readonly<Record<string, ChainDef>>;
   morphs: Readonly<Record<string, MorphDef>>;
   proportions: {

@@ -16,7 +16,8 @@ describe('packGenome', () => {
   });
 
   it('tient sous cinquante octets pour un humain', () => {
-    // Le budget annoncé : trente octets contre cent vingt en float32.
+    // Le budget annoncé : 2 + un octet par gène, contre quatre octets par gène
+    // en float32.
     expect(packGenome(HUMANOID, defaultGenome(HUMANOID)).length).toBeLessThan(50);
   });
 });
@@ -47,14 +48,29 @@ describe('aller-retour', () => {
     }
   });
 
-  it('est stable quel que soit l ordre d insertion des clés', () => {
-    const clés = Object.keys(HUMANOID.genes);
-    const avant = { family: 'humanoid', genes: Object.fromEntries(clés.map((k) => [k, 0.25])) };
-    const après = {
-      family: 'humanoid',
-      genes: Object.fromEntries([...clés].reverse().map((k) => [k, 0.25])),
-    };
-    expect(packGenome(HUMANOID, avant)).toEqual(packGenome(HUMANOID, après));
+  it('encode les gènes dans l ordre ALPHABÉTIQUE, pas celui de la déclaration', () => {
+    // Le seul test qui distingue les deux ordres. Un test qui se contente de
+    // faire varier l'ordre d'INSERTION des clés du génome ne prouve rien :
+    // `packGenome` dérive son ordre de `family.genes`, le même objet dans
+    // toutes les variantes, donc retirer le `.sort()` laisserait un tel test
+    // vert. Ici la valeur de chaque octet dépend de la position ALPHABÉTIQUE
+    // de son gène, ce qui distingue vraiment les deux ordres possibles.
+    const alphabétique = [
+      'armLength', 'bodyMass', 'cheekbone', 'eyeScale', 'hairStyle', 'hairTone',
+      'jawWidth', 'legLength', 'noseSize', 'shoulderWidth', 'skinTone', 'stature',
+      'torsoLength',
+    ];
+    // Garde-fou sur la liste ci-dessus : si un gène est ajouté ou renommé sans
+    // mettre `alphabétique` à jour, ceci échoue bruyamment plutôt que de
+    // laisser le test principal devenir un faux négatif silencieux.
+    expect(Object.keys(HUMANOID.genes).sort()).toEqual(alphabétique);
+
+    const genes: Record<string, number> = {};
+    alphabétique.forEach((clé, i) => {
+      genes[clé] = i / 255;
+    });
+    const bytes = packGenome(HUMANOID, { family: 'humanoid', genes });
+    expect(Array.from(bytes.slice(2))).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
   });
 });
 

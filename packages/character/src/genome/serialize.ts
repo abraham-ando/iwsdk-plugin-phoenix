@@ -7,9 +7,10 @@ export const GENOME_FORMAT_VERSION = 1;
  * Un gène tient sur un octet.
  *
  * 256 pas sur [0,1] placent l'erreur maximale à 0.2 % d'un gène, très en deçà
- * du seuil de perception sur une largeur d'épaules. Trente gènes tiennent donc
- * en trente octets contre cent vingt en float32 — la même arithmétique que les
- * trames de 33 octets et la compression de quaternion sur 32 bits.
+ * du seuil de perception sur une largeur d'épaules. Le format tient donc en
+ * `2 + un octet par gène` — deux octets d'en-tête puis un par gène — contre
+ * quatre octets par gène en float32 : la même arithmétique que les trames de
+ * 33 octets et la compression de quaternion sur 32 bits.
  *
  * L'ordre est celui des clés triées du descripteur, jamais celui de l'objet :
  * deux génomes égaux doivent produire des octets égaux.

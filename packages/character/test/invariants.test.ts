@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { HUMANOID } from '../src/family/humanoid';
-import { createGenome } from '../src/genome/create';
+import { createGenome, defaultGenome } from '../src/genome/create';
 import { compile } from '../src/compile/compile';
 import type { RngLike } from '../src/genome/types';
 import { humanoidBinding as binding } from './fixtures/humanoid-binding';
@@ -76,6 +76,21 @@ describe('dix mille génomes tirés au hasard', () => {
       const genome = createGenome(HUMANOID, rng);
       expect(compile(HUMANOID, genome, 0, rig).stats.nominalHeightMeters)
         .toBeLessThan(compile(HUMANOID, genome, 18, rig).stats.nominalHeightMeters);
+    }
+  });
+});
+
+describe('couverture des gènes', () => {
+  it('aucun gène déclaré n est orphelin : chacun change la sortie compilée', () => {
+    // `shoulderWidth` a été livré déclaré et consommé par rien, et seul un
+    // regard l a vu. Ce test rend l oubli impossible pour la famille suivante.
+    const rig = binding();
+    const base = defaultGenome(HUMANOID);
+    for (const key of Object.keys(HUMANOID.genes)) {
+      const bas = compile(HUMANOID, { family: 'humanoid', genes: { ...base.genes, [key]: 0 } }, 18, rig);
+      const haut = compile(HUMANOID, { family: 'humanoid', genes: { ...base.genes, [key]: 1 } }, 18, rig);
+      expect(JSON.stringify(bas), `le gène "${key}" ne change rien à la sortie compilée`)
+        .not.toBe(JSON.stringify(haut));
     }
   });
 });
