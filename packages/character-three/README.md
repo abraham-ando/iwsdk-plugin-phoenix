@@ -41,6 +41,7 @@ import { HUMANOID, createGenome } from '@iwsdk/cardinal-character';
 
 installCharacterThree(world);
 
+// Lève si le rig est refusé — voir « Le rig refusé lève » plus bas.
 const { entity, report } = createCharacter(world, {
   familyId: 'humanoid',
   genome: createGenome(HUMANOID, rng),
@@ -48,8 +49,12 @@ const { entity, report } = createCharacter(world, {
   rigRoot: assetInstance,
 });
 
-if (!report.accepted) {
-  console.error('rig refusé, os manquants :', report.missingBones);
+// `entity.object3D` est à vous : posez-y la hauteur de terrain, le point
+// d'apparition, ce que vous voulez. Aucune compilation ne l'écrasera.
+entity.object3D.position.set(x, terrainHeight, z);
+
+if (report.missingMorphs.length > 0) {
+  console.warn('rig accepté, morphs absents :', report.missingMorphs);
 }
 ```
 
@@ -60,30 +65,51 @@ Un os nommé par une chaîne est structurel : son absence refuse l'asset. Un mor
 absent ne bloque pas, mais figure au rapport — un asset ne se dégrade jamais en
 silence.
 
-## Le conteneur DOIT être un ancêtre des os
+## Trois niveaux, et celui du milieu porte l'ancrage
 
-`createCharacter` écrit le décalage au sol sur `rigRoot`
-(`stats.groundOffsetMeters`), et cet écrit ne bouge la peau que si les os en
-sont des descendants réels — ni `RigBinding` ni `ImportReport` ne portent de
-référence de scène, seulement des rôles et des transforms, donc rien en amont
-ne peut garantir cette relation à la place de `createCharacter`.
+`createCharacter` ne rend pas votre `rigRoot` tel quel : elle l'enveloppe.
 
-Un import glTF place souvent l'armature en **frère** du `SkinnedMesh`, pas en
-enfant : passer le maillage comme `rigRoot` déplacerait alors le conteneur sans
-jamais atteindre les os, en silence. `createCharacter` vérifie donc, avant de
-construire l'applicateur, que chaque os résolu remonte jusqu'à `rigRoot` par la
-chaîne `.parent` — et **lève**, en nommant l'os fautif, si ce n'est pas le cas.
-Passez l'ancêtre commun du maillage et de l'armature, pas le maillage seul.
+```
+CharacterEntity            ← entity.object3D — À VOUS
+  └ CharacterGroundAnchor  ← le décalage au sol, écrit par l'applicateur
+      └ votre rigRoot
+          └ os…
+```
 
-Second cas refusé, plus subtil : le conteneur porte **lui-même** un rôle d'os.
-`HUMANOID.bones.root` liste `'Armature'` parmi ses alias — le nom que Blender
-donne justement à l'ancêtre commun qu'on recommande de passer comme `rigRoot`
-— donc ce cas se présente pour un rig correctement formé, pas pour une erreur
-d'appelant. Il est refusé quand même : l'applicateur écrirait d'abord la
-position locale de repos de l'os racine sur `rigRoot.position` (X et Z
-compris, pas seulement Y), puis le décalage au sol par-dessus, mêlant la
-morphologie du personnage à l'endroit où l'appelant l'a placé. Enveloppez le
-rig dans un `Group` parent et passez-le comme `rigRoot`.
+L'applicateur écrit `anchor.position.y = stats.groundOffsetMeters` par
+**affectation**, et non par addition : l'ancrage est une propriété de la
+morphologie compilée, pas un delta. Sans le nœud du milieu, cette affectation
+tomberait sur le nœud d'entité — donc sur la hauteur de terrain ou le point
+d'apparition que l'application vient de poser — à la première compilation puis
+à chacune des suivantes. « La morphologie du personnage et l'endroit où il se
+tient sont deux choses distinctes » (conception §7.2) : ici, ce sont deux
+nœuds.
+
+Corollaire : **`entity.object3D` vous appartient entièrement.** Placez-y le
+personnage ; aucune recompilation ne l'écrasera.
+
+L'ancre est aussi ce qui garantit l'autre invariant : le décalage au sol ne
+bouge la peau que si les os en sont des descendants réels, et ils le sont par
+construction puisque `createCharacter` reparente votre rig sous l'ancre.
+`assertBonesAreDescendants` reste exportée et vérifiée, mais c'est désormais
+le filet d'un futur remaniement, pas un chemin que `createCharacter` peut
+emprunter.
+
+## Le rig refusé lève
+
+`createCharacter` **lève** quand `resolveBinding` ne trouve pas tous les os
+déclarés par la famille, en nommant la famille et la liste exacte des rôles
+manquants. Elle lève **avant** de créer l'entité : rien n'est laissé à
+moitié construit.
+
+C'est précisément le cas de l'import glTF qui place l'armature en **frère** du
+`SkinnedMesh` : passer le maillage comme `rigRoot` ne trouve aucun os. Passez
+l'ancêtre commun du maillage et de l'armature, pas le maillage seul.
+
+Un morph ou une cible de surface absents, eux, ne bloquent pas — ils figurent
+au rapport (`report.missingMorphs`, `report.missingSurfaces`), et
+`report.accepted` vaut alors `true`. Un rig qu'on vous rend est un rig dont
+tous les os ont matché.
 
 ## Composants et systèmes
 

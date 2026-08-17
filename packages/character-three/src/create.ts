@@ -37,6 +37,15 @@ export interface CreateCharacterOptions {
  * D'ABORD la position locale de repos de l'os racine sur `rigRoot.position`
  * (X et Z compris, pas seulement Y), puis le décalage au sol par-dessus,
  * mêlant la morphologie du personnage à l'endroit où l'appelant l'a placé.
+ *
+ * **Aucune des deux boucles ne peut plus se déclencher depuis
+ * `createCharacter`** : celle-ci construit désormais elle-même l'ancre
+ * (`CharacterGroundAnchor`) et y reparente le rig, donc les os en sont des
+ * descendants par construction et l'ancre ne porte aucun rôle. La fonction
+ * reste exportée et vérifiée : elle est le filet d'un futur remaniement qui
+ * passerait un autre nœud à l'applicateur, et elle documente l'invariant que
+ * l'ancre satisfait. Ce que `createCharacter` refuse bruyamment, c'est un
+ * autre défaut — un rig dont le résolveur ne trouve pas les os, voir plus bas.
  */
 export function assertBonesAreDescendants(
   rigRoot: Object3D,
@@ -87,6 +96,25 @@ export function createCharacter(
   const height = new Box3().setFromObject(options.rigRoot).getSize(new Vector3()).y;
   const { binding, report } = resolveBinding(family, options.rigRoot as never, height);
 
+  // Un rig refusé LÈVE, et lève avant d'avoir créé quoi que ce soit.
+  //
+  // Rendre une entité sans composants, sans applicateur, sans un mot, était le
+  // chemin le plus SILENCIEUX de tout ce paquet — alors que c'est celui que la
+  // documentation décrit comme le rejet bruyant. C'est aussi le chemin que
+  // prend le motif glTF classique (armature FRÈRE du `SkinnedMesh`, maillage
+  // passé comme `rigRoot`) : aucun os trouvé, donc `binding` nul. Un appelant
+  // ne peut rien faire d'un personnage sans applicateur, sinon le découvrir
+  // plus tard sous la forme d'un mannequin qui ne bouge jamais.
+  if (binding === null) {
+    throw new Error(
+      `createCharacter: rig refusé pour la famille "${family.id}" — os manquants : ` +
+      `${report.missingBones.join(', ')}. Tout rôle déclaré par la famille est ` +
+      `structurel. Vérifiez les noms de nœuds, ou passez l'ancêtre commun du ` +
+      `maillage et de l'armature comme rigRoot : un import glTF place souvent ` +
+      `l'armature en frère du SkinnedMesh, et le maillage seul ne porte aucun os.`,
+    );
+  }
+
   // TROIS niveaux, et le niveau du milieu est la raison de cette fonction.
   //
   //   CharacterEntity        ← `entity.object3D`, donc la vue `Transform` :
@@ -109,7 +137,6 @@ export function createCharacter(
   outer.add(anchor);
 
   const entity = world.createTransformEntity(outer);
-  if (binding === null) return { entity, report };
 
   const bones = new Map<string, Object3D>();
   options.rigRoot.traverse((node) => {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { Object3D, World } from '@iwsdk/core';
+import { BoxGeometry, Mesh, MeshBasicMaterial, Object3D, World } from '@iwsdk/core';
 import { HUMANOID, defaultGenome } from '@iwsdk/cardinal-character';
 import { assertBonesAreDescendants, createCharacter, installCharacterThree } from '../src/create';
 import { CharacterCompileSystem } from '../src/systems/CharacterCompileSystem';
@@ -212,6 +212,49 @@ describe('createCharacter — pont complet, marionnette', () => {
 
     compiler.update();
     expect(rootB.parent!.position.y).not.toBe(0);
+  });
+});
+
+describe('createCharacter — le rig refusé', () => {
+  it('lève en nommant l os manquant et la famille, plutôt que rendre une entité vide', () => {
+    // Le chemin le plus silencieux du paquet avant ce correctif : `binding`
+    // nul rendait une entité sans composants, sans applicateur, sans un mot —
+    // alors que le README le décrivait comme l'échec bruyant.
+    const world = new World();
+    installCharacterThree(world);
+    const { root, bones } = humanoidPuppet();
+    bones['spine']!.name = 'Colonne'; // plus aucun alias de `spine` ne matche
+
+    expect(() =>
+      createCharacter(world, {
+        familyId: HUMANOID.id, genome: defaultGenome(HUMANOID), age: 34, rigRoot: root,
+      }),
+    ).toThrow(/spine/);
+    expect(() =>
+      createCharacter(world, {
+        familyId: HUMANOID.id, genome: defaultGenome(HUMANOID), age: 34, rigRoot: root,
+      }),
+    ).toThrow(/humanoid/);
+  });
+
+  it('lève sur le motif glTF que le README décrit : maillage passé au lieu de l ancêtre commun', () => {
+    // Armature FRÈRE du maillage. Passer le maillage comme rigRoot ne trouve
+    // aucun os — c'est ce cas, et non le garde-fou de descendance, qui se
+    // présente réellement, et il doit crier.
+    const world = new World();
+    installCharacterThree(world);
+    const { root } = humanoidPuppet();
+    const scene = new Object3D();
+    const mesh = new Mesh(new BoxGeometry(0.4, 1.75, 0.3), new MeshBasicMaterial());
+    mesh.name = 'Wolf3D_Body';
+    scene.add(mesh);
+    scene.add(root);
+
+    expect(() =>
+      createCharacter(world, {
+        familyId: HUMANOID.id, genome: defaultGenome(HUMANOID), age: 34, rigRoot: mesh,
+      }),
+    ).toThrow(/root/);
   });
 });
 
