@@ -28,6 +28,28 @@ export function registerDefaultContent(registry: SmartObjectRegistry): void {
         preconditions: { objectState: { woodLeft: '>0' }, actorDistance: '<2' },
         effects: { object: { woodLeft: -1 }, actorInventory: { wood: 1 } },
       },
+      {
+        // L'outil multiplie le travail ; il ne le conditionne jamais. Ramasser
+        // du bois mort reste possible à mains nues — c'est ce qui garantit que
+        // la survie ne dépend d'aucune délibération, donc d'aucun service
+        // externe.
+        //
+        // `woodLeft: '>=3'` n'est pas un détail : applyAffordance borne les
+        // états à zéro, ce qui protège l'arbre mais non le bilan. Sans cette
+        // précondition, un chêne où il reste deux bois en rendrait trois, et
+        // la matière se créerait à partir de rien.
+        verb: 'fell_tree',
+        durationTicks: 90,
+        preconditions: {
+          objectState: { woodLeft: '>=3' },
+          actorDistance: '<2',
+          actorInventory: { flint_blade: '>=1' },
+        },
+        effects: {
+          object: { woodLeft: -3 },
+          actorInventory: { wood: 3, flint_blade: -1 },
+        },
+      },
     ],
     state: { woodLeft: 8 },
     regrowth: [{ field: 'woodLeft', perDay: 2, max: 8 }],
@@ -93,10 +115,13 @@ export function registerDefaultContent(registry: SmartObjectRegistry): void {
         effects: { object: { fishLeft: -1 }, actorInventory: { fish: 1 } },
       },
       {
+        // Un rognon de silex donne plusieurs lames — c'est littéralement vrai
+        // de la taille du silex, et c'est ce qui fait de `flint_blade` un
+        // compteur de durabilité sans qu'aucun état nouveau soit nécessaire.
         verb: 'knap_flint',
         durationTicks: 60,
         preconditions: { actorDistance: '<2', actorInventory: { flint: '>=1' } },
-        effects: { actorInventory: { flint_blade: 1, flint: -1 } },
+        effects: { actorInventory: { flint_blade: 3, flint: -1 } },
       },
     ],
     // Deux berges à +2 par jour font 4 poissons soutenables, pour une demande
