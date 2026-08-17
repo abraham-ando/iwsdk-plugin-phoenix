@@ -83,10 +83,14 @@ export function registerDefaultContent(registry: SmartObjectRegistry): void {
         effects: { actorNeeds: { stress: -5 } },
       },
       {
+        // La rivière porte une population, comme les terrains de chasse. Sans
+        // elle, `fish` était un garde-manger infini à 4 m du village : mesuré,
+        // 18 % des repas venaient de là sans que rien ne s'épuise jamais, et
+        // aucune rareté ailleurs ne pouvait faire voyager personne.
         verb: 'fish',
         durationTicks: 80,
-        preconditions: { actorDistance: '<2' },
-        effects: { actorInventory: { fish: 1 } },
+        preconditions: { objectState: { fishLeft: '>0' }, actorDistance: '<2' },
+        effects: { object: { fishLeft: -1 }, actorInventory: { fish: 1 } },
       },
       {
         verb: 'knap_flint',
@@ -95,7 +99,11 @@ export function registerDefaultContent(registry: SmartObjectRegistry): void {
         effects: { actorInventory: { flint_blade: 1, flint: -1 } },
       },
     ],
-    state: {},
+    // Deux berges à +2 par jour font 4 poissons soutenables, pour une demande
+    // mesurée de 4,6 par jour à onze agents : la rivière contribue sans plus
+    // nourrir le village à elle seule.
+    state: { fishLeft: 6 },
+    regrowth: [{ field: 'fishLeft', perDay: 2, max: 6 }],
   });
 
   registry.define('shelter', {
