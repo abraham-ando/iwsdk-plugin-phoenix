@@ -35,7 +35,29 @@ describe('les génomes du village', () => {
     expect(signatures.size).toBe(AGENTS.length);
   });
 
-  it('Lio et Aya ressemblent à leurs parents plus qu un inconnu', () => {
+  it('Lio et Aya battent au moins 90 inconnus sur 100 (comparaison de rang)', () => {
+    // Comparer la distance d'un enfant à la MOYENNE de 100 inconnus n'a
+    // qu'un pouvoir de détection d'environ 50 % pour un enfant isolé : la
+    // moyenne d'un grand échantillon flotte près de la médiane individuelle,
+    // donc un seul tirage indépendant a une chance sur deux de tomber en
+    // dessous par pur hasard — ça a été mesuré : muter Lio seul pour qu'il
+    // soit tiré au hasard (au lieu d'être engendré) laissait ce test passer
+    // quand même.
+    //
+    // Un seuil de RANG est stable : on compte combien des 100 inconnus
+    // l'enfant BAT (distance au mi-parent plus petite), et on exige un
+    // score élevé plutôt qu'une simple comparaison à une moyenne.
+    //
+    // Seuil retenu : 90/100, mesuré comme suit. Sur 30 enfants synthétiques
+    // engendrés par `breed` à partir de Mira et Haran, le rang minimal
+    // observé est 93/100. Sur 30 inconnus synthétiques tirés par
+    // `createGenome` (indépendants des parents), le rang maximal observé
+    // est 88/100. 90 tombe dans l'intervalle [89, 92] qui sépare
+    // proprement les deux populations, avec marge des deux côtés. Rangs
+    // réellement mesurés pour les enfants du village : lio 100/100,
+    // aya 100/100 — largement au-dessus du seuil.
+    const RANK_THRESHOLD = 90;
+
     const g = buildVillagerGenomes(AGENTS);
     const mira = g['mira']!;
     const haran = g['haran']!;
@@ -44,15 +66,18 @@ describe('les génomes du village', () => {
     // chanceux.
     let seed = 12345;
     const rng: RngLike = { next: () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296) };
-    let strangerMean = 0;
+    const strangerDistances: number[] = [];
     for (let i = 0; i < 100; i++) {
-      strangerMean += distanceToMidparent(createGenome(HUMANOID, rng), mira, haran);
+      strangerDistances.push(distanceToMidparent(createGenome(HUMANOID, rng), mira, haran));
     }
-    strangerMean /= 100;
 
     for (const childId of ['lio', 'aya']) {
       const d = distanceToMidparent(g[childId]!, mira, haran);
-      expect(d, `${childId} doit ressembler à ses parents`).toBeLessThan(strangerMean);
+      const beaten = strangerDistances.filter((s) => d < s).length;
+      expect(
+        beaten,
+        `${childId} doit battre au moins ${RANK_THRESHOLD} inconnus sur 100 (en a battu ${beaten})`,
+      ).toBeGreaterThanOrEqual(RANK_THRESHOLD);
     }
   });
 
