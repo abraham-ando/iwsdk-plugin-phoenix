@@ -71,6 +71,36 @@ if (report.missingMorphs.length > 0) {
 }
 ```
 
+## Depuis le manifeste : `createCharacterFromAsset`
+
+`createCharacter` exige un `rigRoot` déjà instancié. `createCharacterFromAsset`
+fait l'instanciation elle-même, par `world.assets.instantiate` — donc par
+`AssetManager`, jamais par un `GLTFLoader` brut :
+
+```ts
+import { createCharacterFromAsset } from '@iwsdk/cardinal-character-three';
+
+const { entity, report } = await createCharacterFromAsset(world, {
+  assetId: 'avatar-haran',
+  familyId: 'humanoid',
+  genome: createGenome(HUMANOID, rng),
+  age: 34,
+});
+```
+
+`world.assets.instantiate` rend `gltf.scene` d'un clone `SkeletonUtils.clone` —
+donc un `Skeleton` et des os NEUFS à chaque appel, ce qui permet à onze
+villageois de porter onze morphologies sur cinq assets de base. Géométries,
+matériaux et clips restent partagés par référence entre ces appels : c'est
+pourquoi les applicateurs clonent leurs matériaux (voir plus haut) et pourquoi
+`sanitizeClip` rend un nouveau clip plutôt que de muter le sien.
+
+Deux échecs remontent, et ils restent distinguables : le chargement (asset
+inconnu, réseau indisponible) lève depuis `AssetManager`, avant que
+`createCharacterFromAsset` n'appelle `createCharacter` ; le refus de rig lève
+depuis `createCharacter` avec la liste des os manquants (voir « Le rig refusé
+lève » plus haut).
+
 ## Le rapport d'import
 
 `resolveBinding` dit **par quel alias** chaque rôle a matché, et ce qui manque.
@@ -171,3 +201,97 @@ frame, sans jamais recompiler — et projette chaque gène `[0,1]` dans la plage
 que la famille déclare pour ce morph (souvent `[-1,1]`), la même formule que le
 compilateur : un gène à 0 ne veut pas dire « pas de morph », il peut vouloir
 dire « morph au maximum dans l'autre sens ».
+
+## Clips : chargement et assainissement
+
+`loadCharacterClips` charge des clips depuis le manifeste et rend le
+**premier** `AnimationClip` de chaque asset :
+
+```ts
+import { loadCharacterClips } from '@iwsdk/cardinal-character-three';
+
+const clips = await loadCharacterClips({
+  idle: 'clip-idle',
+  walk: 'clip-walk',
+  dance: 'clip-dance',
+});
+```
+
+Les clips sont partagés par tout le village — ils n'ont rien à faire dans une
+fabrique par personnage, contrairement à `rigRoot`. L'assainissement, lui,
+reste par personnage, parce qu'il dépend du `roleOfNode` de CE rig ; c'est
+`sanitizeClip` (et non `loadCharacterClips`) qui décide quelles pistes
+survivent, et son mémo (voir plus haut) le rend gratuit à partir du deuxième
+villageois. Un identifiant qui ne charge pas, ou un asset sans aucun clip, fait
+échouer toute la promesse : un village où la moitié des verbes n'a pas de clip
+serait plus difficile à diagnostiquer qu'un échec net.
+
+### `rootMotion` : qui possède la position du personnage
+
+`sanitizeClip(clip, family, roleOfNode, options?)` accepte
+`options.rootMotion: 'keep' | 'strip' | 'flatten'` :
+
+- `'keep'` — la piste de translation de la racine passe telle quelle.
+- `'strip'` — elle disparaît : le personnage ne bouge jamais dans le monde,
+  quel que soit le clip.
+- `'flatten'` — chaque clé est rebasée sur l'HORIZONTALE de départ (X et Z) ;
+  l'axe vertical reste intact, pour garder le balancement de la marche et
+  l'accroupissement de l'inactivité. Le voyage disparaît, la pose reste.
+
+**Le défaut est `'keep'` — pas parce que c'est le bon choix pour un
+villageois, mais pour ne rien changer aux appelants existants.**
+`sanitizeClip` existait avant cette option (étape 2) ; en faire changer le
+comportement par défaut aurait modifié, sans qu'ils le demandent, tout code déjà
+écrit contre elle. La question que tranche `rootMotion` n'est d'ailleurs pas
+une question d'espèce — donc pas un champ de `FamilyDescriptor` — mais la
+question de savoir QUI possède la position du personnage dans le monde. Un
+villageois dont `AgentView.x/z` est recalculé à chaque tick par la simulation
+(`rootMotion: 'flatten'`, voir `makeRiggedBody` dans `apps/demo`) et un
+personnage joueur en locomotion libre (`'keep'`) appartiennent à la même
+famille et veulent des réponses opposées : c'est donc l'appelant qui tranche,
+jamais la famille.
+
+Mesuré sur `readyplayerme/animation-library` : `M_Walk_001` déplace les hanches
+de 3,20979 m par boucle, `F_Walk_002` de 4,386 m — laissés en `'keep'`, ces
+clips emmènent un villageois plusieurs mètres devant lui-même avant que la
+simulation ne le reteleporte. `F_Dances_001` porte dix-sept pistes de
+translation, dont seize CONSTANTES à 10⁻⁶ m près (les décalages d'os du rig
+source, pas du mouvement) : `classifyTranslationTrack` les retire sur
+l'amplitude, jamais sur la présence, donc `rootMotion` ne les concerne pas —
+seule la piste de la racine, jugée `'keep'`, passe par la politique.
+
+## `CharacterAnimationSystem` (priorité 80)
+
+Un `AnimationMixer` par personnage, des clips assainis une seule fois à
+l'attachement, et un fondu enchaîné au changement de verbe.
+
+**Priorité 80 : après `CharacterCompileSystem` (60) et
+`CharacterExpressionSystem` (70).** Le mixer doit tourner une fois la
+morphologie de la frame posée ; avant elles, il écrirait sur des os que la
+compilation replacerait juste après.
+
+```ts
+const system = world.getSystem(CharacterAnimationSystem);
+
+// Une fois, à l'attachement : assainit et mémorise les clips pour CETTE entité.
+system.attach(entity, clips, roleOfNode, { rootMotion: 'flatten' });
+
+// À chaque changement de verbe : fondu enchaîné vers l'action déjà créée,
+// ou nouvellement créée puis réutilisée — jamais recréée à chaque appel.
+system.setVerb(entity, 'walk');
+```
+
+Un verbe sans clip retombe sur `idle` plutôt que de lever : la bibliothèque RPM
+ne contient aucun clip de repos ni de sommeil, et lever ici ferait tomber la
+démo sur un comportement normal de la simulation. `currentVerb`, `clipFor` et
+`actionCount` existent pour le diagnostic et les tests, pas pour le chemin
+chaud. `update()` détache et arrête le mixer d'une entité disposée — sans
+cette garde, un village qui remplace régulièrement ses marionnettes par des
+rigs fuirait un mixer par remplacement, une fuite qui ne se voit qu'au bout
+d'une heure de jeu.
+
+Pourquoi pas `AvatarAnimationController` de `@iwsdk/plugin-cardinal-ai` : il
+fait des fondus et porte quatorze tests, mais il vit du mauvais côté — faire
+dépendre les personnages du paquet IA inverse la dépendance — et il
+duck-type `globalThis.THREE`, ce qui le laisse silencieusement sans mixer
+quand cet objet n'est pas là.
