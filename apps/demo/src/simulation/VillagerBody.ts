@@ -11,7 +11,6 @@ import { Mesh } from '@iwsdk/core';
 import type { AnimationClip, Entity, Group, Object3D, World } from '@iwsdk/core';
 import type { AgentView } from '@iwsdk/cardinal-simulation';
 import { applyAvatarPose } from './AgentAvatarFactory';
-import { hash } from './villagerGenomes';
 
 export interface VillagerBody {
   readonly node: Object3D;
@@ -119,16 +118,6 @@ export async function upgradeVillagers(options: UpgradeOptions): Promise<void> {
       );
     }
   }
-}
-
-/**
- * Choisit un asset de façon stable pour un identifiant donné.
- *
- * Réutilise le FNV-1a de `villagerGenomes.ts` plutôt que d'en écrire un
- * second dans ce dossier — une seule implémentation, deux usages.
- */
-export function hashIndex(id: string, modulo: number): number {
-  return hash(id) % modulo;
 }
 
 /**

@@ -18,11 +18,11 @@ const CHILDREN: Readonly<Record<string, 'f' | 'm'>> = { lio: 'm', aya: 'f' };
 /**
  * FNV-1a 32 bits. Stable, sans dépendance, suffisant pour semer.
  *
- * Exportée : `VillagerBody.hashIndex` la réutilise pour choisir un asset RPM
- * par villageois. Un second FNV-1a dans ce même dossier serait le défaut que
- * la grille de revue signale — une seule implémentation, deux usages.
+ * N'est plus exportée : `VillagerBody.hashIndex`, son seul appelant hors de
+ * ce fichier, a disparu avec la tâche 9 — le basculement choisit désormais
+ * l'asset par genre, pas par hachage de l'identifiant.
  */
-export function hash(text: string): number {
+function hash(text: string): number {
   let h = 0x811c9dc5;
   for (let i = 0; i < text.length; i++) {
     h ^= text.charCodeAt(i);

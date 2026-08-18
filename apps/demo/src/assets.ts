@@ -83,6 +83,22 @@ export default defineAssets({
     priority: 'lazy',
   },
 
+  // Avatars T-pose Ready Player Me, récupérés par `pnpm clips` et absents du
+  // dépôt (licence : usage autorisé, redistribution interdite). Ce sont les
+  // seuls rigs joignables : `models.readyplayer.me` ne résout pas ici.
+  'avatar-tpose-masculine': {
+    url: publicAssetUrl('characters/avatar-tpose-masculine.glb'),
+    type: AssetType.GLTF,
+    name: 'RPM T-Pose (masculine)',
+    priority: 'lazy',
+  },
+  'avatar-tpose-feminine': {
+    url: publicAssetUrl('characters/avatar-tpose-feminine.glb'),
+    type: AssetType.GLTF,
+    name: 'RPM T-Pose (feminine)',
+    priority: 'lazy',
+  },
+
   // Interactive Props & UI
   'plant-sansevieria': {
     url: stockAssetUrl('plant-sansevieria', 'plantSansevieria.gltf'),

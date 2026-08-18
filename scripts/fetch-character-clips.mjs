@@ -33,6 +33,12 @@ export const CLIPS = {
   'feminine/glb/dance/F_Dances_001.glb': 'dance-fixture.glb',
 };
 
+/** Avatars T-pose : rigs complets, skinnés, 19/19 rôles d'os satisfaits. */
+export const AVATARS = {
+  'masculine/glb/Masculine_TPose.glb': 'avatar-tpose-masculine.glb',
+  'feminine/glb/Feminine_TPose.glb': 'avatar-tpose-feminine.glb',
+};
+
 async function json(url) {
   const res = await fetch(url, { headers: { 'User-Agent': 'cardinal-fetch-clips' } });
   if (!res.ok) throw new Error(`${url} → HTTP ${res.status}`);
@@ -47,11 +53,15 @@ async function main() {
   );
   mkdirSync(DEST, { recursive: true });
 
-  const missing = Object.entries(CLIPS).filter(
+  // Clips ET avatars T-pose partagent le même dossier, la même règle
+  // `.gitignore`, et la même boucle de téléchargement : ni les uns ni les
+  // autres ne sont redistribuables.
+  const ALL = { ...CLIPS, ...AVATARS };
+  const missing = Object.entries(ALL).filter(
     ([, local]) => !existsSync(join(DEST, local)),
   );
   if (missing.length === 0) {
-    console.log(`Les ${Object.keys(CLIPS).length} clips sont déjà présents.`);
+    console.log(`Les ${Object.keys(ALL).length} fichiers sont déjà présents.`);
     return;
   }
 

@@ -30,7 +30,7 @@ import {
   loadCharacterClips,
 } from '@iwsdk/cardinal-character-three';
 import { buildVillagerGenomes } from './simulation/villagerGenomes.js';
-import { hashIndex, makeRiggedBody, upgradeVillagers } from './simulation/VillagerBody.js';
+import { makeRiggedBody, upgradeVillagers } from './simulation/VillagerBody.js';
 
 const container = document.getElementById('scene-container') as HTMLDivElement;
 const network = readNetworkConfig(import.meta.env);
@@ -82,7 +82,6 @@ World.create(container, projectOptions)
       // Le village est monté en marionnettes et JOUABLE dès cette frame. Les
       // rigs le remplacent ensuite, un par un, si le réseau les apporte.
       const genomes = buildVillagerGenomes(VILLAGE_LAYOUT.agents);
-      const AVATARS = ['avatar-mira', 'avatar-sylvia', 'avatar-eldrin', 'avatar-garrick', 'avatar-haran'];
       // Une seule chaîne, pas deux indépendantes : un échec des clips
       // FÉMININS annule aussi les rigs MASCULINS (le .catch du bas couvre
       // tout). Asymétrie acceptée pour rester simple — le village entier
@@ -99,9 +98,14 @@ World.create(container, projectOptions)
                 bodies: sceneData.agentAvatars,
                 agents: VILLAGE_LAYOUT.agents,
                 buildRig: async (agent, puppet) => {
-                  // Cinq assets pour onze villageois : le hachage de
-                  // l'identifiant en choisit un, de façon stable.
-                  const assetId = AVATARS[hashIndex(agent.id, AVATARS.length)]!;
+                  // Un seul asset de base par genre : sept villageois
+                  // masculins partagent `avatar-tpose-masculine`, quatre
+                  // féminines `avatar-tpose-feminine`. Ce qui les distingue
+                  // à l'écran est la morphologie compilée, pas le fichier.
+                  const assetId =
+                    agent.gender === 'feminine'
+                      ? 'avatar-tpose-feminine'
+                      : 'avatar-tpose-masculine';
                   const { entity } = await createCharacterFromAsset(world, {
                     assetId,
                     familyId: 'humanoid',
