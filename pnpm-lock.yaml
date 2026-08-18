@@ -58,6 +58,9 @@ importers:
       '@iwsdk/cardinal-character-three':
         specifier: workspace:*
         version: link:../../packages/character-three
+      '@iwsdk/cardinal-character-ui':
+        specifier: workspace:*
+        version: link:../../packages/character-ui
       '@iwsdk/cardinal-simulation':
         specifier: workspace:*
         version: link:../../packages/simulation

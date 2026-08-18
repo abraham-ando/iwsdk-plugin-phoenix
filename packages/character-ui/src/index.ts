@@ -4,3 +4,5 @@ export type { PanelDocument, PanelElement } from './document';
 export { show, setText } from './document';
 export { CharacterUIRoute } from './components';
 export { TabRouter, TAB_IDS, TAB_BUTTON_IDS, PANEL_IDS, type TabId } from './router';
+export { renderGauge } from './gauge';
+export { SettingsTab, GENE_ROW_IDS, GENE_STEP, NON_EDITABLE_GENES, type SettingsHooks } from './tabs/settings';
