@@ -1860,6 +1860,178 @@ git commit -m "feat(demo): real RPM rigs from the animation library, and the scr
 ```
 
 
+---
+
+## Task 10 : Le génome de structure doit atteindre le compilateur
+
+**Défaut CRITIQUE, mesuré.** Deux génomes opposés produisent des squelettes
+identiques au bit près :
+
+```
+gènes=0.05   composant.stature=0.5   genou.y=-0.44   racine.scale.y=0.99538…
+gènes=0.95   composant.stature=0.5   genou.y=-0.44   racine.scale.y=0.99538…
+```
+
+**Cause.** `create.ts:182` pose `entity.addComponent(CharacterStructure, {})` :
+les cinq gènes de structure restent au défaut `0.5` du schéma. Et `refreshGenes`
+(`CharacterCompileSystem.ts:110-113`) lit **le composant en priorité** pour les
+gènes de structure — `const own = STRUCTURE_KEYS.has(key) ? entity.getValue(...)
+: null; const next = own ?? base.genes[key] ?? 0.5`. `own` vaut toujours `0.5`,
+donc `base.genes[key]` n'est jamais consulté.
+
+Cette priorité au composant est **voulue** : c'est ce qui permettra à un panneau
+de réglages d'éditer un personnage vivant. Ce qui manque, c'est l'**amorçage** du
+composant depuis le génome à la création.
+
+**Conséquence observée :** les onze avatars RPM de la démo sont onze corps
+identiques. `buildVillagerGenomes` et `breed` n'ont aucun effet visible.
+
+**Files :**
+- Modify: `packages/character-three/src/create.ts`
+- Test: `packages/character-three/test/create.test.ts`
+- Test: `packages/character-three/test/compile-system.test.ts`
+
+**Interfaces :**
+- Consumes : `Genome`, `CharacterStructure`, `CharacterFace`, `createCharacter`.
+- Produces : aucune signature nouvelle — `createCharacter` amorce désormais ses
+  composants depuis le génome qu'il reçoit déjà.
+
+- [ ] **Step 1 : Écrire le test qui échoue**
+
+Dans `packages/character-three/test/compile-system.test.ts`, ajouter :
+
+```ts
+  it('deux génomes opposés donnent deux squelettes DIFFÉRENTS', () => {
+    // Le test qui manquait : sans lui, `createCharacter` pouvait jeter le
+    // génome de structure sans qu'aucune suite ne s'en aperçoive — et onze
+    // villageois se retrouvaient avec le même corps à l'écran.
+    const world = new World();
+    installCharacterThree(world);
+    const system = world.getSystem(CharacterCompileSystem)!;
+
+    const measure = (value: number): { stature: number; knee: number } => {
+      const genes: Record<string, number> = {};
+      for (const key of Object.keys(HUMANOID.genes)) genes[key] = value;
+      const { root, bones } = humanoidPuppet();
+      const entity = createCharacter(world, {
+        familyId: HUMANOID.id,
+        genome: { family: HUMANOID.id, genes },
+        age: 30,
+        rigRoot: root,
+      }).entity;
+      system.update(0.016, 16);
+      return {
+        stature: entity.getValue(CharacterStructure, 'stature') ?? Number.NaN,
+        knee: bones['legL']?.position.y ?? Number.NaN,
+      };
+    };
+
+    const petit = measure(0.05);
+    const grand = measure(0.95);
+
+    // Le composant porte le gène reçu, pas le défaut du schéma.
+    expect(petit.stature).toBeCloseTo(0.05, 5);
+    expect(grand.stature).toBeCloseTo(0.95, 5);
+    // Et le squelette compilé s'en ressent : le genou n'est pas à la même
+    // hauteur. C'est l'assertion qui compte — la première pourrait passer sur
+    // un composant amorcé mais ignoré par le compilateur.
+    expect(petit.knee).not.toBeCloseTo(grand.knee, 4);
+  });
+```
+
+Importer `CharacterStructure` et `HUMANOID` si le fichier ne les a pas déjà.
+
+- [ ] **Step 2 : Le lancer pour le voir échouer**
+
+```bash
+pnpm --filter @iwsdk/cardinal-character-three test compile-system
+```
+
+Attendu : ÉCHEC sur `petit.stature` — le composant vaut `0.5`, pas `0.05`.
+
+- [ ] **Step 3 : Amorcer les composants depuis le génome**
+
+Dans `packages/character-three/src/create.ts`, remplacer les trois `addComponent`
+à valeurs vides par un amorçage tiré du génome :
+
+```ts
+/**
+ * Les valeurs initiales d'un composant de gènes, prises dans le génome.
+ *
+ * Sans cet amorçage, `addComponent(CharacterStructure, {})` laisse les cinq
+ * champs au défaut `0.5` du schéma — et `refreshGenes` LIT LE COMPOSANT en
+ * priorité pour les gènes de structure, ce qui jetait silencieusement le génome
+ * reçu. Onze villageois tirés de onze génomes distincts se retrouvaient avec le
+ * même corps.
+ *
+ * La priorité au composant est voulue : c'est elle qui permettra à un panneau de
+ * réglages d'éditer un personnage vivant. Ce qui manquait, c'était le point de
+ * départ.
+ */
+function genesFor(
+  schema: Readonly<Record<string, unknown>>,
+  genome: Genome,
+): Record<string, number> {
+  const values: Record<string, number> = {};
+  for (const key of Object.keys(schema)) {
+    const value = genome.genes[key];
+    if (value !== undefined) values[key] = value;
+  }
+  return values;
+}
+```
+
+puis :
+
+```ts
+  entity.addComponent(CharacterIdentity, { family: family.id, age: options.age });
+  entity.addComponent(CharacterStructure, genesFor(CharacterStructure.schema, options.genome));
+  entity.addComponent(CharacterFace, genesFor(CharacterFace.schema, options.genome));
+  entity.addComponent(CharacterSurface, {});
+```
+
+`CharacterSurface` reste vide : ses champs sont des `Types.Color`, des champs
+**vecteurs**, que `CharacterCompileSystem` écrit par `getVectorView` à la
+compilation. Les initialiser ici par `addComponent` n'apporterait rien et
+brouillerait la source de vérité.
+
+- [ ] **Step 4 : Vérifier que le test passe**
+
+```bash
+pnpm --filter @iwsdk/cardinal-character-three test
+```
+
+Attendu : le nouveau test passe, et les 87 existants restent verts.
+
+- [ ] **Step 5 : Vérifier que le garde peut tomber**
+
+Rétablir temporairement `addComponent(CharacterStructure, {})`, relancer, et
+confirmer que le nouveau test tombe **sur les deux assertions**. Rétablir.
+
+- [ ] **Step 6 : Regarder l'écran**
+
+```bash
+npx iwsdk dev up
+npx iwsdk browser logs --count 100
+```
+
+Puis obtenir une capture montrant **plusieurs** villageois dans le même cadre —
+la séquence établie par la tâche 8 fonctionne : `xr enter`, `xr look-at` pour
+recentrer, `xr exit`, `browser screenshot`. Les villageois de la tribu de la Rive
+(`dagan`, `sira`, `nia`, `kan`) sont groupés autour de `x ≈ 4,6–6,5`,
+`z ≈ −2,4 à −4,0`.
+
+**Ce que la capture doit montrer :** des tailles visiblement différentes. Si tous
+les corps se ressemblent encore, le dire — et chercher pourquoi.
+
+- [ ] **Step 7 : Commiter**
+
+```bash
+git add packages/character-three
+git commit -m "fix(character-three): seed the gene components from the genome"
+```
+
+
 ## Auto-revue
 
 **Couverture de la spec.** §2 → tâches 3 et 8 (les mesures deviennent des tests, puis corrigent les specs). §4 root motion → tâche 3. §5 fabrique → tâche 4. §6.1 chargement → tâche 4 ; §6.2 licence et script → tâche 2 ; §6.2.1 saut bruyant → tâche 3 step 1 ; §6.3 table des verbes → tâche 5 (`setVerb` retombe sur `idle`) et tâche 7 ; §6.4 système → tâche 5. §7 basculement → tâche 7. §8 génomes et `breed` → tâche 6. §10.1 tests 1–8 → répartis (1–4 tâche 3, 5–6 tâche 4, 7 tâche 6, 8 tâche 7). §10.2 écran → tâches 1 et 8. §11 corrections → tâche 8. §13 ordre → respecté.
