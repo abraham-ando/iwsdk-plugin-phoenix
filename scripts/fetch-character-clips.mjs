@@ -12,7 +12,7 @@
  *
  * Chaque développeur les récupère donc lui-même, sous sa propre acceptation.
  */
-import { mkdirSync, writeFileSync, existsSync, statSync } from 'node:fs';
+import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
