@@ -16,6 +16,17 @@ export default defineConfig({
       '@character-three/fixtures': fileURLToPath(
         new URL('../../packages/character-three/test/fixtures', import.meta.url),
       ),
+      // Même logique que l'alias ci-dessus, mais pour lire le texte source du
+      // sous-chemin `/components` (voir test/components.test.ts) : un test
+      // d'inertie a besoin du fichier SOURCE, pas du `dist/` construit — les
+      // chunks de tsup portent un nom haché par le contenu, imprévisible. La
+      // clé se termine par `?raw` (littéralement, dans le spécificateur
+      // importé) pour retomber sur `declare module '*?raw'` de
+      // `vite/client.d.ts` côté types, et pour que Vite lise le fichier comme
+      // texte brut plutôt que de l'évaluer comme module côté runtime.
+      '@character-three/components-source?raw': fileURLToPath(
+        new URL('../../packages/character-three/src/components/index.ts', import.meta.url),
+      ) + '?raw',
     },
   },
   test: { globals: true, environment: 'node', include: ['test/**/*.test.ts'] },
