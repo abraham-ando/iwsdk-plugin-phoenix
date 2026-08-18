@@ -216,6 +216,11 @@ World.create(container, projectOptions)
           m.runGpuContentionProbe(mode2)
         );
       }
+      // Sonde de budget de frame, sur demande explicite (TS-B1) : échantillonne
+      // le temps de frame p50/p95/p99 en continu, sans dépendance à Mode2Client.
+      if (new URLSearchParams(location.search).has('probe-frame') || env.VITE_PROBE_FRAME) {
+        void import('./simulation/FrameBudgetProbe.js').then((m) => m.runFrameBudgetProbe());
+      }
       // Dataset capture: ship recorded trajectories to the BFF periodically.
       new TrajectoryUploader(simSystem);
       // Panneau d'activation de l'IA locale, posé devant le point d'apparition.

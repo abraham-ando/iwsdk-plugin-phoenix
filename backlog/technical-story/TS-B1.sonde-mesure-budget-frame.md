@@ -6,7 +6,7 @@ epic: "Épic B — Mesure et budget de frame (voie 2)"
 priority: P2
 voie: 2
 depends_on: "—"
-status: "À faire"
+status: "Fait"
 gherkin: TS-B1.sonde-mesure-budget-frame.bdd.md
 ---
 
