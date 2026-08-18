@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { Entity } from '@iwsdk/core';
 import { CardinalContextBuilder } from '../src/context/CardinalContextBuilder';
-import { addDialogueTurn, clearDialogueHistory } from '../src/components/NPCMemory';
+import { NPCMemoryStore } from '../src/components/NPCMemory';
 
 function fakeEntity(index: number): Entity {
   return { index, hasComponent: () => false } as unknown as Entity;
@@ -33,15 +33,24 @@ describe('CardinalContextBuilder', () => {
 
   it('scopes the conversational memory summary to the requesting player session', () => {
     const npcId = 55;
-    clearDialogueHistory(npcId, 'alice');
-    clearDialogueHistory(npcId, 'bob');
+    const memoryStore = new NPCMemoryStore();
 
-    addDialogueTurn(npcId, { role: 'user', content: 'Je cherche le trésor secret', timestamp: 100 }, 4, 'alice');
-    addDialogueTurn(npcId, { role: 'user', content: 'Salut PNJ', timestamp: 100 }, 4, 'bob');
+    memoryStore.addDialogueTurn(npcId, { role: 'user', content: 'Je cherche le trésor secret', timestamp: 100 }, 4, 'alice');
+    memoryStore.addDialogueTurn(npcId, { role: 'user', content: 'Salut PNJ', timestamp: 100 }, 4, 'bob');
 
-    const contextForBob = CardinalContextBuilder.buildContext(fakeEntity(npcId), { playerId: 'bob' });
+    const contextForBob = CardinalContextBuilder.buildContext(fakeEntity(npcId), { playerId: 'bob' }, memoryStore);
 
     expect(contextForBob).toContain('Salut PNJ');
     expect(contextForBob).not.toContain('trésor secret');
+  });
+
+  it('omits the conversational memory summary entirely when no memory store is supplied', () => {
+    const npcId = 56;
+    const memoryStore = new NPCMemoryStore();
+    memoryStore.addDialogueTurn(npcId, { role: 'user', content: 'Ne doit jamais apparaître', timestamp: 100 });
+
+    const context = CardinalContextBuilder.buildContext(fakeEntity(npcId), {});
+
+    expect(context).not.toContain('Ne doit jamais apparaître');
   });
 });

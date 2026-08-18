@@ -1,6 +1,6 @@
 import { Types, createSystem, type Entity } from '@iwsdk/core';
 import { SmartNPC } from '../components/SmartNPC';
-import { NPCMemory, addDialogueTurn } from '../components/NPCMemory';
+import { NPCMemory, NPCMemoryStore } from '../components/NPCMemory';
 import { NPCEmotion, EmotionPromptModifiers, EmotionTypeValue } from '../components/NPCEmotion';
 import { CardinalContextBuilder, type CardinalWorldContextOptions } from '../context/CardinalContextBuilder';
 import { IntentParser, IntentDispatcher } from '../intents/IntentParser';
@@ -15,10 +15,19 @@ import type { IInferenceAdapter, InferenceResponse } from '../adapters/types';
 export class CardinalIntelligenceSystem extends createSystem(
   {
     npcs: { required: [SmartNPC] },
+    memoryHolders: { required: [NPCMemory] },
   },
   {
     /** Optional swappable inference adapter */
     adapter: { type: Types.Object, default: null },
+    /**
+     * Optional externally-owned {@link NPCMemoryStore} — `installCardinalAI`
+     * injects one instance per plugin installation so it can be shared with
+     * `CardinalContextBuilder`. Left unset (e.g. when this system is
+     * registered directly, without going through the plugin factory), the
+     * system creates and owns its own private store.
+     */
+    memoryStore: { type: Types.Object, default: null },
     /** Enable auto-triggering queries on proximity */
     autoQueryNearby: { type: Types.Boolean, default: false },
     /** Global fallback interaction radius in meters */
@@ -33,6 +42,16 @@ export class CardinalIntelligenceSystem extends createSystem(
   private scheduler = new CognitiveScheduler();
   public readonly intentDispatcher = new IntentDispatcher();
 
+  /**
+   * This system's episodic-memory store. Injected via `configData.memoryStore`
+   * by `installCardinalAI`, or lazily self-owned when this system is
+   * registered directly (see class doc). Public so `CardinalContextBuilder`
+   * and tests can read it; entity-scoped purging on destroy is wired in
+   * {@link init}.
+   */
+  public memoryStore!: NPCMemoryStore;
+  private unsubscribeMemoryPurge: (() => void) | null = null;
+
   private personalities = new Map<number, string>([
     [0, 'Tu es un guide bienveillant dans cet univers virtuel.'],
     [1, 'Tu es un garde vigilant protégeant les remparts.'],
@@ -45,6 +64,31 @@ export class CardinalIntelligenceSystem extends createSystem(
     if (this.config.adapter.value) {
       this.inferenceAdapter = this.config.adapter.value as unknown as IInferenceAdapter;
     }
+
+    this.memoryStore = (this.config.memoryStore.value as unknown as NPCMemoryStore | null) ?? new NPCMemoryStore();
+
+    // Purge an NPC's full episodic memory (every player session) the moment
+    // its entity stops carrying NPCMemory — i.e. on destroy. `disqualify`
+    // fires synchronously from `entity.destroy()`, before the entity index
+    // is recycled, so `entity.index` is still the correct, still-unique id.
+    this.unsubscribeMemoryPurge = this.queries.memoryHolders.subscribe('disqualify', (entity) => {
+      const entityId = (entity as any).index ?? (entity as any).id ?? 0;
+      this.memoryStore.clearEntity(entityId);
+    });
+  }
+
+  /**
+   * Unregister the destroy-purge subscription and release every stored
+   * dialogue history. Called by `world.unregisterSystem(CardinalIntelligenceSystem)`,
+   * which is exactly what `installCardinalAI(...).dispose()` does — so
+   * disposing the plugin leaves no residual entry in this system's memory
+   * store, regardless of how many NPCs ever had a history.
+   */
+  public override destroy(): void {
+    this.unsubscribeMemoryPurge?.();
+    this.unsubscribeMemoryPurge = null;
+    this.memoryStore.dispose();
+    super.destroy();
   }
 
   /** Set or replace the active inference backend adapter */
@@ -129,10 +173,14 @@ export class CardinalIntelligenceSystem extends createSystem(
     if (typeof worldContextOrOptions === 'string') {
       formattedContext = worldContextOrOptions;
     } else {
-      formattedContext = CardinalContextBuilder.buildContext(entity, {
-        ...(worldContextOrOptions ?? {}),
-        playerId: playerId ?? worldContextOrOptions?.playerId,
-      });
+      formattedContext = CardinalContextBuilder.buildContext(
+        entity,
+        {
+          ...(worldContextOrOptions ?? {}),
+          playerId: playerId ?? worldContextOrOptions?.playerId,
+        },
+        this.memoryStore
+      );
     }
 
     // Append instructions for structured action intent formatting
@@ -167,8 +215,13 @@ export class CardinalIntelligenceSystem extends createSystem(
         // no episodic memory was ever recorded).
         if ((NPCMemory as any).bitmask && entity.hasComponent(NPCMemory)) {
           const maxTurns = entity.getValue(NPCMemory, 'maxHistoryTurns') ?? 4;
-          addDialogueTurn(npcId, { role: 'user', content: sanitizedMessage, timestamp: now }, maxTurns, playerId);
-          addDialogueTurn(
+          this.memoryStore.addDialogueTurn(
+            npcId,
+            { role: 'user', content: sanitizedMessage, timestamp: now },
+            maxTurns,
+            playerId
+          );
+          this.memoryStore.addDialogueTurn(
             npcId,
             { role: 'assistant', content: parsed.cleanDialogue, timestamp: now },
             maxTurns,
