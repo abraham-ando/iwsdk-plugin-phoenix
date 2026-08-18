@@ -86,6 +86,19 @@ defmodule IwsdkPhoenix.Room.Server do
   @doc "Current room state. Intended for tests and diagnostics."
   def state(room), do: GenServer.call(room, :state)
 
+  @doc """
+  Author a component value for `network_id` under server authority, and
+  broadcast it to every connected peer.
+
+  This is the mechanism a sector's weather already rides (`publish_weather/1`
+  below); anything else the server itself owns — an NPC's genome, say — uses
+  the exact same path rather than a parallel one. Deduped against the room's
+  component cache, so an unchanged value costs no traffic, and a late joiner
+  still receives it through the ordinary cache replay on `:after_join`.
+  """
+  def publish_component(room, network_id, component_id, payload),
+    do: GenServer.call(room, {:publish_component, network_id, component_id, payload})
+
   # -- Callbacks --------------------------------------------------------------
 
   @impl true
@@ -167,6 +180,13 @@ defmodule IwsdkPhoenix.Room.Server do
   end
 
   def handle_call(:state, _from, state), do: {:reply, state.room, state}
+
+  def handle_call({:publish_component, network_id, component_id, payload}, _from, state) do
+    {room, frame} = State.author_component(state.room, network_id, component_id, payload)
+    state = %{state | room: room}
+    if frame, do: broadcast_to_peers(state, frame)
+    {:reply, :ok, state}
+  end
 
   # -- Zone handoff -----------------------------------------------------------
   #
@@ -285,6 +305,10 @@ defmodule IwsdkPhoenix.Room.Server do
     state
   end
 
+  # Weather's own component id on the wire. `author_component/4` is the
+  # generic mechanism; this is the one detail specific to weather.
+  @weather_component_id 3
+
   defp publish_weather(state) do
     {room, network_id, spawn_frame} = State.ensure_world_entity(state.room)
     state = %{state | room: room}
@@ -297,18 +321,10 @@ defmodule IwsdkPhoenix.Room.Server do
         wind: room.weather.wind
       })
 
-    if IwsdkPhoenix.Cardinal.Cache.get(room.components, network_id, 3) == payload do
-      state
-    else
-      record = %{network_id: network_id, component_id: 3, payload: payload}
-
-      broadcast_to_peers(
-        state,
-        Protocol.encode_component_update([record], room.tick)
-      )
-
-      %{state | room: State.put_components(room, [record], room.mode)}
-    end
+    {room, frame} = State.author_component(room, network_id, @weather_component_id, payload)
+    state = %{state | room: room}
+    if frame, do: broadcast_to_peers(state, frame)
+    state
   end
 
   # Server-originated frames go through `notify`, not `broadcast`.

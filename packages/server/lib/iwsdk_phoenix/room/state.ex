@@ -439,6 +439,30 @@ defmodule IwsdkPhoenix.Room.State do
     Cache.frames(state.components, state.tick)
   end
 
+  @doc """
+  Author a component value under server authority — dedupe against the cache,
+  cache it, and return the frame to broadcast.
+
+  Returns `{state, nil}` when `payload` matches what is already cached (no
+  traffic for an unchanged value, same rule as everything else on this path).
+  Returns `{state, frame}` when it changed, `frame` being the `COMPONENT_UPDATE`
+  to broadcast to every connected peer.
+
+  This is what lets the server itself act as an object's owner. `Room.Server`
+  uses it for a sector's weather; any other server-authored component — an
+  NPC's genome, say — rides the same path.
+  """
+  @spec author_component(t(), pos_integer(), pos_integer(), binary()) :: {t(), binary() | nil}
+  def author_component(%__MODULE__{} = state, network_id, component_id, payload) do
+    if Cache.get(state.components, network_id, component_id) == payload do
+      {state, nil}
+    else
+      record = %{network_id: network_id, component_id: component_id, payload: payload}
+      frame = Protocol.encode_component_update([record], state.tick)
+      {put_components(state, [record], state.mode), frame}
+    end
+  end
+
   @doc "Look up an entity by network id."
   @spec entity(t(), pos_integer()) :: entity() | nil
   def entity(%__MODULE__{} = state, network_id), do: Map.get(state.entities, network_id)
