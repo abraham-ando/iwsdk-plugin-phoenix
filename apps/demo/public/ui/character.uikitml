@@ -145,27 +145,27 @@
   <div class="tab" id="tab-persona">
     <p class="name" id="persona-role">—</p>
     <p class="note" id="persona-text">—</p>
-    <div class="row" id="need-row-hunger">
+    <div class="row">
       <p class="name" id="need-label-hunger">Faim</p>
       <div class="track"><div class="bar" id="need-bar-hunger"></div></div>
       <p class="val" id="need-val-hunger">—</p>
     </div>
-    <div class="row" id="need-row-warmth">
+    <div class="row">
       <p class="name" id="need-label-warmth">Chaleur</p>
       <div class="track"><div class="bar" id="need-bar-warmth"></div></div>
       <p class="val" id="need-val-warmth">—</p>
     </div>
-    <div class="row" id="need-row-energy">
+    <div class="row">
       <p class="name" id="need-label-energy">Énergie</p>
       <div class="track"><div class="bar" id="need-bar-energy"></div></div>
       <p class="val" id="need-val-energy">—</p>
     </div>
-    <div class="row" id="need-row-affection">
+    <div class="row">
       <p class="name" id="need-label-affection">Affection</p>
       <div class="track"><div class="bar" id="need-bar-affection"></div></div>
       <p class="val" id="need-val-affection">—</p>
     </div>
-    <div class="row" id="need-row-stress">
+    <div class="row">
       <p class="name" id="need-label-stress">Stress</p>
       <div class="track"><div class="bar" id="need-bar-stress"></div></div>
       <p class="val" id="need-val-stress">—</p>

@@ -1,7 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { GENE_ROW_IDS, TAB_IDS, TAB_BUTTON_IDS, PANEL_IDS } from '@iwsdk/cardinal-character-ui';
+import {
+  GENE_ROW_IDS,
+  NEED_ROW_IDS,
+  PERSONA_IDS,
+  TAB_IDS,
+  TAB_BUTTON_IDS,
+  PANEL_IDS,
+} from '@iwsdk/cardinal-character-ui';
 
 /**
  * Confronte le document RÉEL aux identifiants que les contrôleurs demandent.
@@ -11,10 +18,6 @@ import { GENE_ROW_IDS, TAB_IDS, TAB_BUTTON_IDS, PANEL_IDS } from '@iwsdk/cardina
  * tous les tests à document factice passent pendant que le panneau reste vide.
  * C'est la panne la plus probable de cette étape, et la seule qu'aucun autre
  * test ne peut attraper.
- *
- * `NEED_ROW_IDS` et `PERSONA_IDS` naissent à la tâche 6, qui complétera ce
- * fichier avec les blocs correspondants — les référencer maintenant laisserait
- * le typecheck rouge entre les deux tâches.
  */
 function idsDuDocument(): Set<string> {
   const chemin = join(__dirname, '../public/ui/character.uikitml');
@@ -43,11 +46,22 @@ describe('le contrat d identifiants du document', () => {
     expect(manquants).toEqual([]);
   });
 
+  it('porte les cinq lignes de besoin, au complet', () => {
+    const manquants: string[] = [];
+    for (const [besoin, ids] of Object.entries(NEED_ROW_IDS)) {
+      for (const [role, id] of Object.entries(ids)) {
+        if (!presents.has(id)) manquants.push(`${besoin}.${role} → ${id}`);
+      }
+    }
+    expect(manquants).toEqual([]);
+  });
+
   it('porte les conteneurs d onglet, leurs boutons, et les champs du panneau', () => {
     const attendus = [
       ...Object.values(TAB_IDS),
       ...Object.values(TAB_BUTTON_IDS),
       ...Object.values(PANEL_IDS),
+      ...Object.values(PERSONA_IDS),
     ];
     expect(attendus.filter((id) => !presents.has(id))).toEqual([]);
   });
