@@ -39,10 +39,21 @@ Conventions :
 | TS-D3 | TS | Publier réellement les génomes des villageois | P3 | 4 | — | À faire |
 | TS-E1 | TS | Les secteurs persistants survivent au redémarrage | P4 | 5 | — | À faire |
 | US-F1 | US | Exporter les datasets SFT et world-model | P4 | 6 | — | À faire |
+| TS-H1 | TS | Le serveur complète la poignée de main d'horloge étendue | P2 | 7 | — | À faire |
+| TS-I1 | TS | Limiter le débit par pair | P2 | 8 | — | À faire |
+| TS-I2 | TS | Roster de présence côté serveur | P3 | 8 | — | À faire |
+| TS-J1 | TS | Résorber le doublon StructuredOutputParser / IntentParser | P3 | 9 | — | À faire |
+| TS-J2 | TS | Décider du sort de SpeculativeDecodingEngine | P4 | 9 | — | À faire |
+| TS-J3 | TS | Câbler AudioWorkletManager dans le pipeline audio réel | P4 | 9 | — | À faire |
+| TS-J4 | TS | Le provider `anthropic-proxy` est réel ou retiré du type | P3 | 9 | — | À faire |
+| TS-K1 | TS | Brancher l'occlusion acoustique dans la démo | P3 | 10 | — | À faire |
+| TS-K2 | TS | Occlusion de profondeur MR réelle | P4 | 10 | — | À faire |
 | US-G1 | US | Préparation Meta Horizon Store | Icebox | — | US-B2 | Gelée |
 
-Les voies 1 à 6 sont indépendantes entre elles ; à l'intérieur d'une voie, les
-stories se suivent dans l'ordre du tableau.
+Les voies 1 à 10 sont indépendantes entre elles ; à l'intérieur d'une voie, les
+stories se suivent dans l'ordre du tableau. Les voies 7 à 10 ont été ajoutées
+après une seconde passe de vérification de l'écart entre les specs approuvées
+(`docs/superpowers/specs/`) et le code réellement câblé.
 
 ---
 
@@ -555,6 +566,321 @@ Fonctionnalité: Export des jeux d'entraînement
     Quand l'export est produit
     Alors les tours du joueur portent le marquage "player_text"
     Et aucun identifiant d'appareil ou de session n'apparaît dans l'export
+```
+
+---
+
+## Épic H — Synchronisation d'horloge (voie 7)
+
+### TS-H1 — Le serveur complète la poignée de main d'horloge étendue
+
+**Contexte.** Le côté client est entièrement écrit et exposé publiquement :
+`ClockSyncEstimator` (`packages/client/src/math/clock-sync.ts`), la boucle
+`clock-loop.ts` qui lui fournit des échantillons, et `net.serverNow()` /
+`net.synced` sur `plugin.ts`. Le codec sait encoder et décoder le PONG étendu à
+29 octets (`Protocol.encode_pong/4` côté Elixir, `BinaryProtocol.encodePong`
+côté TS). Mais `room/handler.ex::reply_pong/2` ne fait jamais que réémettre
+l'horodatage du client via la forme historique à 9 octets
+(`encode_ping(timestamp, true)`) : le serveur n'horodate jamais sa propre
+réception ni son émission. Conséquence vérifiée : `offsetMs` reste `null` pour
+toujours, `net.synced` ne devient jamais vrai — tout un pipeline fini et testé
+tourne à vide faute d'un seul appel côté serveur.
+
+**Objectif.** `reply_pong` horodate la réception (t1) et l'émission (t2) via
+`Clock`, et répond avec `Protocol.encode_pong(t0, t1, t2, epoch)`.
+
+*Implémente : `general-purpose`. Relit : `phoenix-networking-reviewer`.*
+
+```gherkin
+# language: fr
+Fonctionnalité: Poignée de main d'horloge étendue
+  Le client obtient un offset d'horloge exploitable, pas seulement un RTT.
+
+  Scénario: Le serveur répond par un PONG étendu
+    Étant donné un client connecté à une salle
+    Quand il envoie un PING horodaté
+    Alors il reçoit un PONG de 29 octets
+    Et ce PONG porte l'horodatage client, la réception serveur, l'émission serveur et l'époque
+
+  Scénario: L'estimateur client converge vers un offset synchronisé
+    Étant donné un client ayant échangé 5 PING/PONG étendus avec un serveur réel
+    Quand l'estimateur d'horloge traite ces échantillons
+    Alors "net.synced" devient vrai
+    Et "net.serverNow()" diffère de l'horloge locale d'un offset stable
+
+  Scénario: Un redémarrage serveur change l'époque
+    Étant donné un client synchronisé avec l'époque courante du serveur
+    Quand le serveur redémarre et qu'un nouvel échange PING/PONG a lieu
+    Alors l'époque reçue diffère de la précédente
+    Et l'estimateur d'horloge réinitialise sa fenêtre d'échantillons
+```
+
+---
+
+## Épic I — Durcissement pour déploiement public (voie 8)
+
+### TS-I1 — Limiter le débit par pair
+
+**Contexte.** [Spec approuvée](../docs/superpowers/specs/2026-08-15-rate-limiting-design.md)
+le 15 août 2026, jamais implémentée (aucune occurrence de `RateLimit` dans
+`packages/server`). `Physics.Kinematic` rejette déjà ce qu'un pair *affirme*
+(vitesse, diagonale, pas de temps), et `Protocol` plafonne la taille d'un
+`SIGNAL` à 16 KiB — mais rien ne borne la **fréquence** des messages. Le
+throttling de `NetworkLODSystem` est côté client, donc coopératif : un
+attaquant qui contrôle son client l'ignore. Bloquant pour tout déploiement où
+les pairs sont des inconnus (le MMO RPG VR public visé par la vision produit).
+
+**Objectif.** Un pair qui dépasse son budget de messages par seconde est
+throttlé puis déconnecté, sans affecter les autres pairs de la même room.
+
+*Implémente : `general-purpose`. Relit : `phoenix-networking-reviewer` +
+`security-reviewer`.*
+
+```gherkin
+# language: fr
+Fonctionnalité: Limitation de débit par pair
+  Un pair hostile ne peut pas coûter plus qu'un budget fixe à une room.
+
+  Scénario: Un pair sous le seuil n'est jamais affecté
+    Étant donné un pair envoyant des transforms au débit publié attendu
+    Quand une minute de trafic s'écoule
+    Alors aucun message de ce pair n'est rejeté
+
+  Scénario: Un pair en rafale est throttlé puis reconnecté
+    Étant donné un pair dépassant le seuil de messages par seconde
+    Quand il continue d'émettre au-delà du seuil
+    Alors ses messages excédentaires sont rejetés sans crash de la room
+    Et les autres pairs de la même room ne voient aucune dégradation
+
+  Scénario: Un pair qui persiste au-delà de la tolérance est déconnecté
+    Étant donné un pair déjà throttlé qui ne réduit pas son débit
+    Quand la fenêtre de tolérance expire
+    Alors le pair est déconnecté avec une raison explicite
+    Et la room continue de fonctionner pour les pairs restants
+```
+
+### TS-I2 — Roster de présence côté serveur
+
+**Contexte.** [FEASIBILITY.md](../docs/FEASIBILITY.md) §4 liste `Phoenix.Presence`
+parmi ce qui a été délibérément non livré. `Room.State` connaît déjà la
+membership pour ses propres besoins (allocation d'id, AoI), mais rien
+n'expose de roster standard côté canal Phoenix pour un client externe
+(overlay web de modération, tableau de bord de salle).
+
+**Objectif.** `RoomChannel` track chaque pair via `Phoenix.Presence`, avec les
+métadonnées minimales (network_id, heure de connexion).
+
+*Implémente : `general-purpose`. Relit : `phoenix-networking-reviewer` +
+`bff-backend-engineer`.*
+
+```gherkin
+# language: fr
+Fonctionnalité: Roster de présence de la room
+  N'importe quel canal peut lister qui est présent, sans lire l'état interne.
+
+  Scénario: Un pair qui rejoint apparaît dans la présence
+    Étant donné une room vide
+    Quand un pair rejoint le canal
+    Alors la présence de la room liste ce pair avec son network_id
+
+  Scénario: Un pair qui part disparaît de la présence
+    Étant donné deux pairs présents dans une room
+    Quand l'un des deux se déconnecte
+    Alors la présence ne liste plus que le pair restant
+
+  Scénario: La présence survit à un handoff de zone
+    Étant donné un pair en cours de transfert entre deux zones
+    Quand le handoff se termine
+    Alors le pair apparaît dans la présence de la zone de destination
+    Et n'apparaît plus dans celle de la zone d'origine
+```
+
+---
+
+## Épic J — Dette des modules orphelins d'IA (voie 9)
+
+### TS-J1 — Résorber le doublon StructuredOutputParser / IntentParser
+
+**Contexte.** `CardinalIntelligenceSystem.queryNPC()` n'utilise que
+`IntentParser` (regex `[ACTION: TYPE k=v]`). `src/structured/StructuredOutputParser.ts`
+et `FunctionCallingSchema.ts` implémentent un second format (tool calls JSON)
+et sont testés isolément, mais aucun système ne les appelle : deux
+formats d'intent coexistent dans le code, un seul est vivant.
+
+**Objectif.** Choisir un format d'intent unique — garder `IntentParser` et
+supprimer le doublon, ou migrer `queryNPC()` vers le format structuré JSON
+(plus robuste aux petits modèles) et supprimer `IntentParser`. Documenter le
+choix dans le README du package.
+
+*Implémente : `npc-behavior-engineer`. Relit : `ai-security-engineer`
+(le format retenu doit rester compatible avec TS-A1/IntentGuard).*
+
+```gherkin
+# language: fr
+Fonctionnalité: Un seul format d'intent
+  Le code ne porte plus deux analyseurs d'intent dont un seul est branché.
+
+  Scénario: Le format retenu est le seul importé par le runtime
+    Étant donné le choix de format documenté dans le README du package
+    Quand on cherche les imports du format abandonné hors des tests
+    Alors aucun système de production ne l'importe
+
+  Scénario: Le format retenu passe par IntentGuard
+    Étant donné une réponse de modèle contenant un intent hors politique
+    Quand elle est parsée par le format retenu
+    Alors l'intent est toujours rejeté par la validation de politique
+```
+
+### TS-J2 — Décider du sort de SpeculativeDecodingEngine
+
+**Contexte.** `src/speculative/SpeculativeDecodingEngine.ts` évalue un lot de
+tokens draft contre un seuil de probabilité et calcule une télémétrie de
+speedup — mais c'est un estimateur pur : aucun couple modèle draft/cible réel
+ne l'alimente, et aucun worker ne l'appelle.
+
+**Objectif.** Soit le brancher sur `llm.worker.ts` avec un vrai modèle draft
+(WebLLM le permet), soit le retirer du build tant qu'aucun modèle draft n'est
+choisi — pas de code mort exporté publiquement entre les deux.
+
+*Implémente : `ai-runtime-engineer`. Relit : `perf-profiler`.*
+
+```gherkin
+# language: fr
+Fonctionnalité: Décodage spéculatif honnête
+  Le module n'existe dans le build que s'il fait vraiment gagner du temps.
+
+  Scénario: Branché, il mesure un vrai gain
+    Étant donné un modèle draft et un modèle cible chargés dans le worker LLM
+    Quand une génération passe par le décodage spéculatif
+    Alors la télémétrie de speedup rapporte un ratio mesuré, pas simulé
+
+  Scénario: Non branché, il n'est plus exporté
+    Étant donné la décision de ne pas câbler le décodage spéculatif pour l'instant
+    Quand on inspecte les exports publics du package
+    Alors SpeculativeDecodingEngine n'y figure plus
+```
+
+### TS-J3 — Câbler AudioWorkletManager dans le pipeline audio réel
+
+**Contexte.** `src/audio/AudioWorkletManager.ts` gère un ring buffer sans
+allocation pour l'audio PCM, mais rien dans `CardinalSpatialAudioSystem` ni
+`LipSyncSystem` ne l'utilise aujourd'hui.
+
+**Objectif.** Le pipeline TTS→audio spatial passe réellement par ce ring
+buffer plutôt que par une éventuelle copie intermédiaire.
+
+*Implémente : `ai-runtime-engineer`. Relit : `perf-profiler`.*
+
+```gherkin
+# language: fr
+Fonctionnalité: Ring buffer audio effectivement utilisé
+  Le chemin audio d'un PNJ ne copie pas ce qu'il pourrait faire transiter.
+
+  Scénario: L'audio TTS transite par le ring buffer
+    Étant donné un PNJ dont la réplique TTS est prête sous forme de PCM
+    Quand l'audio est joué en spatial
+    Alors le buffer utilisé est celui d'AudioWorkletManager
+    Et aucune copie complète du buffer n'a lieu sur le chemin chaud
+```
+
+### TS-J4 — Le provider `anthropic-proxy` est réel ou retiré du type
+
+**Contexte.** `packages/ai/src/types/options.ts:44` déclare
+`'anthropic-proxy'` comme valeur valide de `CloudProviderConfig.provider`,
+mais `resolveBaseURL` ne la traite dans aucune branche — elle tombe dans le
+`default` OpenAI, donc un intégrateur qui choisit `'anthropic-proxy'` obtient
+silencieusement un mauvais endpoint plutôt qu'une erreur.
+
+**Objectif.** Implémenter réellement l'endpoint proxy Anthropic (format
+Messages API, pas Chat Completions — en-têtes et corps différents), ou retirer
+la valeur du type jusqu'à ce qu'elle soit vraie.
+
+*Implémente : `bff-backend-engineer` (le proxy vit à côté du BFF). Relit :
+`ai-security-engineer`.*
+
+```gherkin
+# language: fr
+Fonctionnalité: Le type des providers ne ment pas
+  Choisir un provider dans le type produit ce provider, jamais un autre.
+
+  Scénario: anthropic-proxy résout vers le bon endpoint
+    Étant donné un adaptateur cloud configuré avec provider "anthropic-proxy"
+    Quand une requête de chat est résolue
+    Alors l'URL de base et le format de requête sont ceux de l'API Messages Anthropic
+    Et non ceux du format OpenAI Chat Completions
+
+  Scénario: Un provider non implémenté échoue tôt, jamais silencieusement
+    Étant donné une valeur de provider absente de resolveBaseURL
+    Quand l'adaptateur cloud est construit
+    Alors la construction lève une erreur explicite au démarrage
+```
+
+---
+
+## Épic K — Occlusion perçue par le joueur (voie 10)
+
+### TS-K1 — Brancher l'occlusion acoustique dans la démo
+
+**Contexte.** `AcousticOcclusionSystem` est enregistré par `plugin.ts` (donc
+actif) mais reste inerte tant qu'aucun raycaster ne lui est fourni via
+`setRaycaster` — et aucun appel de ce genre n'existe dans `apps/demo/src`.
+Résultat : le système tourne chaque frame sans jamais produire d'effet.
+
+**Objectif.** La démo injecte un raycaster réel (contre le mesh de terrain et
+les objets solides) au montage du village IA.
+
+*Implémente : `ai-runtime-engineer`. Relit : `vr-comfort-ux-reviewer` +
+`graphics-tech-artist`.*
+
+```gherkin
+# language: fr
+Fonctionnalité: Occlusion acoustique effective
+  Un mur entre le joueur et un PNJ change réellement ce qu'on entend.
+
+  @dom
+  Scénario: Une occlusion mesurable derrière un obstacle
+    Étant donné un PNJ parlant, séparé du joueur par le terrain
+    Quand le joueur se place derrière un relief occludant
+    Alors le filtre passe-bas appliqué à sa voix descend vers 700 Hz
+
+  @dom
+  Scénario: Aucune occlusion en ligne de vue directe
+    Étant donné un PNJ parlant en ligne de vue directe du joueur
+    Alors le filtre appliqué à sa voix reste proche de 20 kHz
+```
+
+### TS-K2 — Occlusion de profondeur MR réelle
+
+**Contexte.** `src/mr/MRDepthOcclusionHelper.ts` applique des indicateurs de
+matériau (`depthTest`/`depthWrite`/`transparent`/`renderOrder`) sur une
+hiérarchie Three, mais n'appelle jamais la WebXR Depth Sensing API — c'est un
+utilitaire de matériaux, pas une occlusion réelle par la géométrie du monde
+physique. IWSDK expose déjà `DepthSensingSystem` (skill `iwsdk-depth-occlusion`).
+
+**Objectif.** Un système consomme la profondeur réelle du monde physique pour
+occulter les PNJ et objets virtuels derrière un meuble ou un mur réel, en
+s'appuyant sur `DepthSensingSystem` plutôt qu'en le réimplémentant.
+
+*Implémente : `graphics-tech-artist`. Relit : `vr-comfort-ux-reviewer` +
+`iwsdk-project-code-reviewer`.*
+
+```gherkin
+# language: fr
+Fonctionnalité: Occlusion par la profondeur réelle en MR
+  Un PNJ virtuel disparaît derrière un objet physique, pas seulement virtuel.
+
+  @device
+  Scénario: Un PNJ est occulté par un meuble réel
+    Étant donné une session MR avec depth sensing actif
+    Et un PNJ virtuel placé derrière une table physique du point de vue du joueur
+    Alors le rendu du PNJ n'affiche pas les fragments plus proches que la table
+
+  @device
+  Scénario: Sans depth sensing disponible, le rendu reste correct
+    Étant donné un appareil sans capteur de profondeur
+    Quand la session MR démarre
+    Alors le PNJ se rend normalement, sans tentative d'occlusion
+    Et aucune erreur n'apparaît dans la console
 ```
 
 ---
