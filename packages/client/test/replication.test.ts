@@ -465,7 +465,7 @@ describe('rate limiting and change detection', () => {
 });
 
 /**
- * Pin down a gap, not a bug.
+ * The server, not a peer, is the source of authority (TS-D3).
  *
  * `CardinalPublisher.collect()` (`../src/cardinal/publish.ts`) is itself
  * ownership-agnostic — it publishes any Cardinal component an entity
@@ -475,19 +475,26 @@ describe('rate limiting and change detection', () => {
  * (`../src/systems/PhoenixNetworkSystem.ts`, the `continue` at the top of
  * `publishComponents()`).
  *
- * As wired in étape 5, the eleven villagers get `isLocalOwner: false` on
- * every peer, forever — nothing in this codebase ever flips it, because the
- * only existing path to `isLocalOwner: true` is a grab-triggered ownership
- * claim, and villagers are not `Grabbable`. So today, no peer ever publishes
- * `CharacterGenome` for a villager. That is a real, deliberately-deferred
- * gap (see `docs/superpowers/specs/2026-08-18-personnages-etape5-replication-design.md`
- * §2.4) — not something this test suite should fix by inventing an ownership
- * rule. This test exists so that if a future change ever flips
- * `isLocalOwner`/ownership assignment for these entities, it shows up here
- * as an intentional, visible test change, not a silent, unnoticed regression
- * (or a silent, unnoticed fix).
+ * Villagers get `isLocalOwner: false` on every peer, forever — and that is
+ * correct, not a gap to fix. TS-D3 settled the architecture question this
+ * describe used to leave open (see
+ * `backlog/technical-story/TS-D3.publier-genomes-villageois.md`): villagers
+ * are replicated objects owned by the Elixir server, not by a designated
+ * host peer. `IwsdkPhoenix.Room.Server.publish_component/4`
+ * (`packages/server/lib/iwsdk_phoenix/room/server.ex`) authors their
+ * `CharacterGenome` under server authority and broadcasts it — exactly the
+ * `COMPONENT_UPDATE` path a client already knows how to ingest for anyone
+ * else's frames, via `PhoenixNetworkSystem.handleMessage()`
+ * (`../src/systems/PhoenixNetworkSystem.ts`, the `OpCode.COMPONENT_UPDATE`
+ * case), which never checks ownership on the way in.
+ *
+ * So a client never publishing `CharacterGenome` for a villager is the
+ * intended shape: no peer is ever this entity's owner. The first test below
+ * is a short confirmation that the client-side ownership lock still holds;
+ * the last one proves the other half — that the server *does* publish, and
+ * that two independent peers decode the identical bytes it sends.
  */
-describe('CharacterGenome publish gate — pinning the current (incomplete) behavior', () => {
+describe("CharacterGenome publication — le serveur, pas un pair, est la source d'autorité", () => {
   function entityWithGenome(world: World, isLocalOwner: boolean): Entity {
     const entity = makeEntity(world, { networkId: 1, isLocalOwner });
     entity.addComponent(CharacterGenome, {
@@ -496,7 +503,7 @@ describe('CharacterGenome publish gate — pinning the current (incomplete) beha
     return entity;
   }
 
-  it('ne publie jamais CharacterGenome pour un villageois — isLocalOwner reste false', () => {
+  it('un pair ne publie jamais CharacterGenome pour un villageois — isLocalOwner reste false', () => {
     const bus = new LoopbackNetwork(0);
     const alice = bus.createPeer('alice');
     const { world } = makeWorld(alice);
@@ -509,7 +516,8 @@ describe('CharacterGenome publish gate — pinning the current (incomplete) beha
     world.update(1 / 90, 0);
 
     // Le verrou d'ownership empêche même l'appel à collect() : aucun octet
-    // de CharacterGenome n'atteint jamais le fil pour cette entité.
+    // de CharacterGenome n'atteint jamais le fil pour cette entité — le
+    // client ne redevient pas l'autorité, c'est le serveur qui publie.
     expect(collectSpy).not.toHaveBeenCalled();
   });
 
@@ -538,6 +546,60 @@ describe('CharacterGenome publish gate — pinning the current (incomplete) beha
     expect(genomeRecord?.data).toEqual({
       genes: Array.from({ length: 13 }, (_, i) => i * 10),
     });
+  });
+
+  it("le serveur publie CharacterGenome et deux pairs décodent le même génome à l'octet près (TS-D3)", () => {
+    // Scénario BDD 1 (TS-D3), côté client : "A" et "B" décodent le même
+    // génome à l'octet près une fois que l'autorité (ici, le serveur)
+    // publie. Même montage que `describe('ownership transfer', ...)`
+    // plus bas — un pair distinct simule le serveur — mais avec deux pairs
+    // clients A et B, chacun sur son propre `World`, puisqu'ils ne
+    // partagent pas la même instance elics (voir le commentaire de
+    // `describe('inbound replication', ...)` en tête de fichier).
+    const bus = new LoopbackNetwork(0);
+    const server = bus.createPeer('server');
+    const clientA = bus.createPeer('clientA');
+    const clientB = bus.createPeer('clientB');
+
+    void server.connect('memory://');
+    void clientA.connect('memory://');
+    void clientB.connect('memory://');
+
+    const { world: worldA } = makeWorld(clientA);
+    const { world: worldB } = makeWorld(clientB);
+
+    const villagerA = entityWithGenome(worldA, false);
+    const villagerB = entityWithGenome(worldB, false);
+    // Both entities were created with `networkId: 1` by `entityWithGenome`;
+    // pin them to the TS-D3 Gherkin fixture id instead.
+    villagerA.setValue(Networked, 'networkId', 200_001);
+    villagerB.setValue(Networked, 'networkId', 200_001);
+
+    const collectSpy = vi.spyOn(CardinalPublisher.prototype, 'collect');
+
+    const genes = Array.from({ length: 13 }, (_, i) => (i + 1) * 3);
+
+    server.send(
+      BinaryProtocol.encodeComponentUpdate(
+        [{ networkId: 200_001, componentId: 4, data: { genes } }],
+        0,
+      ),
+    );
+
+    bus.advance(0);
+    worldA.update(1 / 90, 0);
+    worldB.update(1 / 90, 0);
+
+    const genesA = Array.from(villagerA.getVectorView(CharacterGenome, 'genes'));
+    const genesB = Array.from(villagerB.getVectorView(CharacterGenome, 'genes'));
+
+    expect(genesA).toEqual(genes);
+    expect(genesB).toEqual(genes);
+    expect(genesA).toEqual(genesB);
+
+    // Neither client ever became this entity's owner; the bytes arrived
+    // purely through inbound replication of the server's broadcast.
+    expect(collectSpy).not.toHaveBeenCalled();
   });
 });
 
