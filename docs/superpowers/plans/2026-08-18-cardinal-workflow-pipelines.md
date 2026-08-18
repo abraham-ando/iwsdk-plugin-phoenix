@@ -153,15 +153,14 @@ const synthesis = await agent(
 return { files, reviews, synthesis }
 ```
 
-- [ ] **Step 2: Syntax-check the script**
+- [ ] **Step 2: Verify the script content**
 
-```bash
-node --check .claude/workflows/cardinal-pre-merge-review.mjs
-```
-Expected: no output (valid syntax). This only checks parsing —
-`agent`/`phase`/`log`/`parallel` are Workflow-runtime globals and will
-not resolve under plain `node`, which is expected and fine for this
-check.
+Do NOT use `node --check` — the Workflow runtime wraps the script body
+in an async function itself, so the top-level `return` is valid for the
+runtime but a syntax error for plain node, and any wrapper added to
+appease node (an IIFE) breaks the runtime's return contract. Verify
+instead by byte-comparing the committed file against the brief's fenced
+block (extract the block and `diff -` it).
 
 - [ ] **Step 3: Note the dry-run** (performed once Plan 2's roster exists,
   not part of this task's automated steps)
@@ -291,12 +290,9 @@ const verification = await agent(
 return { story, implementer: domain.implementer, implementation, review, verification }
 ```
 
-- [ ] **Step 2: Syntax-check the script**
+- [ ] **Step 2: Verify the script content**
 
-```bash
-node --check .claude/workflows/cardinal-feature-delivery.mjs
-```
-Expected: no output.
+Same rule as Task 1: no `node --check` (top-level `return` is runtime-valid, node-invalid); byte-compare the file against the brief's fenced block instead.
 
 - [ ] **Step 3: Note the dry-run**
 
@@ -390,12 +386,9 @@ if (sourcing.decision === 'skip') {
 return { sourcing, review, verification }
 ```
 
-- [ ] **Step 2: Syntax-check the script**
+- [ ] **Step 2: Verify the script content**
 
-```bash
-node --check .claude/workflows/cardinal-asset-production.mjs
-```
-Expected: no output.
+Same rule as Task 1: no `node --check` (top-level `return` is runtime-valid, node-invalid); byte-compare the file against the brief's fenced block instead.
 
 - [ ] **Step 3: Note the dry-run**
 
