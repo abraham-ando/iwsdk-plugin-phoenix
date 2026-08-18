@@ -506,6 +506,12 @@ export const TAB_BUTTON_IDS: Readonly<Record<TabId, string>> = {
   persona: 'btn-tab-persona',
 };
 
+/** Les éléments du panneau qui n'appartiennent à aucun onglet. */
+export const PANEL_IDS = Object.freeze({
+  root: 'panel-root',
+  targetName: 'target-name',
+});
+
 const ORDRE: readonly TabId[] = ['settings', 'persona'];
 
 /**
@@ -560,7 +566,7 @@ export const ENGINE_NAME = '@iwsdk/cardinal-character-ui';
 export type { PanelDocument, PanelElement } from './document';
 export { show, setText } from './document';
 export { CharacterUIRoute } from './components';
-export { TabRouter, TAB_IDS, TAB_BUTTON_IDS, type TabId } from './router';
+export { TabRouter, TAB_IDS, TAB_BUTTON_IDS, PANEL_IDS, type TabId } from './router';
 ```
 
 - [ ] **Step 9 : Câbler le paquet dans les chaînes de la racine**
@@ -684,7 +690,7 @@ Create `packages/character-ui/test/settings.test.ts` :
 ```ts
 import { describe, it, expect } from 'vitest';
 import { HUMANOID } from '@iwsdk/cardinal-character';
-import { SettingsTab, GENE_ROW_IDS, GENE_STEP } from '../src/tabs/settings';
+import { SettingsTab, GENE_ROW_IDS, GENE_STEP, NON_EDITABLE_GENES } from '../src/tabs/settings';
 import { makeFakeDocument } from './fixtures/fakeDocument';
 
 /** Tous les identifiants que l'onglet peut demander. */
@@ -784,6 +790,20 @@ describe('l onglet Réglages', () => {
   it('le pas vient du schéma ECS, pas d une constante recopiée', () => {
     expect(GENE_STEP).toBe(0.01);
   });
+
+  it('les trois gènes de surface ne sont pas éditables, et pour une autre raison', () => {
+    // `CharacterSurface` ne porte que `skin` et `hair`, deux Types.Color :
+    // les couleurs RÉSOLUES. Aucun champ scalaire n accueille `skinTone`,
+    // `hairTone` ni `hairStyle` — les éditer voudrait dire écrire le génome,
+    // qui n a pas de mutateur public. Sans ce garde, un clic les enverrait
+    // vers CharacterFace, qui ne les a pas non plus.
+    expect([...NON_EDITABLE_GENES].sort()).toEqual(['hairStyle', 'hairTone', 'skinTone']);
+    const { tab, clicks, ecrits, props } = build();
+    tab.refresh();
+    clicks.get(GENE_ROW_IDS['skinTone']!.plus)?.();
+    expect(ecrits).toEqual([]);
+    expect(props.get(GENE_ROW_IDS['skinTone']!.plus)?.display).toBe('none');
+  });
 });
 ```
 
@@ -840,6 +860,24 @@ export const GENE_ROW_IDS: Readonly<Record<string, GeneRowIds>> = Object.freeze(
   ),
 );
 
+/**
+ * Les gènes qu'aucun composant ne peut recevoir.
+ *
+ * `CharacterSurface` ne porte que `skin` et `hair`, deux `Types.Color` : ce
+ * sont les couleurs RÉSOLUES, écrites par le système de compilation depuis le
+ * génome. Les trois gènes du groupe `surface` n'ont donc aucun champ scalaire
+ * où s'écrire — les éditer voudrait dire écrire le génome lui-même, qui vit
+ * dans `CharacterCompileSystem.genomes` et n'a pas de mutateur public.
+ *
+ * Dérivée du descripteur, jamais écrite en dur : le jour où une famille change
+ * de groupes, la liste suit.
+ */
+export const NON_EDITABLE_GENES: ReadonlySet<string> = new Set(
+  Object.entries(HUMANOID.genes)
+    .filter(([, def]) => def.group === 'surface')
+    .map(([cle]) => cle),
+);
+
 export interface SettingsHooks {
   /** Valeur courante du gène, dans `[0,1]`. */
   read(gene: string): number;
@@ -886,7 +924,10 @@ export class SettingsTab {
     this.inertes = this.hooks.inertGenes();
     for (const cle of Object.keys(GENE_ROW_IDS)) {
       const ids = GENE_ROW_IDS[cle]!;
-      const inerte = this.inertes.has(cle);
+      // Deux raisons distinctes de ne pas offrir de bouton, et la ligne le dit :
+      // le rig ne porte pas la cible (inerte), ou aucun composant ne peut
+      // recevoir la valeur (non éditable).
+      const inerte = this.inertes.has(cle) || NON_EDITABLE_GENES.has(cle);
       const valeur = this.hooks.read(cle);
       renderGauge(this.doc, ids.bar, ids.value, valeur, valeur.toFixed(2));
       // Grisée, sans boutons, et avec sa raison : une ligne éteinte sans
@@ -902,7 +943,7 @@ export class SettingsTab {
     // Cacher le bouton ne suffit pas : un rayon peut encore atteindre un
     // élément masqué selon l'implémentation, et le gestionnaire reste branché.
     // La garde est ici, pas dans l'affichage.
-    if (this.inertes.has(cle)) return;
+    if (this.inertes.has(cle) || NON_EDITABLE_GENES.has(cle)) return;
     const suivant = this.hooks.read(cle) + delta;
     this.hooks.write(cle, suivant < 0 ? 0 : suivant > 1 ? 1 : suivant);
     this.refresh();
@@ -1064,17 +1105,7 @@ describe('le contrat d identifiants du document', () => {
 
 `NEED_ROW_IDS`, `PERSONA_IDS` et `PANEL_IDS` arrivent à la tâche 6 ; ce fichier ne compilera qu'à ce moment. Le créer maintenant, avec les deux premiers tests actifs, et **le laisser échouer à la compilation jusqu'à la tâche 6** n'est pas acceptable : écrire d'abord la version qui ne référence que `GENE_ROW_IDS`, `TAB_IDS`, `TAB_BUTTON_IDS` et `PANEL_IDS`, et **ajouter les deux blocs manquants à la tâche 6**.
 
-`PANEL_IDS` est défini à cette tâche :
-
-```ts
-/** Les éléments du panneau qui n'appartiennent à aucun onglet. */
-export const PANEL_IDS = Object.freeze({
-  root: 'panel-root',
-  targetName: 'target-name',
-});
-```
-
-à placer dans `packages/character-ui/src/router.ts` et à réexporter.
+`PANEL_IDS` vient de la tâche 3, où il est défini dans `router.ts` et exporté.
 
 - [ ] **Step 9 : Exporter et lancer**
 
@@ -1082,8 +1113,7 @@ Ajouter à `packages/character-ui/src/index.ts` :
 
 ```ts
 export { renderGauge } from './gauge';
-export { SettingsTab, GENE_ROW_IDS, GENE_STEP, type SettingsHooks } from './tabs/settings';
-export { PANEL_IDS } from './router';
+export { SettingsTab, GENE_ROW_IDS, GENE_STEP, NON_EDITABLE_GENES, type SettingsHooks } from './tabs/settings';
 ```
 
 Run : `pnpm --filter @iwsdk/cardinal-character-ui test && pnpm --filter @iwsdk/plugin-phoenix-demo test && pnpm typecheck && pnpm build`
@@ -1714,6 +1744,9 @@ export async function installCharacterUI(
     write: (gene, valeur) => {
       const e = cible();
       if (e === null) return;
+      // Deux composants seulement : les gènes de surface ne sont pas
+      // éditables (voir NON_EDITABLE_GENES), et `SettingsTab` ne les fait
+      // jamais parvenir jusqu'ici.
       const composant = gene in CharacterStructure.schema ? CharacterStructure : CharacterFace;
       e.setValue(composant as never, gene, valeur);
     },
