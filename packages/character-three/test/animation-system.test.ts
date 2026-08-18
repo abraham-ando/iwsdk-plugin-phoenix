@@ -46,8 +46,10 @@ function build() {
   const world = new World();
   installCharacterThree(world);
   // `'rpm'` et non le défaut `'mixamo'` : `PropertyBinding` lit `:` comme un
-  // séparateur de répertoire, donc AUCUNE piste ne peut viser un os nommé
-  // `mixamorig:Head`. Voir `BoneNaming` dans la fixture.
+  // séparateur de répertoire, donc une piste `mixamorig:Head.quaternion` — la
+  // seule forme que produisent les GLB — est analysée en `{ nodeName: 'Head' }`
+  // et ne trouve rien ici. (La forme complète `Body.bones[mixamorig:Head]`
+  // se lierait, elle ; aucun exportateur ne l'émet.) Voir `BoneNaming`.
   const { root, bones } = humanoidPuppet('rpm');
   const { entity } = createCharacter(world, {
     familyId: HUMANOID.id, genome: defaultGenome(HUMANOID), age: 30, rigRoot: root,
