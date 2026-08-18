@@ -183,3 +183,36 @@ describe('CharacterAnimationSystem', () => {
     expect(system.mixerCount()).toBe(0);
   });
 });
+
+describe("CharacterAnimationSystem.update() n'alloue rien en régime stable", () => {
+  // Le troisième système du dépôt à passer sous garde, et le plus chaud : il
+  // fait avancer TOUS les rigs à CHAQUE image. `for (const rig of
+  // this.rigs.values())` allouait un itérateur par appel — la même classe de
+  // défaut que celle retirée de `CharacterPickSystem` et
+  // `CharacterPanelPlacementSystem`, laissée ici sans garde jusqu'ici.
+  //
+  // `Map.prototype.forEach` avec un callback hissé n'appelle ni `values()` ni
+  // `[Symbol.iterator]()` — vérifié en Node, et c'est ce que ce test fige.
+  it("update() répété n'itère jamais la carte des rigs par itérateur", () => {
+    const { entity, system, bones } = build();
+    system.attach(entity, { walk: travellingClip('walk') }, roleOfNode, {
+      rootMotion: 'flatten',
+    });
+    system.setVerb(entity, 'walk');
+    system.update(0.016, 16); // une frame de rodage, hors mesure
+
+    const valuesSpy = vi.spyOn(Map.prototype, 'values');
+    const iterSpy = vi.spyOn(Map.prototype, Symbol.iterator as never);
+    system.update(0.016, 32);
+    system.update(0.016, 48);
+    system.update(0.016, 64);
+    expect(valuesSpy).not.toHaveBeenCalled();
+    expect(iterSpy).not.toHaveBeenCalled();
+    valuesSpy.mockRestore();
+    iterSpy.mockRestore();
+
+    // Et le mixer a bien tourné : un garde qui passerait sur un `update()` vide
+    // ne prouverait rien.
+    expect(bones['head']!.quaternion.angleTo(new Quaternion())).toBeGreaterThan(0);
+  });
+});

@@ -49,6 +49,22 @@ export class CharacterAnimationSystem extends createSystem(
    */
   private rigs = new Map<number, Rig>();
 
+  /**
+   * Le `delta` de la frame courante, hissé pour que le callback ci-dessous
+   * puisse être une propriété créée UNE fois par instance.
+   */
+  private frameDelta = 0;
+
+  /**
+   * Fait avancer un mixer. Propriété de classe, jamais un littéral dans
+   * `update()` : une fermeture par frame serait exactement l'allocation qu'on
+   * vient de retirer de `CharacterPickSystem` et
+   * `CharacterPanelPlacementSystem`.
+   */
+  private readonly avancerRig = (rig: Rig): void => {
+    rig.mixer.update(this.frameDelta);
+  };
+
   public override init(): void {
     // La query existe pour ça, et pour rien d'autre : c'est elle qui dit quand
     // une entité de personnage cesse d'en être une (composant retiré) ou
@@ -158,10 +174,17 @@ export class CharacterAnimationSystem extends createSystem(
    * interdit. Le `subscribe('disqualify')` d'`init()` fait le même travail à
    * l'instant exact où l'entité s'en va, et cette boucle ne lit plus que les
    * valeurs.
+   *
+   * `Map.prototype.forEach` et non `for (const rig of this.rigs.values())` :
+   * `values()` alloue un itérateur À CHAQUE APPEL, donc à chaque frame, sur le
+   * chemin le plus chaud du dépôt (tous les rigs, toutes les images). C'est la
+   * classe de défaut que `character-ui` vient de retirer de ses deux systèmes,
+   * gardée là-bas par un espion sur `Set.prototype.values` ; le même espion,
+   * sur `Map.prototype`, garde celui-ci. Mesuré en Node : `forEach` n'appelle
+   * ni `values()` ni `[Symbol.iterator]()`.
    */
   override update(delta: number, _time: number): void {
-    for (const rig of this.rigs.values()) {
-      rig.mixer.update(delta);
-    }
+    this.frameDelta = delta;
+    this.rigs.forEach(this.avancerRig);
   }
 }

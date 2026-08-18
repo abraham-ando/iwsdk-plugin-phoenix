@@ -49,6 +49,11 @@ describe('la sélection au rayon', () => {
     const a = villageois();
     a.addComponent(Pressed, {});
     system.update(0.016, 16);
+    // Le villageois RELÂCHE avant l appui sur le caillou. Sans cette ligne il
+    // restait `Pressed` pendant tout le test : l assertion était alors
+    // satisfaite par une implémentation qui re-sélectionne la même entité à
+    // chaque frame, et ne prouvait rien de la stabilité de la cible.
+    a.removeComponent(Pressed);
     const caillou = world.createTransformEntity(new Object3D());
     caillou.addComponent(Pressed, {});
     system.update(0.016, 32);

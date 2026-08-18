@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   CharacterIdentity, CharacterStructure, CharacterFace,
   CharacterSurface, CharacterSelection,
@@ -61,5 +63,30 @@ describe('inertie du manifeste au chargement', () => {
     expect(demoComponentsSource).toMatch(/@iwsdk\/cardinal-character-three\/components/);
     expect(demoComponentsSource).not.toMatch(/['"]@iwsdk\/cardinal-character-three['"]/);
     expect(demoComponentsSource).not.toMatch(/['"]@iwsdk\/cardinal-character['"]/);
+  });
+
+  // Le test ci-dessus lit un FICHIER, désigné par l'alias `?raw` de
+  // `vitest.config.ts`. Rien ne garantissait que ce fichier soit celui que le
+  // sous-chemin public `./components` publie : renommer
+  // `src/components/index.ts` cassait l'export du paquet en laissant le test
+  // vert, sur un fichier que plus personne ne construit. Les trois
+  // déclarations doivent nommer le même chemin.
+  const CHEMIN_SOURCE = 'src/components/index.ts';
+  const racineDuPaquet = join(__dirname, '../../../packages/character-three');
+
+  it("le fichier que l alias `?raw` lit est bien celui que `./components` publie", () => {
+    const pkg = JSON.parse(
+      readFileSync(join(racineDuPaquet, 'package.json'), 'utf8'),
+    ) as { exports: Record<string, { import?: string }> };
+    // Le sous-chemin public existe, et il pointe la sortie construite…
+    expect(pkg.exports['./components']?.import).toBe('./dist/components/index.js');
+    // …que `tsup` construit depuis CE fichier source, et pas un autre.
+    const tsup = readFileSync(join(racineDuPaquet, 'tsup.config.ts'), 'utf8');
+    expect(tsup).toContain(`'components/index': '${CHEMIN_SOURCE}'`);
+    // …celui-là même que l'alias de test désigne.
+    const configDeTest = readFileSync(join(__dirname, '../vitest.config.ts'), 'utf8');
+    expect(configDeTest).toContain(`packages/character-three/${CHEMIN_SOURCE}`);
+    // …et il existe.
+    expect(readFileSync(join(racineDuPaquet, CHEMIN_SOURCE), 'utf8').length).toBeGreaterThan(0);
   });
 });
