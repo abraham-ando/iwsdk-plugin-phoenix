@@ -458,6 +458,84 @@ defmodule DemoServerWeb.RoomChannelTest do
       assert_reply(reference, :error, %{reason: "client_authority_denied"})
     end
   end
+
+  describe "server-authoritative component publication (TS-D3)" do
+    # Fixed network id used by the TS-D3 Gherkin scenarios as a test fixture —
+    # not one of the demo's real villager ids.
+    @villager_network_id 200_001
+    @character_genome_component_id 4
+
+    defp villager_genome(genes) do
+      %IwsdkPhoenix.Cardinal.CharacterGenome{genes: genes}
+      |> IwsdkPhoenix.Cardinal.CharacterGenome.encode()
+    end
+
+    test "the genome travels to peers already present, byte for byte" do
+      # Scénario: Le génome voyage vers un pair déjà présent
+      room_id = unique_room()
+      {a, _a_reply} = join_room("A", room_id)
+      {_b, _b_reply} = join_room("B", room_id)
+      drain_frames()
+
+      payload = villager_genome(Enum.to_list(1..13))
+
+      assert :ok =
+               IwsdkPhoenix.Room.Server.publish_component(
+                 a.assigns.room,
+                 @villager_network_id,
+                 @character_genome_component_id,
+                 payload
+               )
+
+      records =
+        drain_frames()
+        |> of_kind(:component_update)
+        |> Enum.flat_map(& &1.records)
+        |> Enum.filter(&(&1.network_id == @villager_network_id))
+
+      # Both A and B received it — one record delivered per peer topic.
+      assert length(records) == 2
+      assert Enum.all?(records, &(&1.payload == payload))
+    end
+
+    test "a latecomer receives the current genome through the cache replay" do
+      # Scénario: Un retardataire reçoit l'état courant
+      room_id = unique_room()
+      {a, _a_reply} = join_room("A", room_id)
+      {_b, _b_reply} = join_room("B", room_id)
+
+      payload = villager_genome(Enum.to_list(13..1//-1))
+
+      assert :ok =
+               IwsdkPhoenix.Room.Server.publish_component(
+                 a.assigns.room,
+                 @villager_network_id,
+                 @character_genome_component_id,
+                 payload
+               )
+
+      # What A and B actually decoded, before C ever joins.
+      present_payload =
+        drain_frames()
+        |> of_kind(:component_update)
+        |> Enum.flat_map(& &1.records)
+        |> Enum.find(&(&1.network_id == @villager_network_id))
+        |> Map.fetch!(:payload)
+
+      {_c, _c_reply} = join_room("C", room_id)
+
+      c_payload =
+        drain_frames()
+        |> of_kind(:component_update)
+        |> Enum.flat_map(& &1.records)
+        |> Enum.find(&(&1.network_id == @villager_network_id))
+        |> Map.fetch!(:payload)
+
+      assert c_payload == present_payload
+      assert c_payload == payload
+    end
+  end
+
   describe "persistent sectors" do
     test "a room is ephemeral unless the join asks otherwise" do
       # Today's behaviour, and the default: a demo lobby should not accumulate

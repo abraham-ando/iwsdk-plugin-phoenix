@@ -132,4 +132,58 @@ defmodule IwsdkPhoenix.RoomServerTest do
     assert Process.alive?(room)
     assert State.player_count(RoomServer.state(room)) == 1
   end
+
+  describe "publish_component/4 (TS-D3)" do
+    defp start_room_with_notify(opts \\ []) do
+      test_pid = self()
+
+      defaults = [
+        id: "room-#{System.unique_integer([:positive])}",
+        tick_hz: 50,
+        notify: fn {peer_id, frame} -> send(test_pid, {:notify, peer_id, frame}) end
+      ]
+
+      {:ok, pid} = RoomServer.start_link(Keyword.merge(defaults, opts) |> Keyword.put(:name, nil))
+      pid
+    end
+
+    defp genome_payload(genes) do
+      IwsdkPhoenix.Cardinal.CharacterGenome.encode(%IwsdkPhoenix.Cardinal.CharacterGenome{
+        genes: genes
+      })
+    end
+
+    test "broadcasts a server-authored component to every connected peer, identical bytes" do
+      room = start_room_with_notify()
+      {:ok, _alice} = RoomServer.join(room, "alice")
+      {:ok, _bob} = RoomServer.join(room, "bob")
+
+      payload = genome_payload(Enum.to_list(1..13))
+
+      assert :ok = RoomServer.publish_component(room, 200_001, 4, payload)
+
+      assert_receive {:notify, "alice", alice_frame}, 500
+      assert_receive {:notify, "bob", bob_frame}, 500
+
+      assert alice_frame == bob_frame
+
+      assert {:ok, :component_update, %{records: [record]}} = Protocol.decode(alice_frame)
+      assert record.network_id == 200_001
+      assert record.component_id == 4
+      assert record.payload == payload
+    end
+
+    test "does not broadcast again for an unchanged payload" do
+      room = start_room_with_notify()
+      {:ok, _alice} = RoomServer.join(room, "alice")
+
+      payload = genome_payload(Enum.to_list(1..13))
+
+      assert :ok = RoomServer.publish_component(room, 200_001, 4, payload)
+      assert_receive {:notify, "alice", _frame}, 500
+
+      assert :ok = RoomServer.publish_component(room, 200_001, 4, payload)
+      refute_receive {:notify, "alice", _frame}, 100
+    end
+  end
 end
