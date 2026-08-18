@@ -1695,6 +1695,171 @@ git commit -m "docs: close the mother spec's open clip question, and record what
 
 ---
 
+---
+
+## Task 9 : Les avatars T-pose, et la preuve du chemin riggé
+
+**Pourquoi cette tâche existe.** Les cinq avatars du manifeste sont des URLs
+`models.readyplayer.me`, et ce domaine **ne résout pas** dans cet environnement —
+mesuré depuis le shell et depuis le navigateur managé. Le chemin riggé n'a donc
+jamais pu être exercé : la tâche 8 n'a prouvé que le repli.
+
+**Ce qui change.** La bibliothèque `readyplayerme/animation-library`, atteignable
+par l'API GitHub, contient deux avatars complets. Sondés avant l'écriture de
+cette tâche :
+
+| | `Masculine_TPose.glb` | `Feminine_TPose.glb` |
+| :--- | :--- | :--- |
+| poids | 2,51 Mo | 2,59 Mo |
+| maillage skinné | `Wolf3D_Avatar` | `Wolf3D_Avatar` |
+| joints | 58 | 60 |
+| **rôles d'os satisfaits** | **19/19** | **19/19** |
+| morph targets | **0** | **0** |
+| maillages de surface | `Wolf3D_Avatar` seul | `Wolf3D_Avatar` seul |
+
+Aucun os manquant : `createCharacter` les accepte. En revanche **aucun morph
+target** — les gènes de visage seront inertes — et **aucune cible de teinte**,
+puisque l'unique maillage ne s'appelle ni `Wolf3D_Body` ni `Wolf3D_Hair`. Le
+rapport d'import doit le dire, et cette tâche doit le vérifier.
+
+**Files :**
+- Modify: `scripts/fetch-character-clips.mjs`
+- Modify: `apps/demo/src/assets.ts`
+- Modify: `apps/demo/src/index.ts`
+- Modify: `apps/demo/src/simulation/VillagerBody.ts`
+- Modify: `apps/demo/test/villager-body.test.ts`
+- Test: `packages/character-three/test/tpose-rig.test.ts` (créé)
+
+**Interfaces :**
+- Consumes : `createCharacterFromAsset`, `loadCharacterClips`, `makeRiggedBody`,
+  `upgradeVillagers` — inchangés.
+- Produces : deux identifiants de manifeste, `avatar-tpose-masculine` et
+  `avatar-tpose-feminine`.
+
+- [ ] **Step 1 : Étendre le script de récupération**
+
+Dans `scripts/fetch-character-clips.mjs`, ajouter à côté de `CLIPS` :
+
+```js
+/** Avatars T-pose : rigs complets, skinnés, 19/19 rôles d'os satisfaits. */
+export const AVATARS = {
+  'masculine/glb/Masculine_TPose.glb': 'avatar-tpose-masculine.glb',
+  'feminine/glb/Feminine_TPose.glb': 'avatar-tpose-feminine.glb',
+};
+```
+
+et faire porter la boucle de téléchargement sur `{ ...CLIPS, ...AVATARS }`.
+Même dossier `apps/demo/public/characters/`, donc **même règle `.gitignore`** :
+ces fichiers ne sont pas plus redistribuables que les clips.
+
+- [ ] **Step 2 : Lancer et vérifier**
+
+```bash
+node scripts/fetch-character-clips.mjs && ls -la apps/demo/public/characters/
+git status --porcelain apps/demo/public/characters/
+```
+
+Attendu : sept fichiers, les deux avatars à ~2,5 Mo chacun, et un `git status`
+**vide**. Un avatar sous 100 Ko serait une page d'erreur : le garde de signature
+`glTF` du script doit avoir levé.
+
+- [ ] **Step 3 : Un test qui vérifie le contrat du rig**
+
+Create `packages/character-three/test/tpose-rig.test.ts`. Il charge le GLB
+masculin, résout la liaison contre `HUMANOID`, et vérifie **trois** choses :
+
+1. `report.missingBones` est vide — le rig satisfait le contrat ;
+2. `report.missingMorphs` **n'est pas** vide — le rapport dit la vérité sur les
+   morphs absents plutôt que de les taire ;
+3. `report.missingSurfaces` **n'est pas** vide — idem pour les teintes.
+
+Les points 2 et 3 sont l'essentiel : un rapport d'import qui prétendrait que
+tout va bien serait pire qu'un rig incomplet. Sauter bruyamment si le fichier
+est absent, comme `root-motion.test.ts` le fait déjà.
+
+- [ ] **Step 4 : Déclarer les deux avatars au manifeste**
+
+Dans `apps/demo/src/assets.ts`, à l'intérieur de `defineAssets({ ... })` :
+
+```ts
+  // Avatars T-pose Ready Player Me, récupérés par `pnpm clips` et absents du
+  // dépôt (licence : usage autorisé, redistribution interdite). Ce sont les
+  // seuls rigs joignables : `models.readyplayer.me` ne résout pas ici.
+  'avatar-tpose-masculine': {
+    url: publicAssetUrl('characters/avatar-tpose-masculine.glb'),
+    type: AssetType.GLTF,
+    name: 'RPM T-Pose (masculine)',
+    priority: 'lazy',
+  },
+  'avatar-tpose-feminine': {
+    url: publicAssetUrl('characters/avatar-tpose-feminine.glb'),
+    type: AssetType.GLTF,
+    name: 'RPM T-Pose (feminine)',
+    priority: 'lazy',
+  },
+```
+
+Laisser les cinq entrées `avatar-*` distantes en place : elles préexistent et ne
+relèvent pas de cette tâche.
+
+- [ ] **Step 5 : Faire pointer le basculement sur les rigs locaux**
+
+Dans `apps/demo/src/index.ts`, remplacer le choix d'asset par le genre :
+
+```ts
+const assetId = agent.gender === 'feminine'
+  ? 'avatar-tpose-feminine'
+  : 'avatar-tpose-masculine';
+```
+
+**Sept villageois masculins partagent donc un seul asset de base, et quatre
+féminines un autre — et c'est exactement la démonstration :** ce qui les
+distingue à l'écran est la morphologie compilée, pas le fichier.
+
+`hashIndex` n'a plus d'appelant. **Le supprimer** de `VillagerBody.ts`, ainsi que
+l'export de `hash` dans `villagerGenomes.ts` s'il devient inutilisé — une revue
+l'avait déjà signalé comme câblé sans test. Retirer aussi le test qui le couvre,
+s'il en existe un.
+
+- [ ] **Step 6 : Vérifier**
+
+```bash
+pnpm --filter @iwsdk/cardinal-character-three test
+pnpm --filter @iwsdk/plugin-phoenix-demo test
+pnpm typecheck && pnpm build
+```
+
+- [ ] **Step 7 : Regarder l'écran**
+
+```bash
+npx iwsdk dev up
+npx iwsdk browser logs --count 200
+```
+
+Lire les avertissements `[cardinal-demo] villageois "…"`. **Zéro avertissement**
+signifie que les onze rigs sont montés. Confirmer par le graphe :
+
+```bash
+npx iwsdk ecs find --withComponents CharacterIdentity
+npx iwsdk scene runtime-hierarchy
+```
+
+Puis obtenir une capture montrant un villageois. La tâche 8 a établi la séquence
+qui fonctionne : `xr enter`, puis `xr look-at` pour recentrer, puis `xr exit`,
+puis `browser screenshot` — une session `immersive-vr` active coupe le miroir 2D
+et rend un écran noir.
+
+**Rapporter ce qui est vu, pas ce qui est espéré.** Si les rigs ne montent pas,
+citer la cause exacte et le dire.
+
+- [ ] **Step 8 : Commiter**
+
+```bash
+git add scripts apps/demo/src apps/demo/test packages/character-three/test
+git commit -m "feat(demo): real RPM rigs from the animation library, and the screen to prove it"
+```
+
+
 ## Auto-revue
 
 **Couverture de la spec.** §2 → tâches 3 et 8 (les mesures deviennent des tests, puis corrigent les specs). §4 root motion → tâche 3. §5 fabrique → tâche 4. §6.1 chargement → tâche 4 ; §6.2 licence et script → tâche 2 ; §6.2.1 saut bruyant → tâche 3 step 1 ; §6.3 table des verbes → tâche 5 (`setVerb` retombe sur `idle`) et tâche 7 ; §6.4 système → tâche 5. §7 basculement → tâche 7. §8 génomes et `breed` → tâche 6. §10.1 tests 1–8 → répartis (1–4 tâche 3, 5–6 tâche 4, 7 tâche 6, 8 tâche 7). §10.2 écran → tâches 1 et 8. §11 corrections → tâche 8. §13 ordre → respecté.
