@@ -59,9 +59,12 @@ automatically — the default is ad hoc invocation.
 
 Tool-grant convention: reviewer/analyst roles get `Read, Grep, Glob, Bash`
 (read-only usage — running tests/lint, never committing), matching the
-existing `iwsdk-project-code-reviewer`. Roles that produce artifacts add
-`Write`. `studio-director` additionally gets `Agent, Workflow`.
-`xr-visual-qa` additionally gets browser tools.
+existing `iwsdk-project-code-reviewer`. Roles that produce document
+artifacts add `Write`. The four roles whose description says "reviews and
+implements" (`npc-behavior-engineer`, `ai-runtime-engineer`,
+`bff-backend-engineer`, `graphics-tech-artist`) add `Edit, Write` — a
+role cannot implement without them. `studio-director` additionally gets
+`Agent, Workflow`. `xr-visual-qa` additionally gets browser tools.
 
 | Agent | Department | Domain | Tools | Primary skill(s) |
 |---|---|---|---|---|
@@ -71,13 +74,13 @@ existing `iwsdk-project-code-reviewer`. Roles that produce artifacts add
 | `iwsdk-project-code-reviewer` *(existing)* | Engineering | Generic ECS/IWSDK usage | Read, Grep, Glob, Bash | `iwsdk-planner` |
 | `cardinal-genome-reviewer` | Engineering | Genome/heredity/compiled morphology | Read, Grep, Glob, Bash | `cardinal-character-domain` *(new)* |
 | `cardinal-world-reviewer` | Engineering | Procedural rendering + perf (terrain/atmosphere/flora) | Read, Grep, Glob, Bash | `cardinal-simulation-domain`, `threejs-aaa-graphics-builder` |
-| `npc-behavior-engineer` | Engineering | RAG, perception, gaze, social, intents, avatar rig | Read, Grep, Glob, Bash | `cardinal-ai-domain` *(new)* |
-| `ai-runtime-engineer` | Engineering | scheduler, cache, LOD, streaming, speculative, workers, acoustics | Read, Grep, Glob, Bash | `cardinal-ai-domain` |
+| `npc-behavior-engineer` | Engineering | RAG, perception, gaze, social, intents, avatar rig | Read, Grep, Glob, Bash, Edit, Write | `cardinal-ai-domain` *(new)* |
+| `ai-runtime-engineer` | Engineering | scheduler, cache, LOD, streaming, speculative, workers, acoustics | Read, Grep, Glob, Bash, Edit, Write | `cardinal-ai-domain` |
 | `ai-security-engineer` | Engineering | `packages/ai/security` — prompt injection, guardrails, NPC memory leakage | Read, Grep, Glob, Bash | `cardinal-ai-domain` |
 | `phoenix-networking-reviewer` | Engineering | Protocol, room/server authority (`packages/client`+`server`) | Read, Grep, Glob, Bash | `cardinal-network-protocol` *(new)* |
-| `bff-backend-engineer` | Engineering | `apps/bff-server`, `apps/demo_server` | Read, Grep, Glob, Bash | `cardinal-network-protocol` |
+| `bff-backend-engineer` | Engineering | `apps/bff-server`, `apps/demo_server` | Read, Grep, Glob, Bash, Edit, Write | `cardinal-network-protocol` |
 | `security-reviewer` | Engineering | Auth/secrets/dependencies, cross-cutting (non-AI) | Read, Grep, Glob, Bash | — |
-| `graphics-tech-artist` | Art | Shaders/materials/VFX/render budget | Read, Grep, Glob, Bash | `threejs-aaa-graphics-builder` |
+| `graphics-tech-artist` | Art | Shaders/materials/VFX/render budget | Read, Grep, Glob, Bash, Edit, Write | `threejs-aaa-graphics-builder` |
 | `asset-producer` | Art | Decides + triggers 3D/image/audio generation, keeps the sourcing ledger | Read, Grep, Glob, Bash, Write | `threejs-3d-generator`, `threejs-image-generator`, `threejs-audio-generator` |
 | `vr-comfort-ux-reviewer` | UX | Comfort, locomotion, spatial-UI (UIKitML) legibility | Read, Grep, Glob | `hz-immersive-designer`, `iwsdk-ui`; secondary: `threejs-game-ui-designer` (scoped to `hud.ts`/`ai-hud.ts` desktop DOM overlays only, §4) |
 | `xr-visual-qa` | QA | Browser/canvas verification, runs Gherkin scenarios | Read, Grep, Glob, Bash, Browser | `threejs-qa-release` |
@@ -151,7 +154,11 @@ unavailable" in the synthesis, never silently dropped.
 role → implementation proceeds inline, no PR, local merge only (per
 established project convention) → `xr-visual-qa` runs the Gherkin scenario
 through `playwright-bdd` with a real browser, reporting pass/fail with
-visual evidence — never a claim without it.
+visual evidence — never a claim without it. Domains whose specialist is a
+read-only reviewer (character, networking, comfort-ux, ai-security,
+simulation, generic) are implemented by a general-purpose agent, then
+reviewed by that domain's reviewer before QA — a reviewer role is never
+asked to write code it has no tools to write.
 
 **C. Asset production**
 `asset-producer` identifies a surface lacking an authored asset, runs the
