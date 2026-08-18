@@ -161,3 +161,9 @@ packages/server/_build_core/
 
 # Claude / agent worktrees
 .claude/
+
+# Playwright / playwright-bdd
+/test-results/
+/playwright-report/
+/.features-gen/
+/blob-report/
