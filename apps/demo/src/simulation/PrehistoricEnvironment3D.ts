@@ -33,6 +33,7 @@ export interface TerrainData {
 import { ProceduralGrassField } from './ProceduralGrassField';
 import { ProceduralVegetation } from './ProceduralVegetation';
 import { createAgentAvatar } from './AgentAvatarFactory';
+import { PuppetBody, type VillagerBody } from './VillagerBody';
 import type { MaterialLibrary } from '@iwsdk/cardinal-world';
 import type { VILLAGE_LAYOUT } from './layout';
 
@@ -43,7 +44,7 @@ export interface PrehistoricSceneResult {
   berryBushes: Map<string, Group>;
   flintDeposits: Map<string, Group>;
   campStorages: Map<string, Group>;
-  agentAvatars: Map<string, Group>;
+  agentAvatars: Map<string, VillagerBody>;
   entities: Entity[];
   grassField: ProceduralGrassField;
   terrain: TerrainData;
@@ -62,7 +63,7 @@ export class PrehistoricEnvironment3D {
     const berryBushes = new Map<string, Group>();
     const flintDeposits = new Map<string, Group>();
     const campStorages = new Map<string, Group>();
-    const agentAvatars = new Map<string, Group>();
+    const agentAvatars = new Map<string, VillagerBody>();
     const entities: Entity[] = [];
 
     // 1. Le terrain est désormais streamé en tuiles par @iwsdk/cardinal-world.
@@ -226,7 +227,7 @@ export class PrehistoricEnvironment3D {
       );
       avatar.position.set(agent.x, terrain.getHeight(agent.x, agent.z), agent.z);
       root.add(avatar);
-      agentAvatars.set(agent.id, avatar);
+      agentAvatars.set(agent.id, new PuppetBody(avatar, agent.id));
     }
 
     return {

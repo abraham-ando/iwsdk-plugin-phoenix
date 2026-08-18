@@ -19,7 +19,6 @@ import {
   type WeatherMachine,
 } from '@iwsdk/cardinal-simulation';
 import { VILLAGE_LAYOUT } from './layout';
-import { applyAvatarPose } from './AgentAvatarFactory';
 import { PrehistoricEnvironment3D, type PrehistoricSceneResult } from './PrehistoricEnvironment3D';
 import { CelestialTime, WEATHER_KINDS } from '@iwsdk/cardinal-world';
 import { SmartObjectVisual, AnimalVisual, visualStateFor } from '@iwsdk/cardinal-world';
@@ -219,11 +218,11 @@ export class CardinalSimulationSystem extends createSystem({}) {
 
   private projectScene(sceneData: PrehistoricSceneResult): void {
     for (const view of this.runtime.views()) {
-      const avatar = sceneData.agentAvatars.get(view.id);
-      if (avatar === undefined) continue;
-      avatar.position.set(view.x, view.y, view.z);
-      avatar.rotation.y = view.heading;
-      applyAvatarPose(avatar, view.animation, this.elapsed);
+      const body = sceneData.agentAvatars.get(view.id);
+      if (body === undefined) continue;
+      body.node.position.set(view.x, view.y, view.z);
+      body.node.rotation.y = view.heading;
+      body.setPose(view.animation, this.elapsed);
       this.voices?.updatePosition(view.id, view.x, view.y, view.z);
       // Surface fresh dialogue lines to the HUD chronicle and speak them.
       if (view.dialogue !== null && this.lastSpeech.get(view.id) !== view.dialogue) {

@@ -24,6 +24,13 @@ import { mountLocalAiPanel } from './simulation/mountLocalAiPanel.js';
 import { PlayerMicrophone } from './simulation/PlayerMicrophone.js';
 import { TrajectoryUploader } from './simulation/TrajectoryUploader.js';
 import { PhysicsSimulationSystem } from './simulation/PhysicsSimulationSystem.js';
+import {
+  createCharacterFromAsset,
+  installCharacterThree,
+  loadCharacterClips,
+} from '@iwsdk/cardinal-character-three';
+import { buildVillagerGenomes } from './simulation/villagerGenomes.js';
+import { hashIndex, makeRiggedBody, upgradeVillagers } from './simulation/VillagerBody.js';
 
 const container = document.getElementById('scene-container') as HTMLDivElement;
 const network = readNetworkConfig(import.meta.env);
@@ -67,6 +74,47 @@ World.create(container, projectOptions)
       const sceneData = PrehistoricEnvironment3D.createWorldScene(world, VILLAGE_LAYOUT, materials);
       (world as any).scene?.add?.(sceneData.root);
       simSystem.attachScene(sceneData);
+
+      // Le paquet des personnages n'était branché nulle part : l'étape 2 avait
+      // livré des composants et des systèmes que l'application n'importait pas.
+      installCharacterThree(world);
+
+      // Le village est monté en marionnettes et JOUABLE dès cette frame. Les
+      // rigs le remplacent ensuite, un par un, si le réseau les apporte.
+      const genomes = buildVillagerGenomes(VILLAGE_LAYOUT.agents);
+      const AVATARS = ['avatar-mira', 'avatar-sylvia', 'avatar-eldrin', 'avatar-garrick', 'avatar-haran'];
+      void loadCharacterClips({
+        idle: 'clip-idle-masculine',
+        walk: 'clip-walk-masculine',
+      })
+        .then((masculineClips) =>
+          loadCharacterClips({ idle: 'clip-idle-feminine', walk: 'clip-walk-feminine' }).then(
+            (feminineClips) =>
+              upgradeVillagers({
+                bodies: sceneData.agentAvatars,
+                agents: VILLAGE_LAYOUT.agents,
+                buildRig: async (agent) => {
+                  // Cinq assets pour onze villageois : le hachage de
+                  // l'identifiant en choisit un, de façon stable.
+                  const assetId = AVATARS[hashIndex(agent.id, AVATARS.length)]!;
+                  const { entity } = await createCharacterFromAsset(world, {
+                    assetId,
+                    familyId: 'humanoid',
+                    genome: genomes[agent.id]!,
+                    age: 30,
+                  });
+                  return makeRiggedBody(
+                    world, entity,
+                    agent.gender === 'feminine' ? feminineClips : masculineClips,
+                  );
+                },
+              }),
+          ),
+        )
+        .catch((error: unknown) => {
+          console.warn('[cardinal-demo] clips indisponibles, village en marionnettes :', error);
+        });
+
       const microphone = new PlayerMicrophone(world, (text) => simSystem.playerSpeak(text));
       new SimulationHud(document.body, simSystem, microphone);
       // Mode-2 deliberation: pump plan requests to the BFF (LLM or mock), with

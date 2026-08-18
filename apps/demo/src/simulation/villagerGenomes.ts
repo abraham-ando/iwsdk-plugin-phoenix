@@ -15,8 +15,14 @@ const MOTHER = 'mira';
 const FATHER = 'haran';
 const CHILDREN: Readonly<Record<string, 'f' | 'm'>> = { lio: 'm', aya: 'f' };
 
-/** FNV-1a 32 bits. Stable, sans dépendance, suffisant pour semer. */
-function hash(text: string): number {
+/**
+ * FNV-1a 32 bits. Stable, sans dépendance, suffisant pour semer.
+ *
+ * Exportée : `VillagerBody.hashIndex` la réutilise pour choisir un asset RPM
+ * par villageois. Un second FNV-1a dans ce même dossier serait le défaut que
+ * la grille de revue signale — une seule implémentation, deux usages.
+ */
+export function hash(text: string): number {
   let h = 0x811c9dc5;
   for (let i = 0; i < text.length; i++) {
     h ^= text.charCodeAt(i);
