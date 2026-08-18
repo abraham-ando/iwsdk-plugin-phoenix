@@ -29,6 +29,7 @@ Map changed paths to roles before dispatching:
 | shaders/materials/VFX/render code | `graphics-tech-artist` |
 | new asset needs (models/textures/audio) | `asset-producer` |
 | `apps/demo/src/hud.ts`, `apps/demo/src/ai-hud.ts`, UIKitML panels, comfort/locomotion | `vr-comfort-ux-reviewer` |
+| `docs/PROTOCOL.md` (wire-format changes — protocol work first) | `phoenix-networking-reviewer` |
 | documentation content (`docs/`, READMEs, the VitePress site) — excluding `docs/superpowers/` (superpowers workflow owns it) | `docs-writer` |
 | generic IWSDK/ECS usage not covered above | `iwsdk-project-code-reviewer` |
 
