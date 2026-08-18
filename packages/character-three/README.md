@@ -294,10 +294,29 @@ Un verbe sans clip retombe sur `idle` plutôt que de lever : la bibliothèque RP
 ne contient aucun clip de repos ni de sommeil, et lever ici ferait tomber la
 démo sur un comportement normal de la simulation. `currentVerb`, `clipFor` et
 `actionCount` existent pour le diagnostic et les tests, pas pour le chemin
-chaud. `update()` détache et arrête le mixer d'une entité disposée — sans
-cette garde, un village qui remplace régulièrement ses marionnettes par des
-rigs fuirait un mixer par remplacement, une fuite qui ne se voit qu'au bout
-d'une heure de jeu.
+chaud.
+
+Les mixers vivent dans une carte **clavée par `entity.index`**, et un
+`subscribe('disqualify')` les arrête et les retire à l'instant où l'entité
+quitte la query. Les deux moitiés comptent :
+
+- sans la libération, un village qui remplace régulièrement ses marionnettes
+  par des rigs fuirait un mixer par remplacement — une fuite qui ne se voit
+  qu'au bout d'une heure de jeu ;
+- sans la clé par index, la fuite serait pire qu'une fuite : elics recycle les
+  **instances** d'`Entity`, pas seulement leurs index, donc une carte clavée
+  par l'objet rendrait à la prochaine entité le rig de la précédente, et
+  `setVerb` animerait un sous-arbre mort.
+
+`update()` ne fait donc plus que faire avancer les mixers — pas de sondage,
+pas d'itération des entrées de la carte, aucune allocation par image.
+
+> **Les pistes d'un clip doivent viser des noms que `PropertyBinding` sache
+> résoudre.** Mesuré : il lit `:` comme un séparateur de répertoire, donc une
+> piste `mixamorig:Hips.position` est analysée en `{ nodeName: 'Hips' }` et ne
+> trouve rien sur un rig nommé à la Mixamo. Les avatars Ready Player Me
+> nomment leurs os `Hips`, `Spine`, `Head`… — la convention que ce système
+> attend.
 
 Pourquoi pas `AvatarAnimationController` de `@iwsdk/plugin-cardinal-ai` : il
 fait des fondus et porte quatorze tests, mais il vit du mauvais côté — faire

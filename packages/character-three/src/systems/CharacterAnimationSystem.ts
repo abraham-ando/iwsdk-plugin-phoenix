@@ -33,7 +33,41 @@ export class CharacterAnimationSystem extends createSystem(
   { characters: { required: [CharacterIdentity] } },
   { fadeSeconds: { type: Types.Float32, default: 0.25 } },
 ) {
-  private rigs = new Map<Entity, Rig>();
+  /**
+   * Clavée par `entity.index`, JAMAIS par l'objet `Entity` — le motif
+   * d'EntityIndex que `CharacterCompileSystem` emploie déjà pour ses trois
+   * cartes.
+   *
+   * elics ne recycle pas seulement les index : il recycle les INSTANCES
+   * (`entity-manager.js`, `requestEntityInstance` puise dans un pool). Une
+   * carte clavée par l'objet garde donc silencieusement en vie le rig d'une
+   * entité disposée dès que la suivante hérite du même exemplaire — et
+   * `setVerb` de la nouvelle animerait le rig de l'ancienne. Mesuré :
+   * `entityA.dispose()` puis une création rend le MÊME objet ET le même index.
+   * Ce qui referme le piège n'est donc pas la clé seule, mais la clé plus le
+   * `disqualify` ci-dessous, qui retire l'entrée avant tout recyclage.
+   */
+  private rigs = new Map<number, Rig>();
+
+  public override init(): void {
+    // La query existe pour ça, et pour rien d'autre : c'est elle qui dit quand
+    // une entité de personnage cesse d'en être une (composant retiré) ou
+    // disparaît (`dispose()`). elics fait tomber `disqualify` de façon
+    // SYNCHRONE pendant `Entity.destroy()`, donc avant que
+    // `releaseEntityInstance` ne remette l'exemplaire au pool : il n'existe
+    // aucune fenêtre pendant laquelle une entité recyclée verrait le rig de sa
+    // devancière.
+    this.cleanupFuncs.push(
+      this.queries.characters.subscribe('disqualify', (entity) => {
+        const rig = this.rigs.get(entity.index);
+        if (rig === undefined) return;
+        // Le mixer d'une entité disposée qui continue de tourner est une fuite
+        // qui ne se voit qu'au bout d'une heure de jeu.
+        rig.mixer.stopAllAction();
+        this.rigs.delete(entity.index);
+      }),
+    );
+  }
 
   /** Attache des clips à un personnage. Les assainit une fois, ici. */
   attach(
@@ -58,7 +92,7 @@ export class CharacterAnimationSystem extends createSystem(
         rootMotion: options.rootMotion,
       }).clip;
     }
-    this.rigs.set(entity, {
+    this.rigs.set(entity.index, {
       mixer: new AnimationMixer(node),
       clips: sanitized,
       actions: new Map(),
@@ -72,7 +106,7 @@ export class CharacterAnimationSystem extends createSystem(
    * ici ferait tomber la démo sur un comportement normal de la simulation.
    */
   setVerb(entity: Entity, verb: string): void {
-    const rig = this.rigs.get(entity);
+    const rig = this.rigs.get(entity.index);
     if (rig === undefined) return;
     const wanted = rig.clips[verb] !== undefined ? verb : 'idle';
     if (wanted === rig.verb) return;
@@ -97,40 +131,36 @@ export class CharacterAnimationSystem extends createSystem(
   }
 
   currentVerb(entity: Entity): string {
-    return this.rigs.get(entity)?.verb ?? '';
+    return this.rigs.get(entity.index)?.verb ?? '';
   }
 
   /** Le clip assaini d'un verbe. Pour les tests et le diagnostic. */
   clipFor(entity: Entity, verb: string): AnimationClip | undefined {
-    return this.rigs.get(entity)?.clips[verb];
+    return this.rigs.get(entity.index)?.clips[verb];
   }
 
   actionCount(entity: Entity): number {
-    return this.rigs.get(entity)?.actions.size ?? 0;
+    return this.rigs.get(entity.index)?.actions.size ?? 0;
   }
 
   mixerCount(): number {
     return this.rigs.size;
   }
 
+  /**
+   * Le seul travail par image : faire avancer chaque mixer.
+   *
+   * Le décrochage des entités disposées ne se fait PLUS ici. Il se faisait par
+   * un sondage de `entity.object3D`, ce qui obligeait à itérer les ENTRÉES de
+   * la carte — `for (const [entity, rig] of this.rigs)` alloue un tableau de
+   * deux éléments par entrée et par image, onze par image pour le village,
+   * exactement ce que la contrainte « aucune allocation dans `update()` »
+   * interdit. Le `subscribe('disqualify')` d'`init()` fait le même travail à
+   * l'instant exact où l'entité s'en va, et cette boucle ne lit plus que les
+   * valeurs.
+   */
   override update(delta: number, _time: number): void {
-    for (const [entity, rig] of this.rigs) {
-      // Une entité disposée ne doit pas garder son mixer vivant : c'est une
-      // fuite qui ne se voit qu'au bout d'une heure de jeu.
-      //
-      // Mesuré (voir le rapport de tâche) : `entity.dispose()` appelle
-      // `Entity.destroy()` d'elics, qui est SYNCHRONE — `active = false`,
-      // requêtes mises à jour, puis `entityManager.releaseEntityInstance`.
-      // `@iwsdk/core` intercepte ce dernier pour faire `delete
-      // entity.object3D` avant même que `dispose()` ne rende la main. Ce
-      // contrôle est donc déjà vrai à l'entrée de CETTE image, pas seulement
-      // après un futur appel — la garde reste ici parce que c'est cette boucle
-      // qui doit décrocher le mixer, mais elle ne dépend d'aucun luxe timing.
-      if (entity.object3D === null || entity.object3D === undefined) {
-        rig.mixer.stopAllAction();
-        this.rigs.delete(entity);
-        continue;
-      }
+    for (const rig of this.rigs.values()) {
       rig.mixer.update(delta);
     }
   }
