@@ -22,8 +22,18 @@ export interface VillagerBody {
  * Les cylindres d'aujourd'hui, derrière le contrat.
  *
  * Ce n'est pas du code de transition jetable : c'est le repli permanent quand
- * un asset n'arrive pas, et c'est le SEUL usage réel de `PuppetApplicator`,
- * qui resterait sinon une implémentation d'interface que personne n'appelle.
+ * un asset n'arrive pas — hors ligne, ou avec un rig que la famille refuse.
+ *
+ * Ce corps n'a en revanche AUCUN rapport avec `PuppetApplicator` de
+ * `@iwsdk/cardinal-character-three`, contrairement à ce qu'une phrase de la
+ * spec §7.2 affirmait et que ce commentaire recopiait : `PuppetBody` enveloppe
+ * `applyAvatarPose` et les cylindres d'`AgentAvatarFactory`, tandis que
+ * `PuppetApplicator` n'est construit par `createCharacter` que pour un rig
+ * SANS `SkinnedMesh`. Les deux avatars T-pose livrés en portent un
+ * (`Wolf3D_Avatar`), donc `PuppetApplicator` reste sans appelant de
+ * production. Le dire ici plutôt que de laisser croire l'inverse : ce qui
+ * justifie ce repli est le village jouable hors ligne, pas un applicateur à
+ * faire vivre.
  */
 export class PuppetBody implements VillagerBody {
   // `Group` et non `Object3D` : `applyAvatarPose` en exige un, et typer le
@@ -164,15 +174,21 @@ export function chainsToIdentity(node: Object3D, stopAt: Object3D): boolean {
  * le garantit demain.
  *
  * REPARENTER le rig sous `sceneData.root` pour forcer un parent commun a été
- * envisagé et rejeté : l'entité du rig porte un `LevelTag` (posé par
- * `createTransformEntity`, absent de la marionnette qui n'est pas une
- * entité), et `TransformSystem.update()` — mesuré dans
- * `@iwsdk/core/dist/transform/transform.js` — reparente de force, CHAQUE
- * IMAGE, tout `Object3D` d'entité dont le parent réel n'a pas de
- * `.entityIdx` vers `activeLevel`/`sceneEntity`, avec un `console.warn` à
- * chaque fois. Reparenter manuellement perdrait donc cette bataille toutes
- * les images. D'où l'assertion plutôt que le reparentage : la coïncidence
- * devient un échec bruyant, nommé, si l'une des deux racines bouge un jour.
+ * envisagé et rejeté, mais pas pour la raison que ce commentaire donnait
+ * d'abord. Relu ligne à ligne dans
+ * `@iwsdk/core/dist/transform/transform.js`, `TransformSystem.update()` ne
+ * livre AUCUNE bataille par image : le rig porte un `Transform.parent` valide
+ * (posé par `createTransformEntity`), donc la seule branche qui le concerne
+ * est `parentObject !== object.parent`, laquelle rappelle `add()` — ce qui
+ * réaligne `object.parent` sur-le-champ. La correction est donc PONCTUELLE,
+ * et elle est SILENCIEUSE : le `console.warn` de ce système vit dans une
+ * autre branche, celle des entités sans parent valide.
+ *
+ * Ce qui reste vrai, et suffit à rejeter le reparentage : un `add()` manuel
+ * sous `sceneData.root` serait défait une fois, sans un mot, à la première
+ * image suivante — un déplacement qui ne tient pas et qui ne prévient pas.
+ * D'où l'assertion plutôt que le reparentage : la coïncidence devient un
+ * échec bruyant, nommé, si l'une des deux racines bouge un jour.
  */
 export function assertSameWorldFrame(
   puppetParent: Object3D | null,
@@ -199,6 +215,20 @@ export function assertSameWorldFrame(
  * `rootMotion: 'flatten'` parce que la simulation possède déjà la position du
  * villageois : mesuré, `M_Walk_001` l'emmènerait 3,21 m devant lui-même à
  * chaque boucle (et `F_Walk_002` 4,39 m).
+ *
+ * **Toute levée dispose l'entité reçue avant de remonter.** `createCharacter`
+ * appelle `world.createTransformEntity`, qui parente le rig IMMÉDIATEMENT sous
+ * `activeLevel` (`@iwsdk/core/dist/ecs/world.js`) : une erreur laissée
+ * remonter telle quelle laisserait un avatar monté dans la scène, compilé et
+ * animé à chaque image, à l'origine du monde, et absent de la carte `bodies`
+ * — donc jamais positionné par `projectScene`. `upgradeVillagers` attrape,
+ * garde la marionnette, et le village se retrouverait doublé : onze
+ * marionnettes correctes PLUS onze rigs empilés à l'origine. La garde qui
+ * existait pour rendre une coïncidence bruyante produirait une scène pire que
+ * la coïncidence.
+ *
+ * Les trois portes sont toutes ici : le système non enregistré, un
+ * `sanitizeClip` en conflit dans `attach`, et `assertSameWorldFrame`.
  */
 export function makeRiggedBody(
   world: World,
@@ -206,20 +236,29 @@ export function makeRiggedBody(
   clips: Record<string, AnimationClip>,
   puppet: VillagerBody,
 ): VillagerBody {
-  const system = world.getSystem(CharacterAnimationSystem);
-  if (system === undefined) {
-    throw new Error('makeRiggedBody: CharacterAnimationSystem non enregistré');
+  try {
+    const system = world.getSystem(CharacterAnimationSystem);
+    if (system === undefined) {
+      throw new Error('makeRiggedBody: CharacterAnimationSystem non enregistré');
+    }
+    // Les noms de nœuds des avatars T-pose RPM sont `Hips`, `Spine`, `Head`…
+    // (mesuré dans `tpose-rig.test.ts`) ; seule la hanche porte un rôle qui
+    // nous intéresse pour l'assainissement.
+    system.attach(entity, clips, (name) => (name === 'Hips' ? 'root' : null), {
+      rootMotion: 'flatten',
+    });
+    const node = entity.object3D!;
+    assertSameWorldFrame(puppet.node.parent, node.parent, world.scene);
+    return {
+      node,
+      setPose: (animation) => system.setVerb(entity, animation),
+      dispose: () => entity.dispose(),
+    };
+  } catch (error) {
+    // `dispose()` et non `destroy()` : le second fuit la mémoire GPU. Il
+    // détache aussi le nœud de son parent (`releaseEntityInstance` fait
+    // `obj.removeFromParent()`), ce qui est précisément ce qu'on veut ici.
+    entity.dispose();
+    throw error;
   }
-  // Les noms de nœuds d'un rig RPM suivent la convention Mixamo ; seule la
-  // hanche porte un rôle qui nous intéresse pour l'assainissement.
-  system.attach(entity, clips, (name) => (name === 'Hips' ? 'root' : null), {
-    rootMotion: 'flatten',
-  });
-  const node = entity.object3D!;
-  assertSameWorldFrame(puppet.node.parent, node.parent, world.scene);
-  return {
-    node,
-    setPose: (animation) => system.setVerb(entity, animation),
-    dispose: () => entity.dispose(),
-  };
 }

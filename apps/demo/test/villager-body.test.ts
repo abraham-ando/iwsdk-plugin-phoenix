@@ -1,12 +1,26 @@
 import { describe, it, expect, vi } from 'vitest';
-import { Group, Mesh } from '@iwsdk/core';
+import {
+  AnimationClip, Group, Mesh, Quaternion, Vector3,
+  VectorKeyframeTrack, QuaternionKeyframeTrack, World,
+} from '@iwsdk/core';
+import { HUMANOID, defaultGenome } from '@iwsdk/cardinal-character';
+import {
+  CharacterAnimationSystem, createCharacter, installCharacterThree,
+} from '@iwsdk/cardinal-character-three';
 import {
   PuppetBody,
+  makeRiggedBody,
   upgradeVillagers,
   assertSameWorldFrame,
   type VillagerBody,
 } from '../src/simulation/VillagerBody';
 import { createAgentAvatar } from '../src/simulation/AgentAvatarFactory';
+// Le rig de test vit dans le paquet des personnages : c'est là qu'est
+// l'invariant qu'il encode (les 19 rôles d'os de HUMANOID), et le dupliquer
+// ici le laisserait diverger en silence. `'rpm'` reproduit le nommage des deux
+// avatars T-pose réellement livrés — le seul qu'un `AnimationMixer` sache
+// viser, voir `BoneNaming`.
+import { humanoidPuppet } from '../../../packages/character-three/test/fixtures/humanoidPuppet';
 
 function puppetMap(ids: string[]): Map<string, VillagerBody> {
   return new Map(ids.map((id) => [id, new PuppetBody(new Group(), id)]));
@@ -149,6 +163,114 @@ describe('PuppetBody.dispose() et les ressources GPU', () => {
 // parce que la racine de niveau et la racine de scène du village sont toutes
 // deux à l'identité. `assertSameWorldFrame` transforme cette coïncidence
 // tacite en échec bruyant si l'une des deux bouge.
+// I1 / I3 (revue finale) : `makeRiggedBody` est la SEULE soudure entre la démo
+// et `@iwsdk/cardinal-character-three`, et rien ne la traversait.
+describe('makeRiggedBody, de bout en bout', () => {
+  const HEAD_TURN = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI / 2);
+
+  /** Un clip qui fait voyager la hanche de deux mètres et tourner la tête. */
+  function walkClip(): AnimationClip {
+    return new AnimationClip('walk', 1, [
+      new VectorKeyframeTrack('Hips.position', [0, 1], [0, 0.95, 0, 0, 0.95, 2]),
+      new QuaternionKeyframeTrack(
+        'Head.quaternion',
+        [0, 1],
+        [0, 0, 0, 1, HEAD_TURN.x, HEAD_TURN.y, HEAD_TURN.z, HEAD_TURN.w],
+      ),
+    ]);
+  }
+
+  /**
+   * Un clip qui déplace RÉELLEMENT un os non racine : `sanitizeClip` rend le
+   * verdict `conflict` et lève. C'est la deuxième des trois portes d'échec de
+   * `makeRiggedBody`, et la plus réaliste des trois.
+   */
+  function conflictingClip(): AnimationClip {
+    return new AnimationClip('walk', 1, [
+      new VectorKeyframeTrack('Spine.position', [0, 1], [0, 0.12, 0, 0, 0.9, 0]),
+    ]);
+  }
+
+  function makeCharacter() {
+    const world = new World();
+    installCharacterThree(world);
+    const { root, bones } = humanoidPuppet('rpm');
+    const { entity } = createCharacter(world, {
+      familyId: HUMANOID.id, genome: defaultGenome(HUMANOID), age: 30, rigRoot: root,
+    });
+    return { world, entity, bones };
+  }
+
+  it('attache les clips, et setPose fait BOUGER un os du rig', () => {
+    const { world, entity, bones } = makeCharacter();
+    const head = bones.head!;
+    const hips = bones.root!;
+    const before = head.quaternion.clone();
+
+    const body = makeRiggedBody(world, entity, { idle: walkClip(), walk: walkClip() }, new PuppetBody(new Group(), 'mira'));
+    expect(body.node).toBe(entity.object3D);
+
+    body.setPose('walk', 0);
+    world.getSystem(CharacterAnimationSystem)!.update(0.5, 500);
+
+    // À mi-clip : la moitié du quart de tour. Un mixer branché ailleurs que
+    // sur le rig laisse cet angle à zéro.
+    expect(before.angleTo(head.quaternion)).toBeCloseTo(Math.PI / 4, 3);
+    // `rootMotion: 'flatten'` : la simulation possède la position, le clip ne
+    // doit emporter le villageois nulle part.
+    expect(hips.position.z).toBeCloseTo(0, 6);
+  });
+
+  it("une levée après création ne laisse AUCUN nœud orphelin dans la scène", () => {
+    const { world, entity } = makeCharacter();
+    // En production, `createTransformEntity` a déjà parenté le nœud sous
+    // `activeLevel` au retour de `createCharacter` ; un `new World()` de Node
+    // n'a ni niveau actif ni entité de scène, donc on monte le nœud à la main
+    // pour reproduire la situation que la trouvaille décrit.
+    const levelRoot = new Group();
+    const node = entity.object3D!;
+    levelRoot.add(node);
+    expect(levelRoot.children).toContain(node);
+
+    expect(() =>
+      makeRiggedBody(world, entity, { idle: conflictingClip() }, new PuppetBody(new Group(), 'mira')),
+    ).toThrow(/déplace réellement/);
+
+    // Sans le `dispose()` du chemin d'échec, ce rig resterait monté, compilé
+    // et animé à chaque image, à l'origine du monde, et absent de `bodies`.
+    expect(node.parent).toBeNull();
+    expect(levelRoot.children).toHaveLength(0);
+    expect(entity.object3D).toBeUndefined();
+  });
+
+  it("une levée ne laisse pas non plus de mixer vivant derrière elle", () => {
+    const { world, entity } = makeCharacter();
+    const system = world.getSystem(CharacterAnimationSystem)!;
+    expect(() =>
+      makeRiggedBody(world, entity, { idle: conflictingClip() }, new PuppetBody(new Group(), 'mira')),
+    ).toThrow();
+    expect(system.mixerCount()).toBe(0);
+  });
+
+  it("le repli reste possible : upgradeVillagers absorbe la levée et garde la marionnette", async () => {
+    const { world, entity } = makeCharacter();
+    const puppet = new PuppetBody(new Group(), 'mira');
+    const bodies = new Map<string, VillagerBody>([['mira', puppet]]);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await upgradeVillagers({
+      bodies,
+      agents: [{ id: 'mira', gender: 'feminine' }],
+      buildRig: async (_agent, current) =>
+        makeRiggedBody(world, entity, { idle: conflictingClip() }, current),
+    });
+
+    expect(bodies.get('mira')).toBe(puppet);
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+});
+
 describe('assertSameWorldFrame (repère du rig vs. repère de la marionnette)', () => {
   it("ne lève pas quand les deux parents remontent à l'identité jusqu'à la scène", () => {
     const scene = new Group();
