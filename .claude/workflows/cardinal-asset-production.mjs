@@ -36,7 +36,6 @@ if (!request) {
   )
 }
 
-export default (async () => {
 phase('Source')
 const sourcing = await agent(
   `Decide procedural vs. generated vs. hybrid for this surface, per your scope boundary, and if generation is chosen, trigger the relevant generator script. Surface: ${request}`,
@@ -60,4 +59,3 @@ if (sourcing.decision === 'skip') {
 }
 
 return { sourcing, review, verification }
-})()

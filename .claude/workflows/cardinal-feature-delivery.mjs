@@ -58,7 +58,6 @@ if (!request) {
   )
 }
 
-export default (async () => {
 phase('Story')
 const story = await agent(
   `Write the user story, technical story, and Gherkin .feature file for this request, per your process. Request: ${request}`,
@@ -91,4 +90,3 @@ const verification = await agent(
 )
 
 return { story, implementer: domain.implementer, implementation, review, verification }
-})()

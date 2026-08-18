@@ -74,7 +74,6 @@ const FINDINGS_SCHEMA = {
   required: ['role', 'findings'],
 }
 
-export default (async () => {
 phase('Discover changes')
 const diff = await agent(
   'Run `git diff --name-only main...HEAD` in the repo root and return every changed file path, one per array entry. If there is no `main` to diff against, use `git diff --name-only HEAD~1`.',
@@ -112,4 +111,3 @@ const synthesis = await agent(
 )
 
 return { files, reviews, synthesis }
-})()
