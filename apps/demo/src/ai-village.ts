@@ -39,6 +39,7 @@ import {
 } from '@iwsdk/plugin-cardinal-ai';
 import { CardinalAIHud } from './ai-hud.js';
 import { PhysicsSimulationSystem } from './simulation/PhysicsSimulationSystem.js';
+import { createBffTokenProvider, resolveBffBaseUrl } from './ai-bff-auth.js';
 
 export interface VillageNPCs {
   eldrin: Entity;
@@ -48,12 +49,19 @@ export interface VillageNPCs {
 }
 
 export function setupCardinalVillage(world: World): VillageNPCs {
-  // 1. Install Cardinal AI Engine with Cloud / BFF fallback
+  // 1. Install Cardinal AI Engine, proxied through the BFF (TS-A2) — the demo
+  // never holds a provider API key. It authenticates against
+  // POST /api/auth/session to get a short-lived JWT, then every chat call
+  // goes through POST /api/v1/cardinal/chat, where the BFF injects the real
+  // provider key server-side. TokenManager (inside CloudInferenceAdapter)
+  // owns caching that JWT and calling tokenProvider again on expiry — this
+  // module only supplies the fetch, never the refresh timing.
   installCardinalAI(world, {
     provider: 'cloud',
     cloud: {
       model: 'llama-3.1-8b-instant',
-      apiKey: 'demo_key',
+      proxyUrl: `${resolveBffBaseUrl()}/api/v1/cardinal/chat`,
+      tokenProvider: createBffTokenProvider(),
     },
   });
 
@@ -216,15 +224,15 @@ export function setupCardinalVillage(world: World): VillageNPCs {
   AvatarMeshBinder.bindAvatar(sylvia, sylviaMesh);
   const sylviaAnim = new AvatarAnimationController(sylviaMesh, { gender: 'feminine' });
 
-  // 6. Connect Group Conversation Circle between the 3 NPCs
+  // 6. Group Conversation Circle between the 3 NPCs — created lazily, on the
+  // player's first "🗣️ Cercle PNJ" click, not eagerly here. GroupConversationSystem
+  // .createCircle() marks every participant NPCBanter.isBantering = true for
+  // as long as the circle exists (by design — see its own test suite), which
+  // is also NPCBanterSystem's own "already busy" guard: creating the circle
+  // unconditionally at startup permanently blocked the 3 NPCs' spontaneous
+  // pairwise banter loop before a single player action ever happened.
   const groupSystem = world.getSystem(GroupConversationSystem);
   let circleId = '';
-  if (groupSystem) {
-    circleId = groupSystem.createCircle(
-      [eldrin, garrick, sylvia],
-      'L\'impact de la comète céleste et la sécurité du village'
-    );
-  }
 
   // 7. Interactive Testing HUD
   const hud = new CardinalAIHud(document.body, {
@@ -256,7 +264,13 @@ export function setupCardinalVillage(world: World): VillageNPCs {
     },
     onTriggerGroupBanter: () => {
       hud.log('Déclenchement du Cercle Multi-Agents...', 'info');
-      if (groupSystem && circleId) {
+      if (groupSystem) {
+        if (!circleId) {
+          circleId = groupSystem.createCircle(
+            [eldrin, garrick, sylvia],
+            'L\'impact de la comète céleste et la sécurité du village'
+          );
+        }
         groupSystem.injectPlayerSpeech(circleId, 'Avez-vous remarqué l\'énergie inhabituelle venant du pic ?');
         hud.log('Eldrin -> Garrick -> Sylvia : Échange spontané en cours.', 'agent');
       }
