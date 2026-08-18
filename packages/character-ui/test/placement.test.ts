@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
-import { Object3D, Vector3 } from '@iwsdk/core';
-import { placePanel } from '../src/systems/CharacterPanelPlacementSystem';
+import { describe, it, expect, vi } from 'vitest';
+import { Object3D, Vector3, World } from '@iwsdk/core';
+import { CharacterSelection, installCharacterThree } from '@iwsdk/cardinal-character-three';
+import { CharacterPanelPlacementSystem, placePanel } from '../src/systems/CharacterPanelPlacementSystem';
 
 function scene() {
   const panel = new Object3D();
@@ -73,5 +74,34 @@ describe('le placement du panneau', () => {
     placePanel(panel, cible, camera, 0.8, 0.5, 3);
     placePanel(panel, cible, camera, 0.8, 0.5, 3);
     expect(panel.position.equals(avant)).toBe(false);
+  });
+});
+
+describe("CharacterPanelPlacementSystem.update() n'alloue rien en régime stable", () => {
+  // Même trouvaille de revue que `CharacterPickSystem` : `this.selection`
+  // était rescanné via `entities.values().next().value` à chaque `update()`,
+  // qui alloue un itérateur ET un objet résultat par appel (mesuré en Node :
+  // `it1 !== it2`, `r1 !== r2`). Espionne `Set.prototype.values` et vérifie
+  // qu'aucun `update()` en régime stable ne l'appelle.
+  it("update() répété n'appelle jamais Set.prototype.values", () => {
+    const world = new World();
+    installCharacterThree(world);
+    world.registerSystem(CharacterPanelPlacementSystem, { priority: 92 });
+    const system = world.getSystem(CharacterPanelPlacementSystem)!;
+    system.panel = new Object3D();
+
+    const selectionEntity = world.createEntity();
+    selectionEntity.addComponent(CharacterSelection, {});
+
+    // Première frame : qualifie `this.selection` via l'abonnement `qualify`.
+    // La cible reste `null` — sans intérêt ici, seul le rescan compte.
+    system.update(0.016, 16);
+
+    const valuesSpy = vi.spyOn(Set.prototype, 'values');
+    system.update(0.016, 32);
+    system.update(0.016, 48);
+    system.update(0.016, 64);
+    expect(valuesSpy).not.toHaveBeenCalled();
+    valuesSpy.mockRestore();
   });
 });

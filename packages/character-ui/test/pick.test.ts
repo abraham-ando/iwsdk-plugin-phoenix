@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { World, Object3D, Pressed } from '@iwsdk/core';
 import {
   CharacterIdentity, CharacterSelection, installCharacterThree,
@@ -63,5 +63,33 @@ describe('la sélection au rayon', () => {
     a.removeComponent(Pressed);
     system.update(0.016, 32);
     expect(selection.getValue(CharacterSelection, 'target')).toBe(a);
+  });
+});
+
+describe("CharacterPickSystem.update() n'alloue rien en régime stable", () => {
+  // Trouvaille de revue : `entities.values().next().value` alloue un
+  // itérateur ET un objet résultat À CHAQUE APPEL (mesuré en Node :
+  // `it1 !== it2`, `r1 !== r2`). Ce test espionne `Set.prototype.values` et
+  // vérifie qu'aucun `update()` en régime stable ne l'appelle — ni pour la
+  // cible de sélection (mémorisée par abonnement), ni pour la query des
+  // personnages pressés (`Set.prototype.forEach` avec un callback hissé
+  // n'appelle jamais `.values()`, vérifié séparément en Node).
+  it("update() répété n'appelle jamais Set.prototype.values", () => {
+    const { system, selection, villageois } = build();
+    const a = villageois();
+    a.addComponent(Pressed, {});
+    // Première frame : qualifie la cible via l'abonnement `qualify` et
+    // écrit la sélection. On espionne SEULEMENT à partir d'ici, en régime
+    // stable — la question posée est « rescanner coûte-t-il », pas
+    // « qualifier coûte-t-il ».
+    system.update(0.016, 16);
+    expect(selection.getValue(CharacterSelection, 'target')).toBe(a);
+
+    const valuesSpy = vi.spyOn(Set.prototype, 'values');
+    system.update(0.016, 32);
+    system.update(0.016, 48);
+    system.update(0.016, 64);
+    expect(valuesSpy).not.toHaveBeenCalled();
+    valuesSpy.mockRestore();
   });
 });

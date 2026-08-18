@@ -1,4 +1,4 @@
-import { createSystem, Types, Vector3, type Object3D } from '@iwsdk/core';
+import { createSystem, Types, Vector3, type Entity, type Object3D } from '@iwsdk/core';
 import { CharacterSelection } from '@iwsdk/cardinal-character-three';
 
 // Vecteurs de travail au niveau du module : la fonction tourne à 90 Hz, et un
@@ -62,15 +62,35 @@ export class CharacterPanelPlacementSystem extends createSystem(
   /** Le nœud du panneau, posé par `installCharacterUI`. */
   public panel: Object3D | null = null;
 
+  /**
+   * `CharacterSelection` est un SINGLETON : comme dans `CharacterPickSystem`,
+   * mémorisée par abonnement plutôt que rescannée à chaque `update()` —
+   * `entities.values().next().value` allouait un itérateur ET un objet
+   * résultat par appel (mesuré en Node : `it1 !== it2`, `r1 !== r2`).
+   */
+  private selection: Entity | null = null;
+
+  public override init(): void {
+    this.cleanupFuncs.push(
+      this.queries.selections.subscribe(
+        'qualify',
+        (entity) => {
+          this.selection = entity;
+        },
+        true,
+      ),
+      this.queries.selections.subscribe('disqualify', (entity) => {
+        if (this.selection === entity) this.selection = null;
+      }),
+    );
+  }
+
   // Signature alignée sur `CharacterPickSystem` : voir son commentaire sur
   // `update(_delta, _time)` vs `update()`.
   public override update(_delta: number, _time: number): void {
     if (this.panel === null) return;
-    // Comme dans `CharacterPickSystem` : `entities` est un `Set<Entity>`, pas
-    // un tableau — `entities[0]` ne renvoie jamais rien.
-    const selection = this.queries.selections.entities.values().next().value;
-    if (selection === undefined) return;
-    const cible = selection.getValue(CharacterSelection, 'target');
+    if (this.selection === null) return;
+    const cible = this.selection.getValue(CharacterSelection, 'target');
     const node = cible?.object3D;
     if (node === undefined) {
       this.panel.visible = false;
