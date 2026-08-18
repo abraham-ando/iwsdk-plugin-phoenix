@@ -57,10 +57,33 @@ export function setupCardinalVillage(world: World): VillageNPCs {
     },
   });
 
-  // 1b. Bind RBAC intent policies to each villager archetype — without a
-  // registered policy the IntentGuard lets every LLM-emitted intent through.
+  // 1b. Register per-archetype personality prompts — without these, personalityId
+  // 1/2/3 silently fall back to CardinalIntelligenceSystem's built-in map (garde/
+  // marchand/générique), which mismatches Eldrin the archmage and Garrick the
+  // guard captain with the wrong voice entirely.
   const intelligence = world.getSystem(CardinalIntelligenceSystem);
   if (intelligence) {
+    intelligence.registerPersonality(
+      1,
+      'Tu es Eldrin, archimage érudit et gardien du savoir ancien de la citadelle. ' +
+        'Tu parles avec sagesse et mesure, citant volontiers la lore du royaume et la ' +
+        'Comète Céleste. Tu proposes des quêtes et des conseils, jamais de violence.'
+    );
+    intelligence.registerPersonality(
+      2,
+      'Tu es Garrick, capitaine de la garde de la Porte Nord. Tu es ferme, méfiant ' +
+        'envers les armes non déclarées, et tu fais respecter la Loi Martiale. Tu parles ' +
+        'de façon directe et martiale, sans détour.'
+    );
+    intelligence.registerPersonality(
+      3,
+      'Tu es Sylvia, marchande de potions distillées à partir d\'éther de comète. Tu es ' +
+        'chaleureuse, vive et intéressée par le commerce équitable. Tu proposes tes ' +
+        'élixirs et objets avec enthousiasme.'
+    );
+
+    // 1c. Bind RBAC intent policies to each villager archetype — without a
+    // registered policy the IntentGuard lets every LLM-emitted intent through.
     intelligence.setSecurityPolicy(1, 'questgiver'); // Eldrin — archimage / lore master
     intelligence.setSecurityPolicy(2, 'guard'); // Garrick — guard captain
     intelligence.setSecurityPolicy(3, 'merchant'); // Sylvia — merchant
