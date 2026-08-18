@@ -101,7 +101,12 @@ export async function installCharacterUI(
   const tick = (now: number): void => {
     const e = cible();
     setText(doc.getElementById(PANEL_IDS.targetName), e === null ? 'Aucune cible' : 'Villageois');
-    settings.refresh();
+    // Un onglet en `display: none` n'a rien à montrer. Sans cette garde,
+    // `refresh()` réécrivait treize lignes dix fois par seconde même caché —
+    // ~650 `setProperties` uikit par seconde, chacun allouant — soit treize
+    // fois le coût de Persona, que le commentaire ci-dessous prend soin de
+    // limiter. `refresh()` ne réécrit par ailleurs que ce qui a changé.
+    if (router.current === 'settings') settings.refresh();
     // Persona lit des données PAR FRAME : les relire à 90 Hz allouerait dans
     // la boucle de rendu pour un texte que l'œil ne suit pas.
     if (router.current === 'persona' && now - dernier >= PERSONA_PERIOD_MS) {

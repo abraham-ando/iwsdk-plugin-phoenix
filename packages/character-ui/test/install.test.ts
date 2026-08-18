@@ -227,6 +227,32 @@ describe("installCharacterUI — l onglet Réglages écrit sur le BON composant"
     expect(cible.getValue(CharacterStructure, 'stature')).toBeCloseTo(0.5, 5);
   });
 
+  it("ne rafraîchit plus Réglages quand l onglet Persona est actif", async () => {
+    // `refresh()` tournait à chaque tick de 100 ms, onglet caché ou non :
+    // 65 `setProperties` et 13 `setText` uikit par tick, soit ~650 appels par
+    // seconde, chacun allouant, dans un budget de 11–14 ms par frame — treize
+    // fois le coût de Persona, que le code limitait déjà soigneusement.
+    // `inertGenes` est le premier appel de `refresh()` : le compter dit si la
+    // boucle tourne, sans rien mesurer d autre.
+    const inertGenes = vi.fn((_e: unknown) => new Set<string>());
+    const { world, clicks } = build();
+    await installCharacterUI(world, { inertGenes: inertGenes as never });
+    selectionner(world, villageois(world));
+
+    vi.advanceTimersByTime(100);
+    expect(inertGenes).toHaveBeenCalledTimes(1);
+
+    clicks.get(TAB_BUTTON_IDS.persona)?.();
+    vi.advanceTimersByTime(1000); // dix ticks de plus, onglet Réglages caché
+    expect(inertGenes).toHaveBeenCalledTimes(1);
+
+    // Et il repart dès qu on y revient : la mémoire de changement vit dans le
+    // contrôleur, pas dans le minuteur.
+    clicks.get(TAB_BUTTON_IDS.settings)?.();
+    vi.advanceTimersByTime(100);
+    expect(inertGenes).toHaveBeenCalledTimes(2);
+  });
+
   it("transmet `inertGenes` de l entité sélectionnée, et ne l interroge jamais sans cible", async () => {
     const inertGenes = vi.fn((_e: unknown) => new Set(['jawWidth']));
     const { world, props } = build();

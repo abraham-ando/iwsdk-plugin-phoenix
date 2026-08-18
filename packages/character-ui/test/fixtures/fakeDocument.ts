@@ -13,18 +13,27 @@ export function makeFakeDocument(ids: readonly string[]): {
   props: Map<string, Record<string, unknown>>;
   texts: Map<string, string>;
   clicks: Map<string, () => void>;
+  journal: string[];
 } {
   const props = new Map<string, Record<string, unknown>>();
   const texts = new Map<string, string>();
   const clicks = new Map<string, () => void>();
   const elements = new Map<string, PanelElement>();
+  // Chaque ÉCRITURE, dans l'ordre, sous la forme `id:setProperties` ou
+  // `id:setText`. `props` et `texts` ne gardent que l'état FINAL : ils ne
+  // savent pas distinguer « réécrit à l'identique » de « pas réécrit » — or
+  // c'est exactement la question que pose la détection de changement de
+  // `SettingsTab`, dont le coût réel est le NOMBRE d'appels uikit.
+  const journal: string[] = [];
 
   for (const id of ids) {
     elements.set(id, {
       setProperties(p) {
+        journal.push(`${id}:setProperties`);
         props.set(id, { ...(props.get(id) ?? {}), ...p });
       },
       setText(t) {
+        journal.push(`${id}:setText`);
         texts.set(id, t);
       },
       addEventListener(type, handler) {
@@ -38,5 +47,6 @@ export function makeFakeDocument(ids: readonly string[]): {
     props,
     texts,
     clicks,
+    journal,
   };
 }

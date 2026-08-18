@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { HUMANOID } from '@iwsdk/cardinal-character';
-import { SettingsTab, GENE_ROW_IDS, GENE_STEP, NON_EDITABLE_GENES } from '../src/tabs/settings';
+import { CharacterStructure } from '@iwsdk/cardinal-character-three';
+import {
+  SettingsTab, GENE_ROW_IDS, GENE_STEP, NON_EDITABLE_GENES,
+  NOTE_INERTE, NOTE_NON_EDITABLE,
+} from '../src/tabs/settings';
 import { makeFakeDocument } from './fixtures/fakeDocument';
 
 /** Tous les identifiants que l'onglet peut demander. */
@@ -11,7 +15,7 @@ function tousLesIds(): string[] {
 }
 
 function build(inertes: readonly string[] = []) {
-  const { doc, props, texts, clicks } = makeFakeDocument(tousLesIds());
+  const { doc, props, texts, clicks, journal } = makeFakeDocument(tousLesIds());
   const valeurs = new Map<string, number>();
   for (const cle of Object.keys(HUMANOID.genes)) valeurs.set(cle, 0.5);
   const ecrits: Array<[string, number]> = [];
@@ -23,7 +27,7 @@ function build(inertes: readonly string[] = []) {
     },
     inertGenes: () => new Set(inertes),
   });
-  return { tab, props, texts, clicks, valeurs, ecrits };
+  return { tab, props, texts, clicks, valeurs, ecrits, journal };
 }
 
 describe('l onglet Réglages', () => {
@@ -98,7 +102,13 @@ describe('l onglet Réglages', () => {
   });
 
   it('le pas vient du schéma ECS, pas d une constante recopiée', () => {
-    expect(GENE_STEP).toBe(0.01);
+    // `toBe(0.01)` affirmait le CONTRAIRE de ce que son nom annonce : c'est la
+    // valeur du repli en dur autant que celle du schéma, donc la disparition
+    // de `step` laissait le test vert. On compare désormais à la source, et le
+    // repli a été remplacé par une levée (voir `pasDuSchema`).
+    const pasDuSchema = (CharacterStructure.schema.stature as { step?: number }).step;
+    expect(typeof pasDuSchema).toBe('number');
+    expect(GENE_STEP).toBe(pasDuSchema);
   });
 
   it('les trois gènes de surface ne sont pas éditables, et pour une autre raison', () => {
@@ -113,5 +123,73 @@ describe('l onglet Réglages', () => {
     clicks.get(GENE_ROW_IDS['skinTone']!.plus)?.();
     expect(ecrits).toEqual([]);
     expect(props.get(GENE_ROW_IDS['skinTone']!.plus)?.display).toBe('none');
+  });
+
+  it('et la ligne DIT laquelle des deux raisons : le rig, ou la structure', () => {
+    // Le document ne portait qu un seul texte de note, « inerte sur ce rig »,
+    // répété treize fois. Pour les trois gènes de surface c est faux : la
+    // cause n a rien à voir avec le rig chargé, et un autre avatar ne les
+    // rallumerait pas. La distinction que `refresh()` prend soin de faire
+    // était perdue exactement là où le joueur la lit.
+    const { tab, texts } = build(['jawWidth']);
+    tab.refresh();
+    expect(NOTE_INERTE).not.toBe(NOTE_NON_EDITABLE);
+    expect(texts.get(GENE_ROW_IDS['jawWidth']!.note)).toBe(NOTE_INERTE);
+    expect(texts.get(GENE_ROW_IDS['skinTone']!.note)).toBe(NOTE_NON_EDITABLE);
+    expect(texts.get(GENE_ROW_IDS['hairStyle']!.note)).toBe(NOTE_NON_EDITABLE);
+  });
+
+  it('n invente pas de nombre pour un gène qu aucun composant ne porte', () => {
+    // `install.ts` route la lecture de `skinTone` vers `CharacterFace`, qui ne
+    // l a pas : `getValue` rend `null` et le repli affichait `0.50` pour les
+    // trois gènes de surface, quel que soit le génome réel — un chiffre
+    // inventé présenté comme une mesure.
+    const { tab, texts } = build();
+    tab.refresh();
+    expect(texts.get(GENE_ROW_IDS['stature']!.value)).toBe('0.50');
+    expect(texts.get(GENE_ROW_IDS['skinTone']!.value)).toBe('—');
+  });
+});
+
+describe("l onglet Réglages ne réécrit que ce qui a changé", () => {
+  // `refresh()` écrivait cinq `setProperties` et un `setText` par gène, sans
+  // condition, dix fois par seconde : 650 appels uikit par seconde, chacun
+  // allouant, sur le thread de rendu. Le document garde ce qu on lui a écrit ;
+  // réécrire une valeur identique ne change donc RIEN à l écran et coûte tout.
+
+  it('un second refresh sans changement n écrit pas une seule fois', () => {
+    const { tab, journal } = build();
+    tab.refresh();
+    const apresPremier = journal.length;
+    expect(apresPremier).toBeGreaterThan(0);
+    tab.refresh();
+    tab.refresh();
+    expect(journal.length).toBe(apresPremier);
+  });
+
+  it('mais réécrit la ligne dont la valeur a changé, et elle seule', () => {
+    const { tab, journal, valeurs } = build();
+    tab.refresh();
+    journal.length = 0;
+    valeurs.set('stature', 0.7);
+    tab.refresh();
+    expect(journal.length).toBeGreaterThan(0);
+    expect(journal.every((e) => e.includes('stature'))).toBe(true);
+  });
+
+  it('et réécrit la ligne qui s éteint ou se rallume', () => {
+    const { doc, journal } = makeFakeDocument(tousLesIds());
+    let inertes = new Set<string>();
+    const tab = new SettingsTab(doc, {
+      read: () => 0.5,
+      write: () => {},
+      inertGenes: () => inertes,
+    });
+    tab.refresh();
+    journal.length = 0;
+    inertes = new Set(['jawWidth']);
+    tab.refresh();
+    expect(journal.every((e) => e.includes('jawWidth'))).toBe(true);
+    expect(journal.length).toBeGreaterThan(0);
   });
 });
