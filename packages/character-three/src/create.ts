@@ -10,6 +10,7 @@ import {
 } from './components/index';
 import { CharacterCompileSystem } from './systems/CharacterCompileSystem';
 import { CharacterExpressionSystem } from './systems/CharacterExpressionSystem';
+import { CharacterAnimationSystem } from './systems/CharacterAnimationSystem';
 
 export interface CreateCharacterOptions {
   familyId: string;
@@ -82,6 +83,31 @@ export function assertBonesAreDescendants(
       );
     }
   }
+}
+
+/**
+ * Les valeurs initiales d'un composant de gènes, prises dans le génome.
+ *
+ * Sans cet amorçage, `addComponent(CharacterStructure, {})` laisse les cinq
+ * champs au défaut `0.5` du schéma — et `refreshGenes` LIT LE COMPOSANT en
+ * priorité pour les gènes de structure, ce qui jetait silencieusement le génome
+ * reçu. Onze villageois tirés de onze génomes distincts se retrouvaient avec le
+ * même corps.
+ *
+ * La priorité au composant est voulue : c'est elle qui permettra à un panneau de
+ * réglages d'éditer un personnage vivant. Ce qui manquait, c'était le point de
+ * départ.
+ */
+function genesFor(
+  schema: Readonly<Record<string, unknown>>,
+  genome: Genome,
+): Record<string, number> {
+  const values: Record<string, number> = {};
+  for (const key of Object.keys(schema)) {
+    const value = genome.genes[key];
+    if (value !== undefined) values[key] = value;
+  }
+  return values;
 }
 
 /**
@@ -178,8 +204,12 @@ export function createCharacter(
       : new PuppetApplicator({ rigRoot: anchor, nodes: bones, surfaceTargets, ramps });
 
   entity.addComponent(CharacterIdentity, { family: family.id, age: options.age });
-  entity.addComponent(CharacterStructure, {});
-  entity.addComponent(CharacterFace, {});
+  entity.addComponent(CharacterStructure, genesFor(CharacterStructure.schema, options.genome));
+  entity.addComponent(CharacterFace, genesFor(CharacterFace.schema, options.genome));
+  // CharacterSurface reste amorcé à vide : ses deux champs sont des
+  // Types.Color (des VECTEURS), écrits par getVectorView à la compilation —
+  // voir CharacterCompileSystem. Les initialiser ici par addComponent
+  // n'apporterait rien et brouillerait la source de vérité.
   entity.addComponent(CharacterSurface, {});
 
   const compiler = world.getSystem(CharacterCompileSystem) as CharacterCompileSystem;
@@ -202,4 +232,46 @@ export function installCharacterThree(world: World): void {
     .registerComponent(CharacterSelection);
   world.registerSystem(CharacterCompileSystem, { priority: 60 });
   world.registerSystem(CharacterExpressionSystem, { priority: 70 });
+  // 80 : le mixer tourne APRÈS que la morphologie de la frame est posée.
+  world.registerSystem(CharacterAnimationSystem, { priority: 80 });
+}
+
+export interface CreateCharacterFromAssetOptions {
+  /** Identifiant du manifeste — jamais une URL : le chargement passe par `AssetManager`. */
+  assetId: string;
+  familyId: string;
+  genome: Genome;
+  age: number;
+}
+
+/**
+ * Instancie un rig depuis le manifeste et le fait entrer dans le pont.
+ *
+ * `world.assets.instantiate` rend `gltf.scene` d'un clone obtenu par
+ * `SkeletonUtils.clone` — donc un `Skeleton` et des os NEUFS à chaque appel,
+ * ce qui est la condition pour que onze villageois portent onze morphologies
+ * sur deux assets de base. Géométries, matériaux et clips restent partagés par
+ * référence : c'est pourquoi l'applicateur clone ses matériaux et l'assainisseur
+ * rend un nouveau clip.
+ *
+ * Le nœud rendu est la racine de scène, c'est-à-dire l'ANCÊTRE COMMUN de
+ * l'armature et du `SkinnedMesh` — exactement ce que `createCharacter` exige.
+ * Un import glTF place souvent l'armature en frère du maillage ; passer le
+ * maillage seul ferait lever le pont.
+ *
+ * Deux échecs remontent, et ils doivent rester distinguables : le chargement
+ * (identifiant inconnu, réseau) lève depuis `AssetManager` ; le refus de rig
+ * lève depuis `createCharacter` avec la liste des os manquants.
+ */
+export async function createCharacterFromAsset(
+  world: World,
+  options: CreateCharacterFromAssetOptions,
+): Promise<{ entity: ReturnType<World['createTransformEntity']>; report: ImportReport }> {
+  const rigRoot = await world.assets.instantiate<Object3D>(options.assetId);
+  return createCharacter(world, {
+    familyId: options.familyId,
+    genome: options.genome,
+    age: options.age,
+    rigRoot,
+  });
 }

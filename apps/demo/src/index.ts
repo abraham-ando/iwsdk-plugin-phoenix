@@ -24,6 +24,13 @@ import { mountLocalAiPanel } from './simulation/mountLocalAiPanel.js';
 import { PlayerMicrophone } from './simulation/PlayerMicrophone.js';
 import { TrajectoryUploader } from './simulation/TrajectoryUploader.js';
 import { PhysicsSimulationSystem } from './simulation/PhysicsSimulationSystem.js';
+import {
+  createCharacterFromAsset,
+  installCharacterThree,
+  loadCharacterClips,
+} from '@iwsdk/cardinal-character-three';
+import { buildVillagerGenomes } from './simulation/villagerGenomes.js';
+import { makeRiggedBody, upgradeVillagers } from './simulation/VillagerBody.js';
 
 const container = document.getElementById('scene-container') as HTMLDivElement;
 const network = readNetworkConfig(import.meta.env);
@@ -67,6 +74,57 @@ World.create(container, projectOptions)
       const sceneData = PrehistoricEnvironment3D.createWorldScene(world, VILLAGE_LAYOUT, materials);
       (world as any).scene?.add?.(sceneData.root);
       simSystem.attachScene(sceneData);
+
+      // Le paquet des personnages n'était branché nulle part : l'étape 2 avait
+      // livré des composants et des systèmes que l'application n'importait pas.
+      installCharacterThree(world);
+
+      // Le village est monté en marionnettes et JOUABLE dès cette frame. Les
+      // rigs le remplacent ensuite, un par un, si le réseau les apporte.
+      const genomes = buildVillagerGenomes(VILLAGE_LAYOUT.agents);
+      // Une seule chaîne, pas deux indépendantes : un échec des clips
+      // FÉMININS annule aussi les rigs MASCULINS (le .catch du bas couvre
+      // tout). Asymétrie acceptée pour rester simple — le village entier
+      // retombe en marionnettes plutôt que de mélanger rigs et marionnettes
+      // par genre.
+      void loadCharacterClips({
+        idle: 'clip-idle-masculine',
+        walk: 'clip-walk-masculine',
+      })
+        .then((masculineClips) =>
+          loadCharacterClips({ idle: 'clip-idle-feminine', walk: 'clip-walk-feminine' }).then(
+            (feminineClips) =>
+              upgradeVillagers({
+                bodies: sceneData.agentAvatars,
+                agents: VILLAGE_LAYOUT.agents,
+                buildRig: async (agent, puppet) => {
+                  // Un seul asset de base par genre : sept villageois
+                  // masculins partagent `avatar-tpose-masculine`, quatre
+                  // féminines `avatar-tpose-feminine`. Ce qui les distingue
+                  // à l'écran est la morphologie compilée, pas le fichier.
+                  const assetId =
+                    agent.gender === 'feminine'
+                      ? 'avatar-tpose-feminine'
+                      : 'avatar-tpose-masculine';
+                  const { entity } = await createCharacterFromAsset(world, {
+                    assetId,
+                    familyId: 'humanoid',
+                    genome: genomes[agent.id]!,
+                    age: 30,
+                  });
+                  return makeRiggedBody(
+                    world, entity,
+                    agent.gender === 'feminine' ? feminineClips : masculineClips,
+                    puppet,
+                  );
+                },
+              }),
+          ),
+        )
+        .catch((error: unknown) => {
+          console.warn('[cardinal-demo] clips indisponibles, village en marionnettes :', error);
+        });
+
       const microphone = new PlayerMicrophone(world, (text) => simSystem.playerSpeak(text));
       new SimulationHud(document.body, simSystem, microphone);
       // Mode-2 deliberation: pump plan requests to the BFF (LLM or mock), with

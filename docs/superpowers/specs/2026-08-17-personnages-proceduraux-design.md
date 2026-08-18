@@ -432,7 +432,13 @@ Cible : 30 à 40 êtres vivants morphologiquement distincts, sur Quest 3 autonom
 
 Deux sondes jetables, une heure chacune, avant la première ligne de production.
 
-1. **Les clips écrasent-ils la morphologie ?** Beaucoup de clips animent des positions d'os et pas seulement des rotations. La convention Mixamo/RPM ne met des pistes de position que sur les hanches, auquel cas tout va bien — mais cela n'a pas été vérifié sur un rig réel. Sonde : un rig réel, un membre rallongé, un clip de marche joué. Si la convention ne tient pas, la morphologie s'applique après le mixer ; le reste du design ne bouge pas.
+1. **Les clips écrasent-ils la morphologie ?** — **RÉPONDU (étape 3, §2.1).**
+   Mesuré sur `readyplayerme/animation-library` : les clips de locomotion et
+   d'inactivité ne portent qu'une piste de translation, sur les hanches. Les
+   clips de danse en portent dix-sept — mais seize sont CONSTANTES à 10⁻⁶ m
+   près et ne réencodent que les décalages d'os du rig source.
+   `classifyTranslationTrack` juge sur l'amplitude et non sur la présence : il
+   les retire sans conflit. La conception ne change pas.
 2. **Quel chemin de montage UIKitML pour `@iwsdk/core@0.5.3` ?** La documentation officielle en décrit trois, vraisemblablement issus de versions différentes : compilation Vite vers JSON puis `PanelUI { config }` ; fichiers servis tels quels depuis `public/ui` sans plugin ; enregistrement au manifeste puis `world.assets.instantiate`. Sonde : trancher contre la référence installée (`npx iwsdk reference warmup` puis les outils de `@iwsdk/reference`). Le montage est isolé derrière un adaptateur, donc seule son implémentation dépend de la réponse.
 
 ## 14. Corrections adjacentes incluses

@@ -161,3 +161,8 @@ packages/server/_build_core/
 
 # Claude / agent worktrees
 .claude/
+
+# Clips d'animation Ready Player Me : récupérés par
+# scripts/fetch-character-clips.mjs, JAMAIS commités — leur licence interdit
+# la redistribution (spec étape 3, §6.2).
+apps/demo/public/characters/

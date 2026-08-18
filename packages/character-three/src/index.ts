@@ -8,6 +8,8 @@ export type { RigNode, ImportReport } from './resolve/types';
 export { resolveBinding } from './resolve/resolveBinding';
 
 export { sanitizeClip } from './clips/sanitize';
+export { applyRootMotionPolicy, type RootMotionPolicy } from './clips/rootMotion';
+export { loadCharacterClips } from './clips/load';
 
 export {
   CharacterIdentity, CharacterStructure, CharacterFace,
@@ -18,8 +20,9 @@ export {
   CharacterCompileSystem, genomeFromComponents, needsRecompile,
 } from './systems/CharacterCompileSystem';
 export { CharacterExpressionSystem } from './systems/CharacterExpressionSystem';
+export { CharacterAnimationSystem } from './systems/CharacterAnimationSystem';
 
 export {
   createCharacter, installCharacterThree, assertBonesAreDescendants,
-  type CreateCharacterOptions,
+  createCharacterFromAsset, type CreateCharacterOptions, type CreateCharacterFromAssetOptions,
 } from './create';

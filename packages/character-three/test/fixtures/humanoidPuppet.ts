@@ -4,36 +4,58 @@ import {
 } from '@iwsdk/core';
 
 /**
- * Construit le squelette HUMANOID complet, en vrais `Object3D`, alias
- * Mixamo — les mêmes noms que la fixture `RigNode` de `resolve.test.ts`, mais
- * ici de vrais nœuds de scène. `hips` est l'os racine, pas le conteneur : les
- * deux fabriques ci-dessous l'enveloppent dans un `Object3D` séparé, le motif
- * réaliste d'un import glTF — exactement ce que `assertBonesAreDescendants`
- * vérifie.
+ * Convention de nommage des os de la fixture.
+ *
+ * - `'mixamo'` (défaut) — `mixamorig:Hips`… C'est le jeu d'alias SECONDAIRE de
+ *   `HUMANOID.bones`, celui qui prouve que le résolveur ne dépend pas du nom
+ *   canonique.
+ * - `'rpm'` — `Hips`, `Spine2`, `Head`… la convention des deux avatars T-pose
+ *   réellement livrés (mesurée dans `tpose-rig.test.ts`), et la SEULE des deux
+ *   qu'un `AnimationMixer` sache viser.
+ *
+ * Mesuré, et c'est la raison d'être de cette option : `PropertyBinding` lit
+ * `:` comme un séparateur de « répertoire ». Une piste `mixamorig:Hips.position`
+ * est donc analysée en `{ nodeName: 'Hips' }` — qui ne désigne aucun nœud d'un
+ * rig nommé à la Mixamo — et une piste `mixamorigHips.position` (le nom
+ * assaini) n'en désigne pas davantage tant que les NŒUDS ne sont pas assainis
+ * eux aussi, ce que fait `GLTFLoader` et pas cette fixture. Autrement dit :
+ * aucun clip ne peut animer le rig `'mixamo'`, quel que soit le nom qu'on
+ * donne à ses pistes. C'est exactement le trou qui laissait les cinq tests du
+ * système d'animation verts avec un mixer branché sur rien.
  */
-function buildSkeleton(): { hips: Bone; bones: Record<string, Object3D> } {
+export type BoneNaming = 'mixamo' | 'rpm';
+
+/**
+ * Construit le squelette HUMANOID complet, en vrais `Object3D` — les mêmes noms
+ * que la fixture `RigNode` de `resolve.test.ts`, mais ici de vrais nœuds de
+ * scène. `hips` est l'os racine, pas le conteneur : les deux fabriques
+ * ci-dessous l'enveloppent dans un `Object3D` séparé, le motif réaliste d'un
+ * import glTF — exactement ce que `assertBonesAreDescendants` vérifie.
+ */
+function buildSkeleton(naming: BoneNaming): { hips: Bone; bones: Record<string, Object3D> } {
   const bones: Record<string, Object3D> = {};
+  const prefix = naming === 'mixamo' ? 'mixamorig:' : '';
 
   const bone = (role: string, name: string, y = 0): Bone => {
     const b = new Bone();
-    b.name = name;
+    b.name = `${prefix}${name}`;
     b.position.set(0, y, 0);
     bones[role] = b;
     return b;
   };
 
-  const hips = bone('root', 'mixamorig:Hips', 0.95);
-  const spine = bone('spine', 'mixamorig:Spine', 0.12);
-  const chest = bone('chest', 'mixamorig:Spine2', 0.14);
-  const neck = bone('neck', 'mixamorig:Neck', 0.16);
-  const head = bone('head', 'mixamorig:Head', 0.09);
+  const hips = bone('root', 'Hips', 0.95);
+  const spine = bone('spine', 'Spine', 0.12);
+  const chest = bone('chest', 'Spine2', 0.14);
+  const neck = bone('neck', 'Neck', 0.16);
+  const head = bone('head', 'Head', 0.09);
 
   const arm = (side: 'Left' | 'Right') => {
     const suffix = side === 'Left' ? 'L' : 'R';
-    const shoulder = bone(`shoulder${suffix}`, `mixamorig:${side}Shoulder`, 0.05);
-    const upperArm = bone(`upperArm${suffix}`, `mixamorig:${side}Arm`, 0.13);
-    const foreArm = bone(`foreArm${suffix}`, `mixamorig:${side}ForeArm`, 0.27);
-    const hand = bone(`hand${suffix}`, `mixamorig:${side}Hand`, 0.25);
+    const shoulder = bone(`shoulder${suffix}`, `${side}Shoulder`, 0.05);
+    const upperArm = bone(`upperArm${suffix}`, `${side}Arm`, 0.13);
+    const foreArm = bone(`foreArm${suffix}`, `${side}ForeArm`, 0.27);
+    const hand = bone(`hand${suffix}`, `${side}Hand`, 0.25);
     shoulder.add(upperArm);
     upperArm.add(foreArm);
     foreArm.add(hand);
@@ -42,9 +64,9 @@ function buildSkeleton(): { hips: Bone; bones: Record<string, Object3D> } {
 
   const leg = (side: 'Left' | 'Right') => {
     const suffix = side === 'Left' ? 'L' : 'R';
-    const upLeg = bone(`upLeg${suffix}`, `mixamorig:${side}UpLeg`, -0.05);
-    const shin = bone(`leg${suffix}`, `mixamorig:${side}Leg`, -0.44);
-    const foot = bone(`foot${suffix}`, `mixamorig:${side}Foot`, -0.42);
+    const upLeg = bone(`upLeg${suffix}`, `${side}UpLeg`, -0.05);
+    const shin = bone(`leg${suffix}`, `${side}Leg`, -0.44);
+    const foot = bone(`foot${suffix}`, `${side}Foot`, -0.42);
     upLeg.add(shin);
     shin.add(foot);
     return upLeg;
@@ -77,12 +99,12 @@ function wrap(hips: Bone): Object3D {
  * reste vide (aucun enfant n'a de géométrie) et la hauteur mesurée serait
  * -Infinity.
  */
-export function humanoidPuppet(): {
+export function humanoidPuppet(naming: BoneNaming = 'mixamo'): {
   root: Object3D;
   bones: Record<string, Object3D>;
   body: Mesh<BoxGeometry, MeshBasicMaterial>;
 } {
-  const { hips, bones } = buildSkeleton();
+  const { hips, bones } = buildSkeleton(naming);
 
   const body = new Mesh(new BoxGeometry(0.4, 1.75, 0.3), new MeshBasicMaterial());
   body.name = 'Body';
@@ -102,12 +124,12 @@ export function humanoidPuppet(): {
  * lit `mesh.skeleton` — sans liaison, `createCharacter` lève avant même
  * d'atteindre ce que ce test vérifie.
  */
-export function humanoidSkinned(): {
+export function humanoidSkinned(naming: BoneNaming = 'mixamo'): {
   root: Object3D;
   bones: Record<string, Object3D>;
   mesh: SkinnedMesh;
 } {
-  const { hips, bones } = buildSkeleton();
+  const { hips, bones } = buildSkeleton(naming);
 
   const geometry = new BufferGeometry();
   geometry.setAttribute('position', new Float32BufferAttribute([0, 0, 0], 3));

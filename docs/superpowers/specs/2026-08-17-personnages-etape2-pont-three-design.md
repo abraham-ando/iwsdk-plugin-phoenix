@@ -293,6 +293,9 @@ La spec amont §14 les promettait ; l'étape 1 ne les a pas touchées faute de s
 ## 13. Hors périmètre
 
 - Le remplacement d'`AgentAvatarFactory` et le chargement des clips au manifeste : étape 3.
+- Le **root motion** n'était pas prévu ici et ne l'était nulle part : mesuré à
+  3,21 m par boucle sur `M_Walk_001`, il est traité par l'étape 3 (§4), par une
+  politique portée par l'appelant et non par la famille.
 - Les panneaux spatiaux : étape 4.
 - La réplication du génome : étape 5.
 - La famille `canid` : recommandée mais distincte, et c'est elle qui dira si `FamilyDescriptor` a cessé de grossir.
