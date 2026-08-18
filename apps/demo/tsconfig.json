@@ -12,7 +12,8 @@
     "types": ["@iwsdk/vite-plugin-dev/client"],
     "baseUrl": ".",
     "paths": {
-      "@character-three/fixtures/*": ["../../packages/character-three/test/fixtures/*"]
+      "@character-three/fixtures/*": ["../../packages/character-three/test/fixtures/*"],
+      "@iwsdk/cardinal-character-ui": ["../../packages/character-ui/src/index.ts"]
     }
   },
   "include": ["src/**/*.ts", "test/**/*.ts"]

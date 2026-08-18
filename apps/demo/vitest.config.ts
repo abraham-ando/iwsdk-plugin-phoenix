@@ -27,6 +27,30 @@ export default defineConfig({
       '@character-three/components-source?raw': fileURLToPath(
         new URL('../../packages/character-three/src/components/index.ts', import.meta.url),
       ) + '?raw',
+      // La SOURCE du paquet, pas son `dist/`.
+      //
+      // `character-panel-integration.test.ts` est la seule preuve de bout en
+      // bout de l'étape — clic `[+]` jusqu'à l'os déplacé — et le champ
+      // `exports` du paquet la faisait porter sur `./dist/index.js`. Or `dist`
+      // est ignoré par git (`.gitignore`), le script racine `test` ne construit
+      // rien avant les tests de la démo, et la CI lance `pnpm build` APRÈS
+      // `pnpm test` : sur une machine où `dist/` est périmé, le garde le plus
+      // important de la branche validait la dernière construction et non
+      // l'arbre de travail ; sur une extraction propre, l'import ne résolvait
+      // même plus. On pointe donc le répertoire `src` (Vite y résout
+      // `index.ts`), et le test suit le code qu'on vient d'écrire.
+      //
+      // `@iwsdk/cardinal-character-three` a la même dette, ANTÉRIEURE à cette
+      // étape et partagée avec d'autres tests ; l'aliaser ici ferait charger
+      // ses composants une seconde fois (`createComponent` au niveau module
+      // dans deux réalités), et elics lève sur le doublon. Elle se traite en
+      // construisant avant les tests, pas ici.
+      //
+      // `tsconfig.json` porte le `paths` jumeau, pour que `pnpm typecheck` et
+      // `vitest` vérifient le MÊME code.
+      '@iwsdk/cardinal-character-ui': fileURLToPath(
+        new URL('../../packages/character-ui/src', import.meta.url),
+      ),
     },
   },
   test: { globals: true, environment: 'node', include: ['test/**/*.test.ts'] },
