@@ -4,7 +4,11 @@ import { NPCMemory, addDialogueTurn } from '../components/NPCMemory';
 import { NPCEmotion, EmotionPromptModifiers, EmotionTypeValue } from '../components/NPCEmotion';
 import { CardinalContextBuilder, type CardinalWorldContextOptions } from '../context/CardinalContextBuilder';
 import { IntentParser, IntentDispatcher } from '../intents/IntentParser';
+import { IntentGuard, type IntentSecurityPolicy } from '../security/IntentGuard';
 import type { ActionIntent, ActionIntentType, IntentHandler } from '../intents/types';
+
+/** Built-in RBAC role presets provided by {@link IntentGuard.getRolePolicy} */
+export type NPCSecurityRole = 'merchant' | 'guard' | 'questgiver' | 'companion' | 'neutral';
 import { CognitiveScheduler } from '../scheduler/CognitiveScheduler';
 import type { IInferenceAdapter, InferenceResponse } from '../adapters/types';
 
@@ -35,6 +39,7 @@ export class CardinalIntelligenceSystem extends createSystem(
     [2, 'Tu es un marchand ambulant cherchant des artefacts rares.'],
   ]);
   private dialogueHistory = new Map<number, string>();
+  private securityPolicies = new Map<number, IntentSecurityPolicy>();
 
   public override init(): void {
     if (this.config.adapter.value) {
@@ -55,6 +60,16 @@ export class CardinalIntelligenceSystem extends createSystem(
   /** Register a custom personality prompt for a given archetype ID */
   public registerPersonality(personalityId: number, prompt: string): void {
     this.personalities.set(personalityId, prompt);
+  }
+
+  /**
+   * Bind an intent security policy to a personality ID — either a built-in
+   * role preset name or a custom {@link IntentSecurityPolicy}.
+   * Without a registered policy, intents dispatch unfiltered (legacy behavior).
+   */
+  public setSecurityPolicy(personalityId: number, policy: NPCSecurityRole | IntentSecurityPolicy): void {
+    const resolved = typeof policy === 'string' ? IntentGuard.getRolePolicy(policy) : policy;
+    this.securityPolicies.set(personalityId, resolved);
   }
 
   /** Get the last generated dialogue for an NPC */
@@ -83,6 +98,10 @@ export class CardinalIntelligenceSystem extends createSystem(
     if (isThinking) {
       return 'Le PNJ est déjà en train de réfléchir...';
     }
+
+    // Neutralize forged [ACTION:…] tags and prompt-injection markers before the
+    // text reaches prompt construction or episodic memory.
+    const sanitizedMessage = IntentGuard.sanitizePlayerInput(playerMessage);
 
     const personalityId = entity.getValue(SmartNPC, 'personalityId') ?? 0;
     let basePrompt =
@@ -120,7 +139,7 @@ export class CardinalIntelligenceSystem extends createSystem(
         const res: InferenceResponse = await this.inferenceAdapter!.generate({
           npcId,
           systemPrompt: systemPromptWithInstructions,
-          playerMessage,
+          playerMessage: sanitizedMessage,
           worldContext: formattedContext,
         });
 
@@ -130,16 +149,25 @@ export class CardinalIntelligenceSystem extends createSystem(
         // Record episodic memory
         if ((NPCMemory as any).bit && entity.hasComponent(NPCMemory)) {
           const maxTurns = entity.getValue(NPCMemory, 'maxHistoryTurns') ?? 4;
-          addDialogueTurn(npcId, { role: 'user', content: playerMessage, timestamp: now }, maxTurns);
+          addDialogueTurn(npcId, { role: 'user', content: sanitizedMessage, timestamp: now }, maxTurns);
           addDialogueTurn(npcId, { role: 'assistant', content: parsed.cleanDialogue, timestamp: now }, maxTurns);
           const total = (entity.getValue(NPCMemory, 'totalInteractions') ?? 0) + 1;
           entity.setValue(NPCMemory, 'totalInteractions', total);
           entity.setValue(NPCMemory, 'lastInteractionTime', now);
         }
 
-        // Dispatch action intents to game handlers
-        if (parsed.intents.length > 0) {
-          await this.intentDispatcher.dispatch(parsed.intents, npcId);
+        // Validate LLM-emitted intents against this NPC's security policy,
+        // then dispatch only the surviving ones to game handlers.
+        const policy = this.securityPolicies.get(personalityId);
+        const permittedIntents = parsed.intents.filter((intent) => {
+          const verdict = IntentGuard.validateIntent(intent.type, intent.params, policy);
+          if (!verdict.isValid) {
+            console.warn(`[CardinalAI] Blocked intent '${intent.type}' for NPC ${npcId}: ${verdict.reason}`);
+          }
+          return verdict.isValid;
+        });
+        if (permittedIntents.length > 0) {
+          await this.intentDispatcher.dispatch(permittedIntents, npcId);
         }
 
         this.dialogueHistory.set(npcId, parsed.cleanDialogue);
