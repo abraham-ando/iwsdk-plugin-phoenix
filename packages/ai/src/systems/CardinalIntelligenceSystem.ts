@@ -160,11 +160,7 @@ export class CardinalIntelligenceSystem extends createSystem(
         // then dispatch only the surviving ones to game handlers.
         const policy = this.securityPolicies.get(personalityId);
         const permittedIntents = parsed.intents.filter((intent) => {
-          const verdict = IntentGuard.validateIntent(
-            intent.type,
-            intent.params as Record<string, string>,
-            policy,
-          );
+          const verdict = IntentGuard.validateIntent(intent.type, intent.params, policy);
           if (!verdict.isValid) {
             console.warn(`[CardinalAI] Blocked intent '${intent.type}' for NPC ${npcId}: ${verdict.reason}`);
           }

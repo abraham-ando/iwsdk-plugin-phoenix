@@ -17,17 +17,22 @@ export interface IntentSecurityPolicy {
 export class IntentGuard {
   private static readonly INJECTION_PATTERNS = [
     /<\|(?:im_start|im_end|system|user|assistant)\|>/gi,
-    /\[ACTION:[^\]]*\]/gi, // Strip raw player-injected action tags from input
+    /\[ACTION:[^\]]*\]?/gi, // Strip raw player-injected action tags, terminated or not
     /###\s*(?:System|Instruction|Response):?/gi,
-    /\[SYSTEM:?\]/gi,
+    /\[SYSTEM(?::[^\]]*)?\]/gi,
   ];
+
+  /** Zero-width and word-joiner code points used to split markers past literal matching */
+  private static readonly ZERO_WIDTH_REGEX = /[\u200B-\u200D\u2060\uFEFF]/g;
 
   /**
    * Sanitize player spoken input or text to prevent prompt injection and tag forgery.
    */
   public static sanitizePlayerInput(rawInput: string): string {
     if (!rawInput) return '';
-    let sanitized = rawInput;
+    // Remove zero-width splitters and fold unicode compatibility forms
+    // (full-width pipes/brackets…) so obfuscated markers match the ASCII patterns.
+    let sanitized = rawInput.replace(this.ZERO_WIDTH_REGEX, '').normalize('NFKC');
     for (const pattern of this.INJECTION_PATTERNS) {
       sanitized = sanitized.replace(pattern, ' ');
     }
@@ -39,7 +44,7 @@ export class IntentGuard {
    */
   public static validateIntent(
     action: string,
-    params: Record<string, string>,
+    params: Record<string, string | number | boolean>,
     policy?: IntentSecurityPolicy
   ): { isValid: boolean; reason?: string } {
     const normalizedAction = action.toUpperCase().trim();

@@ -31,6 +31,7 @@ import {
   SpatialDialogueUI,
   NPCPerception,
   NPCBanter,
+  CardinalIntelligenceSystem,
   GroupConversationSystem,
   SpatialRAGSystem,
   AvatarMeshBinder,
@@ -55,6 +56,15 @@ export function setupCardinalVillage(world: World): VillageNPCs {
       apiKey: 'demo_key',
     },
   });
+
+  // 1b. Bind RBAC intent policies to each villager archetype — without a
+  // registered policy the IntentGuard lets every LLM-emitted intent through.
+  const intelligence = world.getSystem(CardinalIntelligenceSystem);
+  if (intelligence) {
+    intelligence.setSecurityPolicy(1, 'questgiver'); // Eldrin — archimage / lore master
+    intelligence.setSecurityPolicy(2, 'guard'); // Garrick — guard captain
+    intelligence.setSecurityPolicy(3, 'merchant'); // Sylvia — merchant
+  }
 
   // 2. Index Kingdom Lore into Spatial RAG
   const ragSystem = world.getSystem(SpatialRAGSystem);
