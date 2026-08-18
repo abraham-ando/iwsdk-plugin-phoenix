@@ -19,6 +19,12 @@ export interface CardinalWorldContextOptions {
   sectorName?: string;
   /** Additional custom situational details */
   customContext?: string;
+  /**
+   * Identifier of the player/session querying the NPC. When provided, the
+   * conversational memory summary is scoped to this player's own turns with
+   * the NPC — never another player's — preventing cross-session leakage.
+   */
+  playerId?: string;
 }
 
 export const WeatherKindNames: Record<number, string> = {
@@ -84,8 +90,8 @@ export class CardinalContextBuilder {
 
     // 5. Conversational Memory Summary
     if (entity) {
-      const entityId = (entity as any).id ?? 0;
-      const history = getDialogueHistory(entityId);
+      const entityId = (entity as any).index ?? (entity as any).id ?? 0;
+      const history = getDialogueHistory(entityId, options.playerId);
       if (history.length > 0) {
         lines.push('- Historique récent de conversation :');
         for (const turn of history.slice(-4)) {

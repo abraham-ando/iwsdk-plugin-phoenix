@@ -84,7 +84,14 @@ export class CardinalIntelligenceSystem extends createSystem(
     entity: Entity,
     playerMessage: string,
     worldContextOrOptions?: string | CardinalWorldContextOptions,
-    spatialPriority?: { distance?: number; gazeAlignment?: number }
+    spatialPriority?: { distance?: number; gazeAlignment?: number },
+    /**
+     * Identifier of the player/session sending this message. Optional and
+     * backward-compatible: omitted, episodic memory falls back to the
+     * legacy shared-per-entity bucket. Supplied, each player's dialogue
+     * turns with this NPC are isolated from every other player's.
+     */
+    playerId?: string
   ): Promise<string> {
     if (!this.inferenceAdapter || !this.inferenceAdapter.isReady) {
       return '...';
@@ -122,7 +129,10 @@ export class CardinalIntelligenceSystem extends createSystem(
     if (typeof worldContextOrOptions === 'string') {
       formattedContext = worldContextOrOptions;
     } else {
-      formattedContext = CardinalContextBuilder.buildContext(entity, worldContextOrOptions ?? {});
+      formattedContext = CardinalContextBuilder.buildContext(entity, {
+        ...(worldContextOrOptions ?? {}),
+        playerId: playerId ?? worldContextOrOptions?.playerId,
+      });
     }
 
     // Append instructions for structured action intent formatting
@@ -132,7 +142,12 @@ export class CardinalIntelligenceSystem extends createSystem(
     const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
     entity.setValue(SmartNPC, 'lastDecisionTime', now);
 
-    const npcId = (entity as any).id ?? personalityId;
+    // Resolve the entity's stable identity the same way the rest of the
+    // codebase does (see DialogueBubbleSystem, CardinalSpatialAudioSystem,
+    // etc.): `entity.index` first, `.id` as a legacy fallback. Falling back
+    // to `personalityId` here was the root cause of a cross-entity memory
+    // leak — every NPC sharing an archetype would share one memory bucket.
+    const npcId = (entity as any).index ?? (entity as any).id ?? 0;
 
     const executeInference = async (): Promise<string> => {
       try {
@@ -146,11 +161,19 @@ export class CardinalIntelligenceSystem extends createSystem(
         // Parse structured action intents
         const parsed = IntentParser.parse(res.text);
 
-        // Record episodic memory
-        if ((NPCMemory as any).bit && entity.hasComponent(NPCMemory)) {
+        // Record episodic memory. Guard on `.bitmask` (elics' actual
+        // registration marker — `.bit` does not exist and was always
+        // falsy, which silently made this whole block dead code and meant
+        // no episodic memory was ever recorded).
+        if ((NPCMemory as any).bitmask && entity.hasComponent(NPCMemory)) {
           const maxTurns = entity.getValue(NPCMemory, 'maxHistoryTurns') ?? 4;
-          addDialogueTurn(npcId, { role: 'user', content: sanitizedMessage, timestamp: now }, maxTurns);
-          addDialogueTurn(npcId, { role: 'assistant', content: parsed.cleanDialogue, timestamp: now }, maxTurns);
+          addDialogueTurn(npcId, { role: 'user', content: sanitizedMessage, timestamp: now }, maxTurns, playerId);
+          addDialogueTurn(
+            npcId,
+            { role: 'assistant', content: parsed.cleanDialogue, timestamp: now },
+            maxTurns,
+            playerId
+          );
           const total = (entity.getValue(NPCMemory, 'totalInteractions') ?? 0) + 1;
           entity.setValue(NPCMemory, 'totalInteractions', total);
           entity.setValue(NPCMemory, 'lastInteractionTime', now);

@@ -7,10 +7,23 @@ export interface DialogueTurn {
 }
 
 /**
- * Global map storing conversation histories keyed by entity network/internal ID.
- * Keeps individual typed array storage clean while providing sliding ring buffer memory.
+ * Global map storing conversation histories keyed by a composite
+ * `entityId` + `playerId` session key. Keeps individual typed array storage
+ * clean while providing sliding ring buffer memory.
+ *
+ * `playerId` is optional and defaults to a shared per-entity bucket for
+ * backward compatibility (e.g. NPC-to-NPC banter, which has no player on
+ * either side). Whenever a `playerId` is supplied — the normal case for a
+ * player talking to an NPC — its turns are isolated in their own bucket so
+ * one player's conversation is never replayed into another player's session
+ * with the same NPC.
  */
-const entityMemoryStore = new Map<number, DialogueTurn[]>();
+const entityMemoryStore = new Map<string, DialogueTurn[]>();
+
+/** Build the composite storage key for an entity + optional player session. */
+function memoryKey(entityId: number, playerId?: string): string {
+  return playerId ? `${entityId}:${playerId}` : `${entityId}`;
+}
 
 /**
  * ECS component giving an NPC a sliding conversational memory buffer.
@@ -28,22 +41,27 @@ export const NPCMemory = createComponent(
   'Sliding episodic conversational memory for NPCs',
 );
 
-/** Append a dialogue turn to an entity's conversation memory */
-export function addDialogueTurn(entityId: number, turn: DialogueTurn, maxTurns = 4): void {
-  const history = entityMemoryStore.get(entityId) ?? [];
+/**
+ * Append a dialogue turn to an entity's conversation memory.
+ * Pass `playerId` to scope the turn to that player's session with the NPC;
+ * omitted, it falls back to the legacy shared-per-entity bucket.
+ */
+export function addDialogueTurn(entityId: number, turn: DialogueTurn, maxTurns = 4, playerId?: string): void {
+  const key = memoryKey(entityId, playerId);
+  const history = entityMemoryStore.get(key) ?? [];
   history.push(turn);
   if (history.length > maxTurns * 2) {
     history.splice(0, history.length - maxTurns * 2);
   }
-  entityMemoryStore.set(entityId, history);
+  entityMemoryStore.set(key, history);
 }
 
-/** Get the conversation history for an entity */
-export function getDialogueHistory(entityId: number): DialogueTurn[] {
-  return entityMemoryStore.get(entityId) ?? [];
+/** Get the conversation history for an entity, optionally scoped to a player session */
+export function getDialogueHistory(entityId: number, playerId?: string): DialogueTurn[] {
+  return entityMemoryStore.get(memoryKey(entityId, playerId)) ?? [];
 }
 
-/** Clear the conversation history for an entity */
-export function clearDialogueHistory(entityId: number): void {
-  entityMemoryStore.delete(entityId);
+/** Clear the conversation history for an entity, optionally scoped to a player session */
+export function clearDialogueHistory(entityId: number, playerId?: string): void {
+  entityMemoryStore.delete(memoryKey(entityId, playerId));
 }

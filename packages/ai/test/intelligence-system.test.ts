@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { World } from '@iwsdk/core';
-import { SmartNPC } from '../src/components';
+import { SmartNPC, NPCMemory } from '../src/components';
 import { CardinalIntelligenceSystem } from '../src/systems';
 import type { IInferenceAdapter, InferenceRequest, InferenceResponse } from '../src/adapters/types';
 
@@ -81,5 +81,44 @@ describe('CardinalIntelligenceSystem', () => {
 
     await system.queryNPC(entity, 'Quelle potion as-tu ?');
     expect(mockAdapter.lastRequest?.systemPrompt).toContain('Tu es un alchimiste fou.');
+  });
+
+  it('carries a player\'s own prior turns into their next world context (same NPC, same session)', async () => {
+    world.registerSystem(CardinalIntelligenceSystem, {
+      configData: { adapter: mockAdapter, useScheduler: false },
+    });
+
+    const system = world.getSystem(CardinalIntelligenceSystem)!;
+    world.registerComponent(NPCMemory);
+    const entity = world.createEntity();
+    entity.addComponent(SmartNPC, { personalityId: 1 });
+    entity.addComponent(NPCMemory);
+
+    await system.queryNPC(entity, 'Mon lieu secret est la grotte', {}, undefined, 'alice');
+    await system.queryNPC(entity, 'Salut', {}, undefined, 'alice');
+
+    expect(mockAdapter.lastRequest?.worldContext).toContain('grotte');
+  });
+
+  it('does not leak another player\'s dialogue turns into a different player\'s world context', async () => {
+    world.registerSystem(CardinalIntelligenceSystem, {
+      // Scheduler dispatch is throttled (real-time gated); bypass it so two
+      // back-to-back queries in the same tick both resolve synchronously.
+      configData: { adapter: mockAdapter, useScheduler: false },
+    });
+
+    const system = world.getSystem(CardinalIntelligenceSystem)!;
+    world.registerComponent(NPCMemory);
+    const entity = world.createEntity();
+    entity.addComponent(SmartNPC, { personalityId: 1 });
+    entity.addComponent(NPCMemory);
+
+    // Player "alice" shares a secret with the NPC.
+    await system.queryNPC(entity, 'Mon code secret est 1234', {}, undefined, 'alice');
+
+    // Player "bob" then talks to the same NPC in a separate session.
+    await system.queryNPC(entity, 'Salut', {}, undefined, 'bob');
+
+    expect(mockAdapter.lastRequest?.worldContext).not.toContain('1234');
   });
 });
