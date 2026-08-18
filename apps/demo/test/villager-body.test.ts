@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
-  AnimationClip, Group, Mesh, Quaternion, Vector3,
+  AnimationClip, Group, Mesh, Quaternion, RayInteractable, Vector3,
   VectorKeyframeTrack, QuaternionKeyframeTrack, World,
 } from '@iwsdk/core';
 import { HUMANOID, defaultGenome } from '@iwsdk/cardinal-character';
@@ -222,6 +222,14 @@ describe('makeRiggedBody, de bout en bout', () => {
     // `rootMotion: 'flatten'` : la simulation possède la position, le clip ne
     // doit emporter le villageois nulle part.
     expect(hips.position.z).toBeCloseTo(0, 6);
+  });
+
+  it('le rig est visable au rayon', () => {
+    const { world, entity } = makeCharacter();
+    makeRiggedBody(world, entity, { idle: walkClip() }, new PuppetBody(new Group(), 'mira'));
+    // Sans ce composant, aucun villageois n est sélectionnable et le panneau
+    // reste sans cible pour toujours.
+    expect(entity.hasComponent(RayInteractable)).toBe(true);
   });
 
   it("une levée après création ne laisse AUCUN nœud orphelin dans la scène", () => {

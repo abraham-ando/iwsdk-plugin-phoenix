@@ -7,7 +7,7 @@
 import {
   CharacterAnimationSystem,
 } from '@iwsdk/cardinal-character-three';
-import { Mesh } from '@iwsdk/core';
+import { Mesh, RayInteractable } from '@iwsdk/core';
 import type { AnimationClip, Entity, Group, Object3D, World } from '@iwsdk/core';
 import type { AgentView } from '@iwsdk/cardinal-simulation';
 import { applyAvatarPose } from './AgentAvatarFactory';
@@ -248,6 +248,10 @@ export function makeRiggedBody(
       rootMotion: 'flatten',
     });
     const node = entity.object3D!;
+    // Visable au rayon du casque comme au pointeur souris : c'est le même
+    // composant qui sert les deux, et c'est ce qui rend le panneau utilisable
+    // en immersion et hors immersion sans chemin séparé.
+    entity.addComponent(RayInteractable, {});
     assertSameWorldFrame(puppet.node.parent, node.parent, world.scene);
     return {
       node,
