@@ -15,8 +15,11 @@ truth for the wire format and authority model.
    regenerated from the TypeScript side (never hand-edited), and confirm
    both the TS encoder/decoder in `packages/client` and the Elixir side
    in `packages/server` moved together. Run:
-   `node scripts/check-single-three.mjs && git diff --exit-code
-   fixtures/protocol_vectors.tsv` after a rebuild to catch drift.
+   `pnpm fixtures && git diff --exit-code fixtures/protocol_vectors.tsv`
+   after a rebuild to catch drift — `pnpm fixtures` regenerates the
+   protocol vectors (`scripts/generate-fixtures.mjs`); byte-level drift
+   is also enforced independently by `packages/client/test/parity.test.ts`
+   and `packages/server`'s `parity_test.exs`.
 2. For any change touching `Room.Server.handle_frame/3` or anything that
    adds a new synchronous call in that path: flag the amplification risk
    — one slow/malicious peer can block every other peer in the same

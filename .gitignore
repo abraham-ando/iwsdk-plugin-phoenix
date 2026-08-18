@@ -160,7 +160,14 @@ packages/server/_build_core/
 .superpowers/
 
 # Claude / agent worktrees
-.claude/
+.claude/*
+!.claude/agents/
+!.claude/skills/
+!.claude/workflows/
+!.claude/rules/
+!.claude/settings.json
+.claude/settings.local.json
+.claude/worktrees/
 
 # Playwright / playwright-bdd
 /test-results/

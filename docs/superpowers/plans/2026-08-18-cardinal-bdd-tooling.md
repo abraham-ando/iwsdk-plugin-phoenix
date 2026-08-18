@@ -189,7 +189,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: Task 2's `playwright.config.ts`.
-- Produces: `pnpm test:bdd`, the command `xr-visual-qa` and CI will use to run every `.feature` scenario.
+- Produces: `pnpm test:bdd`, the command `xr-visual-qa` runs (CI wiring is deliberate future work — no CI job runs it yet) to run every `.feature` scenario.
 
 - [ ] **Step 1: Add the script**
 

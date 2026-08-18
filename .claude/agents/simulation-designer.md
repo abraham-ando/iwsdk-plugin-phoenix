@@ -23,7 +23,9 @@ You design what the simulation kernel does, not how it renders. Load
    `threejs-gameplay-systems`'s `references/game-feel.md` — its
    guidance on hitstop, easing, and impact feedback applies to
    NPC-interaction and trade-interaction feel even though this project
-   doesn't use that skill's scaffold or architecture sections.
+   doesn't use that skill's scaffold or architecture sections. For
+   level/encounter design passes, also load that skill's
+   `references/game-design-level-design.md`.
 4. New trades follow the existing `metiers.ts` pattern (id, genes,
    ageRange, one-line rationale) — never redefine an existing trade's
    genes; add new keys only.

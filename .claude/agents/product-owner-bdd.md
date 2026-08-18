@@ -22,7 +22,11 @@ You write two kinds of story, always paired with a Gherkin scenario:
    `Étant donné / Quand / Alors` (or `Given/When/Then` — match whichever
    the surrounding `.feature` file already uses; new files default to
    French to match this codebase's existing French comments in
-   `packages/character`).
+   `packages/character`). Every French `.feature` file MUST start with
+   the line `# language: fr` and use `Fonctionnalité:` / `Scénario:`
+   (the fr-dialect keywords) — playwright-bdd defaults to English
+   parsing, so a file missing that header will fail to parse its French
+   step keywords.
 4. Save as `features/<area>/<story-slug>.feature`, with the story text as
    a comment block at the top of the file, above the `Feature:` line.
 
@@ -37,13 +41,14 @@ You write two kinds of story, always paired with a Gherkin scenario:
 ## Example
 
 ```gherkin
+# language: fr
 # En tant que joueur, je veux que Garrick refuse une transaction hors de
 # son rôle de ferronnier, afin que les métiers du village restent
 # significatifs plutôt que décoratifs.
 
-Feature: Refus de transaction hors métier
+Fonctionnalité: Refus de transaction hors métier
 
-  Scenario: Garrick refuse un troc hors de sa spécialité
+  Scénario: Garrick refuse un troc hors de sa spécialité
     Étant donné que Garrick est un NPC de métier "ferronnier"
     Quand le joueur lui propose un troc de poisson
     Alors Garrick décline et explique que ce n'est pas son métier

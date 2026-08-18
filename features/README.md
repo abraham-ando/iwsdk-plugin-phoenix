@@ -15,6 +15,9 @@ features/
 
 - `product-owner-bdd` writes the `.feature` file (story comment at the
   top, `Étant donné/Quand/Alors` or `Given/When/Then` scenarios below).
+  French scenarios start with `# language: fr` and use
+  `Fonctionnalité:`/`Scénario:`; files without the header parse as
+  English.
 - The engineer implementing the story, or `xr-visual-qa` for
   verification-only steps, writes the matching `.steps.ts`.
 - Steps come in two kinds — do not conflate them. **DOM steps** (page
@@ -31,7 +34,7 @@ features/
   scenarios need at least two; never write them assuming a single
   client.
 - Run everything: `pnpm test:bdd`. Run one file:
-  `pnpm exec playwright test features/<area>/<story-slug>.feature`.
+  `pnpm exec bddgen && pnpm exec playwright test .features-gen/<area>/<story-slug>.feature.spec.js`.
 - New scenarios drive Playwright against `apps/demo`'s plain-Vite dev
   server (`dev:runtime`, port 8081) via `playwright.config.ts`'s
   `webServer`, which runs `pnpm build` first (the demo imports compiled

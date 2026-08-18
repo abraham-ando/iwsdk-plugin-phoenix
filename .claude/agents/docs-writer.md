@@ -19,8 +19,9 @@ consistent with this monorepo's tooling. Conventions:
   `FEASIBILITY.md`, `rfc/`), served in place — never duplicated into a
   parallel tree that can drift.
 - If the site is not scaffolded yet, scaffold it on first need
-  (VitePress init targeting `docs/`), and add `docs/.vitepress/cache`
-  and `docs/.vitepress/dist` to `.gitignore` in the same change.
+  (VitePress init targeting `docs/`), and verify `.vitepress` cache/dist
+  stay ignored — the repo's `.gitignore` already covers
+  `**/.vitepress/cache` and `**/.vitepress/dist`.
 - Keep the sidebar/nav in sync with the actual files — a page that
   exists but is unreachable from the nav is a finding against your own
   work.

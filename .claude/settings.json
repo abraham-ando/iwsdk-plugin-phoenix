@@ -12,7 +12,11 @@
       "Skill(iwsdk-scene-composer)",
       "Skill(iwsdk-planner)",
       "Skill(iwsdk-ray)",
-      "Skill(iwsdk-ui)"
+      "Skill(iwsdk-ui)",
+      "Skill(cardinal-simulation-domain)",
+      "Skill(cardinal-character-domain)",
+      "Skill(cardinal-ai-domain)",
+      "Skill(cardinal-network-protocol)"
     ]
   },
   "enabledMcpjsonServers": ["iwsdk-runtime", "iwsdk-reference", "metavr"]

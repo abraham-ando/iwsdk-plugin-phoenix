@@ -1,6 +1,6 @@
 ---
 name: cardinal-ai-domain
-description: Domain reference for @iwsdk/plugin-cardinal-ai — the 20-submodule edge-AI NPC stack (memory, perception, RAG, security, runtime). Use when reviewing or building NPC behavior, AI runtime/performance, or AI security/guardrails; loads only the relevant section for your role.
+description: Domain reference for @iwsdk/plugin-cardinal-ai — the two-dozen-submodule (24 directories) edge-AI NPC stack (memory, perception, RAG, security, runtime). Use when reviewing or building NPC behavior, AI runtime/performance, or AI security/guardrails; loads only the relevant section for your role.
 ---
 
 # Cardinal AI Domain
@@ -8,7 +8,7 @@ description: Domain reference for @iwsdk/plugin-cardinal-ai — the 20-submodule
 ## Purpose
 `@iwsdk/plugin-cardinal-ai` (`packages/ai`) gives WebXR NPCs edge AI: episodic memory, action intents, gaze IK, banter, spatial RAG, and 3D spatialized voice — all local, no server round-trip for behavior. `apps/demo/src/ai-village.ts` is the reference integration (Eldrin, Garrick, Sylvia).
 
-This skill is split into three sections. Load only the one matching your role — the module count is why three AI engineering roles exist separately rather than one.
+This skill is split into three sections. Load only the one matching your role — two dozen submodules (24 directories) is why three AI engineering roles exist separately rather than one.
 
 ## Behavior section — for `npc-behavior-engineer`
 - `rag/` — Spatial RAG: retrieval grounded in the NPC's position/surroundings, not just text similarity.
@@ -26,7 +26,7 @@ This skill is split into three sections. Load only the one matching your role �
 - `streaming/`, `speculative/` — incremental/predictive response generation, so an NPC can start speaking before a full response is ready.
 - `workers/` — background-thread execution (not re-exported from the package's public `index.ts` barrel — internal to the runtime, still in scope for review since it's where the actual off-main-thread cost lives).
 - `acoustics/` — audio propagation/spatialization support feeding `SpatialVoice`.
-- `adapters/`, `context/`, `structured/`, `components/`, `systems/`, `debug/`, `plugin.ts` — the ECS glue: component definitions, systems that tick them, the `installCardinalAI` plugin entry point, and debug tooling.
+- `adapters/`, `context/`, `structured/`, `components/`, `systems/`, `debug/`, `audio/`, `types/`, `plugin.ts` — the ECS glue: component definitions, systems that tick them, the `installCardinalAI` plugin entry point, and debug tooling.
 
 ## Security section — for `ai-security-engineer`
 - `security/` — guardrails against prompt injection (a player's chat/voice input reaching an NPC's context), and controls on what an NPC's memory/RAG retrieval can leak back (e.g. one player's private conversation surfacing in another player's session with the same NPC). This is the one submodule that gets its own dedicated review role rather than folding into runtime or behavior — treat any change touching NPC input handling, memory storage, or RAG retrieval as security-relevant even when it isn't in this directory.

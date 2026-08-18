@@ -10,6 +10,13 @@ export const meta = {
 
 // Mirrors studio-director.md's routing table. Kept in sync by hand — this
 // script has no filesystem access to read that file at run time.
+//
+// Matching is first-prefix-wins in array order with no most-specific
+// tiebreak — keep subtype prefixes above their catch-alls (e.g.
+// packages/ai/src/security/ above packages/ai/src/; docs/PROTOCOL.md
+// above docs/) or files will silently misroute. Content-based routing
+// rows from studio-director's table (shaders, asset needs) cannot be
+// path-mapped and are handled ad hoc.
 const ROUTES = [
   { prefix: 'packages/character/', role: 'cardinal-genome-reviewer' },
   // Deliberate simplification of studio-director's table, which splits
@@ -35,6 +42,10 @@ const ROUTES = [
   { prefix: 'apps/demo_server/', role: 'bff-backend-engineer' },
   { prefix: 'apps/demo/src/hud.ts', role: 'vr-comfort-ux-reviewer' },
   { prefix: 'apps/demo/src/ai-hud.ts', role: 'vr-comfort-ux-reviewer' },
+  // New-dependency review is security-reviewer's checklist item.
+  { prefix: 'package.json', role: 'security-reviewer' },
+  { prefix: 'pnpm-lock.yaml', role: 'security-reviewer' },
+  { prefix: 'pnpm-workspace.yaml', role: 'security-reviewer' },
   // Order matters in the three docs rows: PROTOCOL.md is protocol work
   // first, rendering second (smoke-test ruling, roster ledger); process
   // docs belong to the superpowers workflow, not the docs site.
@@ -100,7 +111,9 @@ const reviews = await parallel(
     agent(
       `Review these changed files against your domain checklist: ${roleFiles.join(', ')}. Return your findings. Additionally: if any fact stated in your domain skill (a constant, export, or invariant) no longer matches the code you just read, report that drift as a 'warning' finding naming the skill file — the skill update belongs in the same change.`,
       { agentType: role, schema: FINDINGS_SCHEMA, phase: 'Review', label: role },
-    ).then((result) => result ?? { role, findings: [], unavailable: true }),
+    )
+      .then((result) => result ?? { role, findings: [], unavailable: true })
+      .catch(() => ({ role, findings: [], unavailable: true })),
   ),
 )
 
