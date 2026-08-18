@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { groundGuardY, GROUND_GUARD_MARGIN } from '../src/terrain/groundGuard';
+import {
+  groundGuardY,
+  GROUND_GUARD_MARGIN,
+  GROUND_GUARD_CLEARANCE,
+} from '../src/terrain/groundGuard';
 import { heightAt } from '@iwsdk/cardinal-simulation';
 
 describe('groundGuardY', () => {
@@ -8,7 +12,7 @@ describe('groundGuardY', () => {
     // par tuiles ; entre l'arrivée quelque part et l'existence de sa tuile, il
     // n'y a rien sous les pieds. L'altitude, elle, est connue partout.
     const [x, z] = [0, 0];
-    expect(groundGuardY(x, -3192, z)).toBeCloseTo(heightAt(x, z), 6);
+    expect(groundGuardY(x, -3192, z)).toBeCloseTo(heightAt(x, z) + GROUND_GUARD_CLEARANCE, 6);
   });
 
   it('NE TOUCHE À RIEN quand on est au-dessus du sol', () => {
@@ -23,14 +27,14 @@ describe('groundGuardY', () => {
     const [x, z] = [4, 4];
     const sol = heightAt(x, z);
     expect(groundGuardY(x, sol - GROUND_GUARD_MARGIN + 0.1, z)).toBeNull();
-    expect(groundGuardY(x, sol - GROUND_GUARD_MARGIN - 0.1, z)).toBeCloseTo(sol, 6);
+    expect(groundGuardY(x, sol - GROUND_GUARD_MARGIN - 0.1, z)).toBeCloseTo(sol + GROUND_GUARD_CLEARANCE, 6);
   });
 
   it('vaut PARTOUT dans la zone navigable, tuiles ou pas', () => {
     // ±200 m depuis l'écologie E1, quand l'anneau de tuiles n'en couvre qu'une
     // partie autour du joueur.
     for (const [x, z] of [[199, 199], [-199, -199], [0, 180], [-150, 60]] as const) {
-      expect(groundGuardY(x, -500, z), `${x},${z}`).toBeCloseTo(heightAt(x, z), 6);
+      expect(groundGuardY(x, -500, z), `${x},${z}`).toBeCloseTo(heightAt(x, z) + GROUND_GUARD_CLEARANCE, 6);
     }
   });
 
@@ -38,6 +42,9 @@ describe('groundGuardY', () => {
     const [x, z] = [-30, 22];
     const rattrape = groundGuardY(x, -1000, z);
     expect(rattrape).not.toBeNull();
-    expect(rattrape).toBe(heightAt(x, z));
+    // AU-DESSUS du sol, jamais dessus : reposer pile à la surface relance la
+    // chute, et le garde-fou boucle au lieu de sauver.
+    expect(rattrape).toBe(heightAt(x, z) + GROUND_GUARD_CLEARANCE);
+    expect(rattrape!).toBeGreaterThan(heightAt(x, z));
   });
 });

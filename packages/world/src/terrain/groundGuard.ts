@@ -27,6 +27,17 @@ import { heightAt } from '@iwsdk/cardinal-simulation';
 export const GROUND_GUARD_MARGIN = 3;
 
 /**
+ * Hauteur À LAQUELLE on repose, au-dessus du sol, en mètres.
+ *
+ * Rattraper EXACTEMENT au niveau du sol recrée la faute qu'on répare : le
+ * lancer de rayon du locomoteur part alors de la surface elle-même, ne trouve
+ * rien sous lui, et la gravité reprend aussitôt. Mesuré : le joueur était
+ * rattrapé quarante fois de suite, chaque sauvetage provoquant la chute
+ * suivante. Une marge franche coupe la boucle.
+ */
+export const GROUND_GUARD_CLEARANCE = 0.5;
+
+/**
  * Rend l'altitude corrigée, ou `null` s'il n'y a rien à corriger.
  *
  * Rendre `null` plutôt que la valeur inchangée dit à l'appelant de ne rien
@@ -35,5 +46,5 @@ export const GROUND_GUARD_MARGIN = 3;
  */
 export function groundGuardY(x: number, y: number, z: number): number | null {
   const sol = heightAt(x, z);
-  return y < sol - GROUND_GUARD_MARGIN ? sol : null;
+  return y < sol - GROUND_GUARD_MARGIN ? sol + GROUND_GUARD_CLEARANCE : null;
 }
