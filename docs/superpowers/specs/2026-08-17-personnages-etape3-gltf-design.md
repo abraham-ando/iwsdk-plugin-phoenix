@@ -1,8 +1,29 @@
 # Étape 3 — Le chemin glTF : un vrai rig dans le village
 
 **Date :** 2026-08-17
+**Révisée :** 2026-08-18, après la revue finale de branche
 **Spec mère :** `2026-08-17-personnages-proceduraux-design.md`
 **Étape précédente :** `2026-08-17-personnages-etape2-pont-three-design.md`
+
+---
+
+## 0. Ce que la construction a démenti
+
+Cette spec a été écrite avant la première ligne de code et n'avait jamais été
+rééditée : la revue finale a trouvé six passages qui décrivaient une branche
+non livrée. Ils sont corrigés dans le corps du document, mais l'écart lui-même
+vaut d'être gardé — une spec qui montre où elle s'est trompée vaut mieux qu'une
+spec lissée.
+
+| § | ce que la spec annonçait | ce qui a été livré | ce que ça apprend |
+| :--- | :--- | :--- | :--- |
+| §2.4, §10.2, §12 | l'étape se terminerait sans doute sur une preuve du **repli**, faute de réseau | onze rigs RPM montés, zéro avertissement | la réserve portait sur `models.readyplayer.me` ; les avatars sont finalement venus de `readyplayerme/animation-library`, le même dépôt que les clips. La bonne question n'était pas « le réseau passe-t-il ? » mais « d'où viennent les assets ? » |
+| §8 | onze agents sur **cinq** assets RPM de base | **deux**, choisis par le genre | la démonstration voulue — « ce qui les distingue est la morphologie, pas l'asset » — est plus forte avec deux qu'avec cinq |
+| §6.2 | cinq fichiers, 889 Ko | **sept** fichiers, ~5,2 Mo | les deux avatars T-pose n'étaient pas prévus : la spec supposait des avatars servis par URL |
+| §7.1 | une classe `RiggedBody` | `makeRiggedBody`, qui rend un littéral | un ruling de pré-vol l'avait déjà tranché ; la spec ne l'avait pas enregistré |
+| §7.2 | le repli est « le seul usage réel de `PuppetApplicator` » | faux, et jamais vérifié | deux objets sans rapport confondus par leur nom. Voir §7.2 |
+| §4.3 | « on soustrait la valeur de la clé 0 de chaque clé » | une phrase qui se contredit, et qui ne décrivait pas le code | voir §4.3, réécrit |
+| §13 | sept tâches | **dix** exécutées | trois sont nées de mesures faites en route |
 
 ---
 
@@ -76,18 +97,30 @@ un arbre `Object3D` neuf. Le chargeur importe `clone` depuis
 `three/examples/jsm/utils/SkeletonUtils.js` — le clone sûr pour le skinning.
 
 Chaque instanciation reçoit donc **son propre `Skeleton` et ses propres os** :
-onze villageois peuvent porter onze morphologies distinctes sur cinq assets de
-base. Géométries, matériaux et clips restent partagés par référence — ce qui
+onze villageois peuvent porter onze morphologies distinctes sur deux assets de
+base (§8). Géométries, matériaux et clips restent partagés par référence — ce qui
 valide après coup deux décisions de l'étape 2 : le clone de matériau par
 individu, et l'assainisseur qui rend un **nouveau** clip au lieu d'amputer
 l'original partagé.
 
-### 2.4 Le réseau, depuis cet environnement
+### 2.4 Le réseau, depuis cet environnement — et comment la réserve a été levée
 
-`models.readyplayer.me` **ne résout pas** depuis le shell de l'agent. Les cinq
-avatars déclarés au manifeste de la démo y sont donc injoignables. Le navigateur
-managé d'IWSDK tourne sur l'hôte et aura peut-être un accès différent : ce n'est
-pas établi. Voir §10.2 et §12.
+`models.readyplayer.me` **ne résout pas** depuis le shell de l'agent, ni depuis
+le navigateur managé : les cinq avatars déclarés au manifeste de la démo sont
+et restent injoignables.
+
+**Ce n'était pas la bonne question.** La réserve supposait que le seul chemin
+vers un rig RPM passait par `models.readyplayer.me`. Il en existait un autre :
+`readyplayerme/animation-library`, le dépôt d'où viennent déjà les clips, publie
+deux avatars T-pose complets — `Masculine_TPose.glb` et `Feminine_TPose.glb`,
+skinnés, 19/19 rôles d'os `HUMANOID` satisfaits (mesuré, `tpose-rig.test.ts`).
+Le script de récupération les prend avec les clips, sous la même licence et la
+même règle de non-redistribution.
+
+L'étape se termine donc sur onze rigs montés, **zéro** avertissement de repli.
+Les §10.2 et §12 ont été mis à jour en conséquence ; ce paragraphe garde la
+trace de la réserve parce que la leçon n'est pas « le réseau est passé » mais
+« la réserve portait sur une source, pas sur une capacité ».
 
 ---
 
@@ -136,17 +169,54 @@ restent verts sans être touchés, et aucun appelant existant ne change.
 - **`keep`** — la piste racine est laissée intacte. Locomotion libre.
 - **`strip`** — la piste racine est retirée. Le personnage s'anime strictement
   sur place ; l'application possède les trois axes.
-- **`flatten`** — X et Z **rebasés sur la première clé**, Y intact.
+- **`flatten`** — le **déplacement net** est retiré de X et Z, Y intact.
 
-### 4.3 Pourquoi `flatten` rebase au lieu d'annuler
+### 4.3 Ce que `flatten` retire, et ce qu'il garde
 
-Mettre X et Z à zéro téléporterait le bassin à l'origine de l'armature, qui
-n'est pas là où les hanches se trouvent. On soustrait la valeur de la clé 0 de
-chaque clé : l'offset de repos est préservé, le voyage disparaît. Y reste intact,
-ce qui conserve le balancement vertical de la marche.
+**Cette section a été réécrite après la revue finale. La première version se
+contredisait en une phrase, et le code qui la suivait faisait autre chose
+encore.** Elle disait « on soustrait la valeur de la clé 0 de chaque clé » —
+ce qui met justement la clé 0 à zéro, l'inverse de l'intention annoncée juste
+avant — et l'implémentation, elle, **épinglait** chaque clé sur l'horizontale
+de la clé 0. Trois formulations, trois comportements. Ce qui suit est le seul
+qui tienne.
 
-`M_Walk_001` passe ainsi de 3,20979 m de voyage horizontal à 0, son amplitude
-verticale inchangée.
+Il y a deux choses dans la piste horizontale des hanches, et une seule est du
+root motion :
+
+- le **voyage** — la dérive nette d'un bout à l'autre de la boucle. C'est ce
+  que l'application possède déjà, par `AgentView.x/z`, et c'est ce qu'il faut
+  retirer.
+- l'**oscillation** — le balancement latéral du bassin autour de cette
+  trajectoire. C'est de l'animation, au même titre que le balancement vertical,
+  et il n'y a aucune raison de le jeter.
+
+`flatten` retire donc la **composante linéaire** : pour chaque clé d'indice `i`
+au temps `t_i`, on ôte de X et Z la fraction `(t_i − t_0) / (t_n − t_0)` du
+déplacement net `(dernière clé − première clé)`. Conséquences :
+
+- la clé 0 est intacte — mettre X et Z à zéro téléporterait le bassin à
+  l'origine de l'armature, qui n'est pas là où les hanches se trouvent ;
+- le déplacement net tombe à zéro — le voyage disparaît ;
+- le résidu autour de la droite survit ;
+- Y n'est pas touché.
+
+Mesuré sur les GLB réels (`Hips.translation`) :
+
+| clip | | X | Y | Z |
+| :--- | :--- | ---: | ---: | ---: |
+| `walk-masculine` | amplitude source | 0,05459 m | 0,05222 m | 3,20979 m |
+| | net source | 0,00005 m | — | **3,20979 m** |
+| | amplitude après `flatten` | **0,05456 m** | 0,05222 m | 0,04513 m |
+| | net après `flatten` | 0 | — | **0** |
+| `walk-feminine` | amplitude source | 0,08256 m | 0,04545 m | 4,38555 m |
+| | net source | −0,00058 m | — | **4,38555 m** |
+| | amplitude après `flatten` | **0,08267 m** | 0,04545 m | 0,14650 m |
+| | net après `flatten` | 0 | — | **0** |
+
+Le chiffre qui a tranché : **5,46 cm et 8,26 cm de balancement latéral**, contre
+5,22 et 4,55 cm de balancement vertical. L'épinglage jetait le plus grand des
+deux mouvements que la politique se donnait explicitement du mal à conserver.
 
 ### 4.4 La clé de mémoïsation inclut la politique
 
@@ -222,20 +292,28 @@ clause 1 autorise l'usage personnel et commercial gratuit, et la clause 2 le
 restreint aux avatars Ready Player Me — ce qui est exactement notre cas. C'est
 la **redistribution** qui est fermée, pas l'usage.
 
-**Le remède :** `scripts/fetch-character-clips.mjs` télécharge les cinq GLB dans
+**Le remède :** `scripts/fetch-character-clips.mjs` télécharge les GLB dans
 `apps/demo/public/characters/`, dossier ajouté au `.gitignore`. Chaque
 développeur et la CI les récupèrent sous leur propre acceptation de la licence.
 Le script imprime la licence et son URL avant de télécharger.
 
+**Sept fichiers, et non cinq.** La rédaction initiale n'en prévoyait que cinq
+— les clips — parce qu'elle supposait les avatars servis par
+`models.readyplayer.me`. Ce chemin n'existe pas depuis cet environnement
+(§2.4), et les deux avatars T-pose viennent du même dépôt que les clips.
+
 | fichier source | rôle | taille |
 | :--- | :--- | ---: |
-| `masculine/glb/idle/M_Standing_Idle_001.glb` | `idle`, rig masculin | 163 Ko |
+| `masculine/glb/idle/M_Standing_Idle_001.glb` | `idle`, rig masculin | 164 Ko |
 | `feminine/glb/idle/F_Standing_Idle_001.glb` | `idle`, rig féminin | 392 Ko |
 | `masculine/glb/locomotion/M_Walk_001.glb` | `walk`, rig masculin | 70 Ko |
-| `feminine/glb/locomotion/F_Walk_002.glb` | `walk`, rig féminin | 108 Ko |
+| `feminine/glb/locomotion/F_Walk_002.glb` | `walk`, rig féminin | 109 Ko |
 | `feminine/glb/dance/F_Dances_001.glb` | **fixture de test** | 156 Ko |
+| `masculine/glb/Masculine_TPose.glb` | **avatar**, rig masculin | 2,51 Mo |
+| `feminine/glb/Feminine_TPose.glb` | **avatar**, rig féminin | 2,59 Mo |
 
-889 Ko au total, dans un dossier ignoré.
+≈ 5,2 Mo au total, dans un dossier ignoré — dont 98 % pour les deux avatars,
+qui portent leurs textures.
 
 **`F_Walk_001.glb` n'existe pas.** Les marches féminines de la bibliothèque
 commencent à `F_Walk_002`. Le fait a été vérifié sur l'arborescence complète des
@@ -314,9 +392,19 @@ export interface VillagerBody {
 }
 ```
 
-Deux implémentations : `PuppetBody` enveloppe `applyAvatarPose` et les cylindres
-d'aujourd'hui ; `RiggedBody` pilote le mixer. La boucle de projection devient
+Deux implémentations : `PuppetBody` — une classe, parce qu'elle porte un
+`dispose()` qui libère de vraies ressources GPU — enveloppe `applyAvatarPose` et
+les cylindres d'aujourd'hui ; **`makeRiggedBody`**, une fonction qui rend un
+littéral, pilote le mixer. Il n'y a pas de classe `RiggedBody` : le corps riggé
+n'a aucun état propre, tout vit dans l'entité et dans le système d'animation.
+(Écrit ici après coup — un ruling de pré-vol l'avait tranché, la spec ne
+l'avait pas enregistré.) La boucle de projection devient
 `body.setPose(view.animation, this.elapsed)` et ne change plus jamais.
+
+`makeRiggedBody` **dispose l'entité qu'il a reçue si quoi que ce soit lève**.
+`createTransformEntity` parente le rig immédiatement : sans cette garde, une
+levée laisserait un avatar monté dans la scène, animé, à l'origine du monde et
+absent de la carte `bodies` — le village doublerait au lieu de se replier.
 
 ### 7.2 L'ordre du montage
 
@@ -328,9 +416,21 @@ d'aujourd'hui ; `RiggedBody` pilote le mixer. La boucle de projection devient
 3. Un échec **journalise une fois**, avec l'identifiant de l'agent et la cause,
    et laisse la marionnette en place. Jamais de levée.
 
-Ce repli n'est pas du code jetable : c'est le **seul usage réel** de
-`PuppetApplicator`, qui reste sinon une implémentation d'interface que personne
-n'appelle.
+Ce repli n'est pas du code jetable : c'est le comportement **nominal** hors
+ligne, et c'est lui qui garantit un village complet et jouable dès la première
+image, quoi qu'il arrive au réseau.
+
+**Ce qu'il n'est pas.** Une première rédaction affirmait ici que le repli était
+« le seul usage réel de `PuppetApplicator` ». C'est faux, et l'affirmation a
+voyagé jusque dans le source livré sans jamais être confrontée au code. Ce sont
+deux objets sans rapport que leurs noms rapprochent : `PuppetBody` (démo)
+enveloppe `applyAvatarPose` et les cylindres d'`AgentAvatarFactory` ;
+`PuppetApplicator` vit dans `character-three` et n'est construit par
+`createCharacter` que pour un rig **sans `SkinnedMesh`**. Les deux avatars
+T-pose livrés en portent un (`Wolf3D_Avatar`), donc `PuppetApplicator` reste
+après cette étape **sans aucun appelant de production** — exactement ce que la
+phrase prétendait avoir corrigé. Il n'est pas supprimé pour autant : c'est la
+moitié non skinnée du contrat d'applicateur, testée pour elle-même.
 
 ### 7.3 Ce qui disparaît
 
@@ -342,8 +442,23 @@ principal** qui disparaît, conformément au §10 de la spec mère.
 
 ## 8. Les génomes du village
 
-Onze agents nommés, sur cinq assets RPM de base. C'est la démonstration : ce qui
-les distingue est la morphologie compilée, pas l'asset.
+Onze agents nommés, sur **deux** assets RPM de base — `avatar-tpose-masculine`
+et `avatar-tpose-feminine`, choisis par le genre de l'agent. C'est la
+démonstration, et deux la portent mieux que cinq : ce qui distingue les
+villageois à l'écran est la morphologie compilée, pas le fichier.
+
+(La rédaction initiale annonçait cinq assets `models.readyplayer.me`. Ils
+restent déclarés au manifeste de la démo, injoignables et inutilisés — voir
+§2.4. Les retirer est une tâche à part.)
+
+**Ce que la démonstration livrée montre vraiment : onze squelettes distincts,
+pas onze morphologies complètes.** Mesuré (`tpose-rig.test.ts`) : ces deux
+avatars ne portent **aucun** morph target, et leur unique maillage s'appelle
+`Wolf3D_Avatar`, qui ne figure dans aucun alias de `HUMANOID.surfaces`. Les
+cinq gènes de visage et les tons de peau et de cheveux n'ont donc **aucun effet
+visible** sur ces assets ; ils sont calculés, écrits dans les composants, et
+n'ont rien où se poser. Le rapport d'import le dit (`missingMorphs` et
+`missingSurfaces` non vides), et c'est ce que ce test assère.
 
 | tribu | agents |
 | :--- | :--- |
@@ -403,7 +518,7 @@ ne prélève rien à la simulation.
 
 | # | ce qui est prouvé | comment il tombe s'il est faux |
 | :--- | :--- | :--- |
-| 1 | `flatten` sur `M_Walk_001` : amplitude horizontale 0, verticale inchangée et **non nulle** | un rebasage vers zéro, ou sur le mauvais axe, le fait tomber |
+| 1 | `flatten` sur `M_Walk_001` : déplacement net horizontal nul, amplitude latérale **non nulle** (5,46 cm), verticale inchangée | l'épinglage sur la clé 0 — le comportement d'origine — passe la première assertion et tombe sur la deuxième |
 | 2 | `strip` retire la piste racine ; `keep` conserve les 3,20979 m | une politique ignorée le fait tomber |
 | 3 | La clé de mémo inclut la politique : même clip, deux politiques → deux résultats | une clé incomplète rend le premier verdict au second appelant |
 | 4 | `F_Dances_001` réel : seize pistes retirées, zéro conflit | un assainisseur qui jugerait sur la présence et non l'amplitude lèverait |
@@ -411,28 +526,47 @@ ne prélève rien à la simulation.
 | 6 | Chargement échoué et rig refusé restent distinguables | un `catch` unique qui aplatit les deux le fait tomber |
 | 7 | `breed` : sur cent tirages, l'écart moyen enfant↔milieu-des-parents est **strictement inférieur** à celui d'un génome aléatoire | un `breed` qui ignorerait ses parents passe le test « rend un génome » et tombe sur celui-ci |
 | 8 | Le remplacement échoué laisse la marionnette montée et journalise une fois | un chemin qui lèverait, ou qui viderait la carte, le fait tomber |
+| 9 | L'avatar T-pose réel satisfait 19/19 rôles d'os, et le rapport dit la vérité sur ce qu'il n'a pas (`missingMorphs`, `missingSurfaces` non vides) | un rapport qui prétendrait que tout va bien serait pire qu'un rig incomplet |
+| 10 | **Le mixer bouge un os** : après `setVerb` puis `update`, la rotation de la tête a changé et la hanche n'a pas voyagé | un mixer construit sur un nœud étranger, ou des pistes qui ne visent aucun nœud, laisse l'angle à zéro |
+| 11 | Une levée de `makeRiggedBody` ne laisse **aucun** nœud orphelin dans la scène ni de mixer vivant | un chemin d'échec sans `dispose()` laisse le rig monté, animé, à l'origine du monde |
+| 12 | Une entité recyclée par elics n'hérite pas du rig de sa devancière | une carte clavée par l'objet `Entity` rend `'walk'` là où le nouveau venu n'a rien attaché |
 
-Les tests 1 à 4 parsent les GLB **réels** récupérés par le script (§6.2). Ce ne
-sont pas des fixtures synthétiques. Seuls ceux-là dépendent du réseau, et leur
-saut hors ligne est bruyant (§6.2.1).
+Les tests 1 à 4 et 9 parsent les GLB **réels** récupérés par le script (§6.2).
+Ce ne sont pas des fixtures synthétiques. Seuls ceux-là dépendent du réseau, et
+leur saut hors ligne est bruyant (§6.2.1).
 
-**Mesuré sur trois clips, présumé sur deux.** `M_Walk_001`,
-`M_Standing_Idle_001` et `F_Dances_001` ont été parsés avant l'écriture de cette
-spec (§2). `F_Standing_Idle_001` et `F_Walk_002` ne l'ont pas été : la tâche 2
-les passe à la même sonde et corrige la spec si l'un d'eux dément la convention.
+Les tests 10 à 12 ont été ajoutés par la revue finale : les cinq tests du
+système d'animation passaient tous avec un mixer branché sur un `Group` vide,
+parce que leurs clips visaient des nœuds (`root`, `head`) qui n'existaient dans
+aucune fixture. Mesuré à cette occasion, et vrai bien au-delà de ce test :
+`PropertyBinding` lit `:` comme un séparateur de répertoire, donc **aucune
+piste ne peut viser un os nommé `mixamorig:Hips`** tant que les nœuds n'ont pas
+été assainis eux aussi. Les deux avatars livrés nomment leurs os `Hips`,
+`Head`… — la convention RPM, la seule qu'un mixer sache viser.
 
-### 10.2 À l'écran, et la réserve qui l'accompagne
+**Mesuré sur trois clips, présumé sur deux — puis mesuré sur les cinq.**
+`M_Walk_001`, `M_Standing_Idle_001` et `F_Dances_001` ont été parsés avant
+l'écriture de cette spec (§2). `F_Standing_Idle_001` et `F_Walk_002` l'ont été
+par la tâche 2 : **ils confirment la convention** — une seule piste de
+translation qui bouge, et c'est la hanche.
+
+### 10.2 À l'écran, et ce que la réserve est devenue
 
 Les tests verts ne prouvent rien sur le rendu. La preuve est
 `npx iwsdk dev up` puis `browser_screenshot` — **pas** `scene_screenshot`, qui
 rend l'éditeur et n'exécute aucun système applicatif.
 
-**Réserve explicite.** `models.readyplayer.me` ne résout pas depuis le shell de
-l'agent (§2.4). La **tâche 0 du plan** est de lancer le serveur de développement
-et de vérifier qu'un avatar charge, **avant** d'écrire une ligne. Si le réseau ne
-passe pas depuis le navigateur managé non plus, l'étape 3 se terminera avec une
-preuve visuelle du **repli** et non du rig, et ce sera dit comme tel. Aucun succès
-ne sera annoncé qui n'aura pas été vu.
+**Ce qui a été vu.** Onze entités portant `CharacterIdentity`
+(`ecs find --withComponents CharacterIdentity` = 11), zéro avertissement de
+repli dans la console, et la capture du navigateur runtime.
+
+**La réserve initiale, et sa levée.** Elle disait : « si `models.readyplayer.me`
+ne passe pas depuis le navigateur managé non plus, l'étape 3 se terminera avec
+une preuve visuelle du **repli** et non du rig, et ce sera dit comme tel. » Le
+réseau n'est en effet jamais passé vers cet hôte — la tâche 0 l'a mesuré — mais
+la conclusion ne suit pas : les avatars sont venus d'ailleurs (§2.4). La règle
+qui portait la réserve, elle, tient toujours et n'a pas été entamée : **aucun
+succès n'a été annoncé qui n'ait été vu.**
 
 ---
 
@@ -441,38 +575,66 @@ ne sera annoncé qui n'aura pas été vu.
 1. **Spec mère, ligne 435** — le risque « les clips écrasent-ils la
    morphologie ? » est **clos** par §2.1. La réponse est nuancée : la convention
    tient pour la locomotion, elle ne tient pas pour la danse, et l'assainisseur
-   gère déjà le cas parce qu'il juge sur l'amplitude.
+   gère déjà le cas parce qu'il juge sur l'amplitude. *(Fait, tâche 8.)*
 2. **Spec de l'étape 2, §13** — « le chargement des clips au manifeste : étape 3 »
-   reste juste ; y ajouter que le root motion n'y était pas prévu.
+   reste juste ; y ajouter que le root motion n'y était pas prévu. *(Fait,
+   tâche 8.)*
+3. **Cette spec elle-même.** La tâche 8 a corrigé les deux specs que ce
+   paragraphe nommait, et personne n'a corrigé le paragraphe — ni le document
+   qui le contient. Un seul commit sur ce fichier (`fd39a2c`, sa création)
+   pendant que le plan en recevait trois. Corrigé le 2026-08-18, après la revue
+   finale ; voir §0 pour l'écart mesuré. **La leçon de méthode :** la liste des
+   specs à corriger doit s'inclure elle-même, sans quoi la seule spec qu'on
+   n'audite jamais est celle qu'on est en train de suivre.
 
 ---
 
 ## 12. Risques
 
-| risque | probabilité | conséquence | atténuation |
-| :--- | :--- | :--- | :--- |
-| Le navigateur managé n'atteint pas `models.readyplayer.me` | **inconnue, mesurée en tâche 0** | pas de preuve visuelle du rig | le repli reste vérifiable ; la limite est déclarée, pas masquée |
-| Un rig RPM ne satisfait pas tous les rôles d'os de `HUMANOID` | moyenne | `createCharacter` lève, le villageois reste en cylindres | le rapport d'import nomme les os manquants ; le repli absorbe |
-| Le fondu enchaîné révèle un conflit clip↔morphologie non vu en Node | faible | membres qui tressautent | §2.1 a mesuré la seule source connue ; observable à l'écran |
-| Onze rigs skinnés dépassent le budget de 11 ms | moyenne | chute d'images | mesurer avant d'optimiser ; la compilation est hors frame par construction |
-| Un clone du dépôt sans réseau n'a ni avatars ni clips | **certaine** | quatre tests sautent, la démo reste en marionnettes | conséquence assumée de la licence RPM (§6.2) ; le saut est bruyant, le repli est le comportement nominal |
-| Ready Player Me change ou retire un fichier de sa bibliothèque | faible | le script de récupération échoue | il télécharge par chemin explicite et signale le fichier manquant ; les chemins sont dans la spec |
+Colonne « issue » : ce que la construction a effectivement fait de chaque
+risque. Les laisser au futur aurait été le principal mensonge restant du
+document.
+
+| risque | probabilité | conséquence | atténuation | issue |
+| :--- | :--- | :--- | :--- | :--- |
+| Le navigateur managé n'atteint pas `models.readyplayer.me` | **inconnue, mesurée en tâche 0** | pas de preuve visuelle du rig | le repli reste vérifiable ; la limite est déclarée, pas masquée | **survenu, contourné** : il ne l'atteint pas ; les avatars T-pose viennent du dépôt des clips (§2.4) et la preuve du rig a bien été faite |
+| Un rig RPM ne satisfait pas tous les rôles d'os de `HUMANOID` | moyenne | `createCharacter` lève, le villageois reste en cylindres | le rapport d'import nomme les os manquants ; le repli absorbe | **non survenu** : 19/19 rôles satisfaits sur les deux avatars |
+| Le fondu enchaîné révèle un conflit clip↔morphologie non vu en Node | faible | membres qui tressautent | §2.1 a mesuré la seule source connue ; observable à l'écran | **non survenu** |
+| Onze rigs skinnés dépassent le budget de 11 ms | moyenne | chute d'images | mesurer avant d'optimiser ; la compilation est hors frame par construction | **non mesuré** : à rouvrir dans une passe de perf |
+| Un clone du dépôt sans réseau n'a ni avatars ni clips | **certaine** | des tests sautent, la démo reste en marionnettes | conséquence assumée de la licence RPM (§6.2) ; le saut est bruyant, le repli est le comportement nominal | **tel quel** : deux fichiers de test se sautent bruyamment hors ligne |
+| Ready Player Me change ou retire un fichier de sa bibliothèque | faible | le script de récupération échoue | il télécharge par chemin explicite et signale le fichier manquant ; les chemins sont dans la spec | **non survenu** |
+| Les morphs de visage et les tons de peau n'ont aucune cible sur l'asset livré | — *(non prévu par la rédaction initiale)* | cinq gènes sur onze n'ont aucun effet visible | rien : les avatars T-pose n'ont ni morph target ni maillage aux noms attendus | **survenu, assumé et déclaré** (§8) |
 
 ---
 
 ## 13. Ordre de construction
 
+Huit lignes étaient prévues ; **dix tâches** ont été exécutées. Les trois
+dernières ne sont pas de la dérive : chacune est née d'une mesure que la
+rédaction initiale n'avait pas faite. Elles figurent ici pour que l'ordre de
+construction décrive ce qui a été construit.
+
 | tâche | contenu | livrable |
 | :--- | :--- | :--- |
 | **0** | Lancer `iwsdk dev up`, charger un avatar RPM | **réponse réseau, avant toute écriture** |
-| **1** | `scripts/fetch-character-clips.mjs`, `.gitignore`, déclaration au manifeste | cinq GLB récupérés, jamais commités |
+| **1** | `scripts/fetch-character-clips.mjs`, `.gitignore`, déclaration au manifeste | les GLB récupérés, jamais commités |
 | **2** | Root motion : `RootMotionPolicy`, `flatten`, clé de mémo — **et la sonde passée sur les deux clips non mesurés** | tests 1 à 4 sur les clips réels |
 | **3** | `createCharacterFromAsset` et `loadCharacterClips` | tests 5 et 6 |
 | **4** | `CharacterAnimationSystem`, priorité 80 | un personnage marche en Node |
 | **5** | Génomes du village, `breed` pour Lio et Aya | test 7 |
 | **6** | `VillagerBody`, les deux corps, le basculement | test 8 |
 | **7** | Vérification à l'écran, et correction des specs (§11) | capture, ou réserve déclarée |
+| **8** *(non prévue)* | Avatars T-pose du dépôt des clips, et preuve du chemin riggé | test 9 ; la réserve du §10.2 levée |
+| **9** *(non prévue)* | Le génome de structure doit atteindre le compilateur | défaut Critique : onze villageois compilaient le même corps |
+| **10** *(après la revue finale)* | Les six trouvailles de revue : liaison du mixer, recyclage d'entité, avatars fantômes, affirmations fausses, cette spec, `flatten` | tests 10 à 12 ; §0, §4.3, §7.2 |
 
 La tâche 0 précède tout parce que sa réponse change ce que l'étape peut
 promettre. C'est le même raisonnement qui a placé l'applicateur skinné en
 première position de l'étape 2 : le pari non vérifié passe devant.
+
+**Ce que la tâche 9 apprend, et qu'aucune spec n'aurait attrapé :** les tests
+d'une branche peuvent être verts de bout en bout et pourtant ne rien prouver,
+quand ils sont écrits d'après un brief plutôt que confrontés au code. Les
+tâches 9 et 10 ont toutes deux été ouvertes par une **sonde** — regarder ce que
+le programme fait vraiment — et non par une relecture. C'est la contrepartie de
+la règle « mesurer avant de construire » : mesurer aussi après.

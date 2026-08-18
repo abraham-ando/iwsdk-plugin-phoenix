@@ -81,7 +81,11 @@ fait l'instanciation elle-même, par `world.assets.instantiate` — donc par
 import { createCharacterFromAsset } from '@iwsdk/cardinal-character-three';
 
 const { entity, report } = await createCharacterFromAsset(world, {
-  assetId: 'avatar-haran',
+  // Un identifiant du manifeste, et un qui charge : `avatar-tpose-masculine`
+  // et `avatar-tpose-feminine` sont les deux avatars que `pnpm clips` pose sur
+  // disque. Les cinq entrées `models.readyplayer.me` du manifeste de la démo
+  // restent, elles, injoignables depuis cet environnement.
+  assetId: 'avatar-tpose-masculine',
   familyId: 'humanoid',
   genome: createGenome(HUMANOID, rng),
   age: 34,
@@ -90,7 +94,7 @@ const { entity, report } = await createCharacterFromAsset(world, {
 
 `world.assets.instantiate` rend `gltf.scene` d'un clone `SkeletonUtils.clone` —
 donc un `Skeleton` et des os NEUFS à chaque appel, ce qui permet à onze
-villageois de porter onze morphologies sur cinq assets de base. Géométries,
+villageois de porter onze morphologies sur deux assets de base. Géométries,
 matériaux et clips restent partagés par référence entre ces appels : c'est
 pourquoi les applicateurs clonent leurs matériaux (voir plus haut) et pourquoi
 `sanitizeClip` rend un nouveau clip plutôt que de muter le sien.

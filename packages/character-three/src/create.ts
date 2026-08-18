@@ -250,7 +250,7 @@ export interface CreateCharacterFromAssetOptions {
  * `world.assets.instantiate` rend `gltf.scene` d'un clone obtenu par
  * `SkeletonUtils.clone` — donc un `Skeleton` et des os NEUFS à chaque appel,
  * ce qui est la condition pour que onze villageois portent onze morphologies
- * sur cinq assets de base. Géométries, matériaux et clips restent partagés par
+ * sur deux assets de base. Géométries, matériaux et clips restent partagés par
  * référence : c'est pourquoi l'applicateur clone ses matériaux et l'assainisseur
  * rend un nouveau clip.
  *
