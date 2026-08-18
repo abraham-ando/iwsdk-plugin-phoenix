@@ -22,11 +22,14 @@
     "demo": "pnpm build && pnpm --filter @iwsdk/plugin-phoenix-demo dev",
     "demo:build": "pnpm build && pnpm --filter @iwsdk/plugin-phoenix-demo build",
     "demo:typecheck": "pnpm --filter @iwsdk/plugin-phoenix-demo typecheck",
-    "flora:generate": "node scripts/generate-flora.mjs"
+    "flora:generate": "node scripts/generate-flora.mjs",
+    "test:bdd": "bddgen && playwright test"
   },
   "devDependencies": {
     "@dgreenheck/ez-tree": "^1.1.0",
+    "@playwright/test": "^1.62.1",
     "@types/node": "^22.20.1",
+    "playwright-bdd": "^9.2.0",
     "three": "npm:super-three@0.181.0",
     "typescript": "^5.9.2"
   },
