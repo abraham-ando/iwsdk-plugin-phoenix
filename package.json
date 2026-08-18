@@ -20,7 +20,8 @@
     "fixtures": "node scripts/generate-fixtures.mjs",
     "demo": "pnpm build && pnpm --filter @iwsdk/plugin-phoenix-demo dev",
     "demo:build": "pnpm build && pnpm --filter @iwsdk/plugin-phoenix-demo build",
-    "demo:typecheck": "pnpm --filter @iwsdk/plugin-phoenix-demo typecheck"
+    "demo:typecheck": "pnpm --filter @iwsdk/plugin-phoenix-demo typecheck",
+    "test:bdd": "bddgen && playwright test"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
