@@ -68,4 +68,26 @@ describe('l onglet Persona', () => {
     tab.render(VUE);
     expect(props.get(PERSONA_IDS.absent)?.display).toBe('none');
   });
+
+  it('EFFACE la fiche du villageois précédent quand la vue disparaît', () => {
+    // L ordre compte, et c est toute la trouvaille : le test ci-dessus fait
+    // `null` PUIS la vue, le seul ordre qui ne montre pas le défaut. Dans
+    // l autre sens, le retour anticipé de `render(null)` affichait la note
+    // « aucune source de persona » AU-DESSUS des besoins de Mira, présentés
+    // comme s ils étaient courants. La démo y passe réellement : `index.ts`
+    // rend `null` tant que l entité n est pas connue des deux `Map`.
+    const { tab, texts, props } = build();
+    tab.render(VUE);
+    expect(texts.get(PERSONA_IDS.role)).toContain('Mira');
+
+    tab.render(null);
+
+    expect(props.get(PERSONA_IDS.absent)?.display).toBe('flex');
+    expect(texts.get(PERSONA_IDS.role)).not.toContain('Mira');
+    expect(texts.get(PERSONA_IDS.text)).not.toContain('cueille');
+    expect(texts.get(PERSONA_IDS.action)).not.toContain('gather_berries');
+    expect(texts.get(PERSONA_IDS.plan)).not.toContain('nourrir la famille');
+    expect(props.get(NEED_ROW_IDS.hunger.bar)?.width).toBe('0%');
+    expect(texts.get(NEED_ROW_IDS.hunger.value)).not.toBe('80');
+  });
 });

@@ -38,6 +38,9 @@ export const NEED_ROW_IDS: Readonly<Record<NeedId, { label: string; bar: string;
     ),
   ) as Readonly<Record<NeedId, { label: string; bar: string; value: string }>>;
 
+/** Ce qu'un champ affiche quand il n'a rien à dire. */
+const ABSENT = '—';
+
 export const PERSONA_IDS = Object.freeze({
   role: 'persona-role',
   text: 'persona-text',
@@ -55,7 +58,10 @@ export class PersonaTab {
 
   render(view: PersonaView | null): void {
     show(this.doc.getElementById(PERSONA_IDS.absent), view === null);
-    if (view === null) return;
+    if (view === null) {
+      this.effacer();
+      return;
+    }
 
     setText(this.doc.getElementById(PERSONA_IDS.role), `${view.name} — ${view.role} (${view.tribe})`);
     setText(this.doc.getElementById(PERSONA_IDS.text), view.persona ?? '—');
@@ -73,5 +79,23 @@ export class PersonaTab {
       this.doc.getElementById(PERSONA_IDS.plan),
       view.plan.length === 0 ? 'aucun plan' : view.plan.join(' → '),
     );
+  }
+
+  /**
+   * Vide la fiche. Le retour anticipé de `render(null)` affichait la note
+   * d'absence PAR-DESSUS les données du dernier rendu réussi : nom, rôle,
+   * tribu, les cinq besoins, l'action et le plan restaient à l'écran, du
+   * villageois précédent, présentés comme s'ils étaient courants. Le
+   * déclencheur est réel dans la démo — `index.ts` rend `null` quand
+   * `agentIdParEntite` ou `runtime.agents` ne connaît pas encore l'entité.
+   */
+  private effacer(): void {
+    setText(this.doc.getElementById(PERSONA_IDS.role), ABSENT);
+    setText(this.doc.getElementById(PERSONA_IDS.text), ABSENT);
+    for (const b of BESOINS) {
+      renderGauge(this.doc, NEED_ROW_IDS[b].bar, NEED_ROW_IDS[b].value, 0, ABSENT);
+    }
+    setText(this.doc.getElementById(PERSONA_IDS.action), ABSENT);
+    setText(this.doc.getElementById(PERSONA_IDS.plan), ABSENT);
   }
 }
