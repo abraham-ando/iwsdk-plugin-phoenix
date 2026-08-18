@@ -7,7 +7,16 @@
 
 import { Types, createComponent } from '@iwsdk/core';
 import type { AnyComponent, Entity, World } from '@iwsdk/core';
+import { TypedArrayMap } from 'elics';
 import { CARDINAL_CODECS, type CardinalCodec } from './codecs.generated.js';
+
+// elics ships only Vec2/Vec3/Vec4 (2/3/4-slot Float32Array) as multi-slot
+// storage types — no generic N-slot integer array. `TypedArrayMap` is a
+// plain, mutable, exported object (not a closed enum): registering an
+// entry here, before any component below is registered, gives each array
+// field a real, correctly-sized backing store instead of one borrowed
+// from an unrelated vector type.
+(TypedArrayMap as Record<string, { arrayConstructor: new (n: number) => object; length: number }>)['Array13U8'] = { arrayConstructor: Uint8Array, length: 13 };
 
 /** A codec plus the ECS binding for the same component. */
 export interface CardinalComponentSpec extends CardinalCodec {
@@ -51,7 +60,7 @@ export const Weather = createComponent(
 export const CharacterGenome = createComponent(
   'CharacterGenome',
   {
-    genes: { type: Types.Vec3 as any, default: new Array(13).fill(0) },
+    genes: { type: 'Array13U8' as any, default: new Array(13).fill(0) },
   },
   'Cardinal component 4',
 );
@@ -75,12 +84,12 @@ export const CARDINAL_REGISTRY: ReadonlyMap<number, CardinalComponentSpec> = new
     component: Grabbable as unknown as AnyComponent,
     read: (entity: Entity) => ({
       holderId: entity.getValue(Grabbable, 'holderId'),
-      grabPoint: Array.from((entity as any).getVectorView(Grabbable, 'grabPoint')),
+      grabPoint: Array.from(entity.getVectorView(Grabbable, 'grabPoint')),
     }),
     write: (entity: Entity, data: Record<string, unknown>) => {
       entity.setValue(Grabbable, 'holderId', data.holderId as never);
       {
-        const view = (entity as any).getVectorView(Grabbable, 'grabPoint');
+        const view = entity.getVectorView(Grabbable, 'grabPoint');
         const source = data.grabPoint as number[];
         for (let i = 0; i < 3; i++) view[i] = source[i] ?? 0;
       }
@@ -92,13 +101,13 @@ export const CARDINAL_REGISTRY: ReadonlyMap<number, CardinalComponentSpec> = new
     read: (entity: Entity) => ({
       kind: entity.getValue(Weather, 'kind'),
       intensity: entity.getValue(Weather, 'intensity'),
-      wind: Array.from((entity as any).getVectorView(Weather, 'wind')),
+      wind: Array.from(entity.getVectorView(Weather, 'wind')),
     }),
     write: (entity: Entity, data: Record<string, unknown>) => {
       entity.setValue(Weather, 'kind', data.kind as never);
       entity.setValue(Weather, 'intensity', data.intensity as never);
       {
-        const view = (entity as any).getVectorView(Weather, 'wind');
+        const view = entity.getVectorView(Weather, 'wind');
         const source = data.wind as number[];
         for (let i = 0; i < 3; i++) view[i] = source[i] ?? 0;
       }

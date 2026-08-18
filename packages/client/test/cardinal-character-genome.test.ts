@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { CARDINAL_CODECS } from '../src/cardinal/codecs.generated';
+import { World } from './mocks/iwsdk-core.js';
+import { CharacterGenome } from '../src/cardinal/components.generated.js';
 
 describe('le composant CharacterGenome généré', () => {
   it('occupe treize octets, un par gène', () => {
@@ -41,5 +43,20 @@ describe('le composant CharacterGenome généré', () => {
     const decoded = codec.decode(view, 0) as { genes: number[] };
     expect(decoded.genes[2]).toBe(0);
     expect(decoded.genes.length).toBe(13);
+  });
+
+  it("s enregistre et s écrit correctement sur un World elics réel (checks activés)", () => {
+    const world = new World();
+    world.registerComponent(CharacterGenome);
+    const entity = world.createEntity();
+    const genes = [0, 255, 128, 1, 254, 0, 255, 64, 192, 0, 255, 127, 128];
+    entity.addComponent(CharacterGenome, { genes });
+    // `genes` carries the synthetic `'Array13U8'` storage type (see
+    // scripts/generate-cardinal.mjs), which isn't in elics's closed
+    // `DataType` union, so `getVectorView` can't be typed against it without
+    // the same entity-level cast the generated read/write closures use.
+    expect(
+      Array.from((entity as any).getVectorView(CharacterGenome, 'genes')),
+    ).toEqual(genes);
   });
 });

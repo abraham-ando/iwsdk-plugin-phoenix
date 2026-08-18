@@ -34,6 +34,40 @@ import {
 } from '../cardinal/types.mjs';
 import { componentSize, schemaHash, validateSchema } from '../cardinal/validate.mjs';
 
+/**
+ * JS TypedArray constructor for one Cardinal scalar type, used only when
+ * synthesizing an elics storage type for an array field — see
+ * `elicsArrayTypeName` below. Covers the closed scalar set that can appear
+ * as an array element (`bool` and the vector/quat types cannot).
+ */
+const ARRAY_ELEMENT_CTOR = {
+  u8: 'Uint8Array',
+  u16: 'Uint16Array',
+  u32: 'Int32Array',
+  i32: 'Int32Array',
+  f32: 'Float32Array',
+  f64: 'Float64Array',
+};
+
+/**
+ * Synthetic elics storage-type name for an array field, e.g. `Array13U8` for
+ * a 13-element `u8` array. elics ships only Vec2/Vec3/Vec4 as multi-slot
+ * types, fixed at 2/3/4 `Float32Array` slots — there is no generic N-slot
+ * integer array. `componentArtifact()` below registers a matching entry into
+ * elics's own `TypedArrayMap` (the same table its storage allocator and
+ * `getVectorView` read from) before any component using it is registered,
+ * so the field gets a real, correctly-sized, correctly-typed backing store
+ * instead of silently borrowing an unrelated vector type's slot count.
+ */
+function elicsArrayTypeName(field) {
+  const elementName = fieldTypeName(field);
+  const ctor = ARRAY_ELEMENT_CTOR[elementName];
+  if (!ctor) {
+    throw new Error(`no elics array storage mapping for element type "${elementName}"`);
+  }
+  return `Array${field.length}${elementName[0].toUpperCase()}${elementName.slice(1)}`;
+}
+
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 /**
@@ -230,13 +264,43 @@ function codecArtifact() {
  * may import this file.
  */
 function componentArtifact() {
+  const arrayFieldsByTypeName = new Map();
+  for (const component of sorted) {
+    for (const field of component.fields) {
+      if (field.type !== 'array') continue;
+      arrayFieldsByTypeName.set(elicsArrayTypeName(field), field);
+    }
+  }
+
   const lines = [
     BANNER('cardinal/components.mjs'),
     '',
     "import { Types, createComponent } from '@iwsdk/core';",
     "import type { AnyComponent, Entity, World } from '@iwsdk/core';",
+    ...(arrayFieldsByTypeName.size > 0 ? ["import { TypedArrayMap } from 'elics';"] : []),
     "import { CARDINAL_CODECS, type CardinalCodec } from './codecs.generated.js';",
     '',
+  ];
+
+  if (arrayFieldsByTypeName.size > 0) {
+    lines.push(
+      '// elics ships only Vec2/Vec3/Vec4 (2/3/4-slot Float32Array) as multi-slot',
+      '// storage types — no generic N-slot integer array. `TypedArrayMap` is a',
+      '// plain, mutable, exported object (not a closed enum): registering an',
+      '// entry here, before any component below is registered, gives each array',
+      "// field a real, correctly-sized backing store instead of one borrowed",
+      '// from an unrelated vector type.',
+    );
+    for (const [typeName, field] of arrayFieldsByTypeName) {
+      const ctor = ARRAY_ELEMENT_CTOR[fieldTypeName(field)];
+      lines.push(
+        `(TypedArrayMap as Record<string, { arrayConstructor: new (n: number) => object; length: number }>)['${typeName}'] = { arrayConstructor: ${ctor}, length: ${field.length} };`,
+      );
+    }
+    lines.push('');
+  }
+
+  lines.push(
     '/** A codec plus the ECS binding for the same component. */',
     'export interface CardinalComponentSpec extends CardinalCodec {',
     '  component: AnyComponent;',
@@ -244,7 +308,7 @@ function componentArtifact() {
     '  write(entity: Entity, data: Record<string, unknown>): void;',
     '}',
     '',
-  ];
+  );
 
   for (const component of sorted) {
     lines.push(
@@ -254,15 +318,15 @@ function componentArtifact() {
       '  {',
       ...component.fields.map(
         (f) => {
-          const fieldTypeName_ = fieldTypeName(f);
           let typeSpec;
           if (f.type === 'array') {
-            // For arbitrary-length arrays, use a cast to bypass type checking,
-            // since elics doesn't have a generic array type. The actual access
-            // pattern (getVectorView) correctly retrieves the field.
-            typeSpec = `Types.Vec3 as any`;
+            // Not a real elics `Types` member — see the TypedArrayMap
+            // registration above. The runtime slot count and storage come
+            // from that registration, so `getVectorView` still returns the
+            // correct length despite the type-level `any`.
+            typeSpec = `'${elicsArrayTypeName(f)}' as any`;
           } else {
-            typeSpec = `Types.${TYPES[fieldTypeName_].ts}`;
+            typeSpec = `Types.${TYPES[fieldTypeName(f)].ts}`;
           }
           return `    ${f.name}: { type: ${typeSpec}, default: ${tsDefault(f)} },`;
         }
@@ -288,26 +352,34 @@ function componentArtifact() {
       // Multi-slot fields live in flat typed arrays; elics exposes them only
       // as views. `getValue` on one returns undefined, which would publish
       // zeros forever without ever erroring — hence the split.
-      ...component.fields.map((f) =>
-        isVectorField(f)
-          ? `      ${f.name}: Array.from((entity as any).getVectorView(${component.name}, '${f.name}')),`
-          : `      ${f.name}: entity.getValue(${component.name}, '${f.name}'),`,
-      ),
+      ...component.fields.map((f) => {
+        if (!isVectorField(f)) {
+          return `      ${f.name}: entity.getValue(${component.name}, '${f.name}'),`;
+        }
+        // Real elics vector types (Vec3/Vec4) type-check getVectorView
+        // directly. Synthetic array types (TypedArrayMap registration
+        // above) aren't in elics's closed DataType union, so TS can't prove
+        // they're vector keys — only those need the entity-level cast.
+        const entityExpr = f.type === 'array' ? '(entity as any)' : 'entity';
+        return `      ${f.name}: Array.from(${entityExpr}.getVectorView(${component.name}, '${f.name}')),`;
+      }),
       '    }),',
       '    write: (entity: Entity, data: Record<string, unknown>) => {',
-      ...component.fields.flatMap((f) =>
-        isVectorField(f)
-          ? [
-              '      {',
-              `        const view = (entity as any).getVectorView(${component.name}, '${f.name}');`,
-              `        const source = data.${f.name} as number[];`,
-              `        for (let i = 0; i < ${fieldSlots(f)}; i++) view[i] = source[i] ?? 0;`,
-              '      }',
-            ]
-          : [
-              `      entity.setValue(${component.name}, '${f.name}', data.${f.name} as never);`,
-            ],
-      ),
+      ...component.fields.flatMap((f) => {
+        if (!isVectorField(f)) {
+          return [
+            `      entity.setValue(${component.name}, '${f.name}', data.${f.name} as never);`,
+          ];
+        }
+        const entityExpr = f.type === 'array' ? '(entity as any)' : 'entity';
+        return [
+          '      {',
+          `        const view = ${entityExpr}.getVectorView(${component.name}, '${f.name}');`,
+          `        const source = data.${f.name} as number[];`,
+          `        for (let i = 0; i < ${fieldSlots(f)}; i++) view[i] = source[i] ?? 0;`,
+          '      }',
+        ];
+      }),
       '    },',
       '  }],',
     );
