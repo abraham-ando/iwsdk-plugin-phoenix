@@ -9,3 +9,4 @@ export { SettingsTab, GENE_ROW_IDS, GENE_STEP, NON_EDITABLE_GENES, type Settings
 export { PersonaTab, NEED_ROW_IDS, PERSONA_IDS, type PersonaView, type NeedId } from './tabs/persona';
 export { CharacterPickSystem } from './systems/CharacterPickSystem';
 export { CharacterPanelPlacementSystem, placePanel } from './systems/CharacterPanelPlacementSystem';
+export { installCharacterUI, type CharacterUI, type CharacterUIOptions } from './install';

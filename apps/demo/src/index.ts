@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { World } from '@iwsdk/core';
+import { World, type Entity } from '@iwsdk/core';
 import { installPhoenixNetworking } from '@iwsdk/plugin-phoenix';
 import projectOptions from 'virtual:iwsdk-project';
 import { DemoHud } from './hud.js';
@@ -29,6 +29,7 @@ import {
   installCharacterThree,
   loadCharacterClips,
 } from '@iwsdk/cardinal-character-three';
+import { installCharacterUI } from '@iwsdk/cardinal-character-ui';
 import { buildVillagerGenomes } from './simulation/villagerGenomes.js';
 import { makeRiggedBody, upgradeVillagers } from './simulation/VillagerBody.js';
 
@@ -82,6 +83,14 @@ World.create(container, projectOptions)
       // Le village est monté en marionnettes et JOUABLE dès cette frame. Les
       // rigs le remplacent ensuite, un par un, si le réseau les apporte.
       const genomes = buildVillagerGenomes(VILLAGE_LAYOUT.agents);
+      // Le pont entité → agent, et entité → gènes inertes : remplis dans
+      // `buildRig`, où l'entité est connue en même temps que l'agent et que
+      // le `ImportReport` que `createCharacterFromAsset` rend déjà. Le
+      // panneau de personnage les consomme par injection — voir
+      // `installCharacterUI` plus bas — pour ne jamais dépendre lui-même de
+      // `@iwsdk/cardinal-simulation`.
+      const agentIdParEntite = new Map<Entity, string>();
+      const rapportsParEntite = new Map<Entity, ReadonlySet<string>>();
       // Une seule chaîne, pas deux indépendantes : un échec des clips
       // FÉMININS annule aussi les rigs MASCULINS (le .catch du bas couvre
       // tout). Asymétrie acceptée pour rester simple — le village entier
@@ -106,12 +115,17 @@ World.create(container, projectOptions)
                     agent.gender === 'feminine'
                       ? 'avatar-tpose-feminine'
                       : 'avatar-tpose-masculine';
-                  const { entity } = await createCharacterFromAsset(world, {
+                  const { entity, report } = await createCharacterFromAsset(world, {
                     assetId,
                     familyId: 'humanoid',
                     genome: genomes[agent.id]!,
                     age: 30,
                   });
+                  agentIdParEntite.set(entity, agent.id);
+                  rapportsParEntite.set(
+                    entity,
+                    new Set([...report.missingMorphs, ...report.missingSurfaces]),
+                  );
                   return makeRiggedBody(
                     world, entity,
                     agent.gender === 'feminine' ? feminineClips : masculineClips,
@@ -124,6 +138,37 @@ World.create(container, projectOptions)
         .catch((error: unknown) => {
           console.warn('[cardinal-demo] clips indisponibles, village en marionnettes :', error);
         });
+
+      // Le panneau de personnage : viser un villageois, régler ses gènes,
+      // lire son état mental. Lancé sans attendre le basculement des rigs
+      // ci-dessus — les deux Map qu'il consomme se remplissent au fil de
+      // `buildRig`, et le panneau les relit à chaque sélection plutôt qu'à
+      // l'installation.
+      void installCharacterUI(world, {
+        // Le pont entité → agent : seule la démo le connaît, sa carte étant
+        // clavée par identifiant. C'est pourquoi le paquet ne dépend pas de
+        // `cardinal-simulation`.
+        persona: (entity) => {
+          const id = agentIdParEntite.get(entity);
+          if (id === undefined) return null;
+          const etat = simSystem.runtime.agents.get(id);
+          if (etat === undefined) return null;
+          return {
+            name: etat.profile.name,
+            tribe: etat.profile.tribe,
+            role: etat.profile.role,
+            persona: etat.profile.persona ?? null,
+            needs: etat.needs,
+            action: etat.currentAction?.verb ?? null,
+            plan: etat.plan.map((p) => p.goal),
+          };
+        },
+        inertGenes: (entity) => rapportsParEntite.get(entity) ?? new Set<string>(),
+      }).catch((error: unknown) => {
+        // Le panneau est un confort : son absence ne doit jamais empêcher le
+        // monde de tourner.
+        console.warn('[cardinal-demo] panneau de personnage indisponible :', error);
+      });
 
       const microphone = new PlayerMicrophone(world, (text) => simSystem.playerSpeak(text));
       new SimulationHud(document.body, simSystem, microphone);
