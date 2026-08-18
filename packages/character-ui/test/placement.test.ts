@@ -3,6 +3,10 @@ import { Object3D, Vector3, World } from '@iwsdk/core';
 import { CharacterSelection, installCharacterThree } from '@iwsdk/cardinal-character-three';
 import { CharacterPanelPlacementSystem, placePanel } from '../src/systems/CharacterPanelPlacementSystem';
 
+/** Les valeurs par défaut du système, pour que les tests parlent de la même chose. */
+const OFFSET = 0.8;
+const ELEVATION = 1.2;
+
 function scene() {
   const panel = new Object3D();
   const cible = new Object3D();
@@ -10,13 +14,24 @@ function scene() {
   return { panel, cible, camera };
 }
 
+/** L'écart HORIZONTAL — le seul que `offset` promette. */
+function distanceHorizontale(a: Object3D, b: Object3D): number {
+  return Math.hypot(a.position.x - b.position.x, a.position.z - b.position.z);
+}
+
 describe('le placement du panneau', () => {
-  it('se pose à côté de la cible, pas dessus', () => {
+  it('se pose à côté de la cible à l horizontale, et à hauteur de regard', () => {
+    // Deux mesures SÉPARÉES, et c'est le fond de la trouvaille I3 : mesurer la
+    // distance TOTALE rend les deux exigences de la spec §6 (« 0,8 m sur le
+    // côté, à hauteur de regard ») contradictoires, et le ruling précédent
+    // avait sacrifié l'exigence plutôt que la mesure. La position d'un
+    // villageois étant au sol, le panneau se retrouvait centré sur ses pieds.
     const { panel, cible, camera } = scene();
     cible.position.set(3, 0, -2);
     camera.position.set(0, 1.6, 0);
-    placePanel(panel, cible, camera, 0.8, 0.5, 3);
-    expect(panel.position.distanceTo(cible.position)).toBeCloseTo(0.8, 2);
+    placePanel(panel, cible, camera, OFFSET, ELEVATION, 0.5, 3);
+    expect(distanceHorizontale(panel, cible)).toBeCloseTo(OFFSET, 5);
+    expect(panel.position.y - cible.position.y).toBeCloseTo(ELEVATION, 5);
   });
 
   it('se tourne vers la CAMÉRA, pas vers la cible', () => {
@@ -25,7 +40,7 @@ describe('le placement du panneau', () => {
     const { panel, cible, camera } = scene();
     cible.position.set(5, 0, 0);
     camera.position.set(0, 0, 10);
-    placePanel(panel, cible, camera, 0.8, 0.5, 3);
+    placePanel(panel, cible, camera, OFFSET, ELEVATION, 0.5, 3);
     const versCamera = new Vector3().subVectors(camera.position, panel.position).normalize();
     const avant = new Vector3(0, 0, 1).applyQuaternion(panel.quaternion);
     expect(avant.dot(versCamera)).toBeGreaterThan(0.99);
@@ -35,10 +50,10 @@ describe('le placement du panneau', () => {
     const { panel, cible, camera } = scene();
     cible.position.set(0, 0, 0);
     camera.position.set(0, 0, 2);
-    placePanel(panel, cible, camera, 0.8, 0.5, 3);
+    placePanel(panel, cible, camera, OFFSET, ELEVATION, 0.5, 3);
     const proche = panel.scale.x;
     camera.position.set(0, 0, 12);
-    placePanel(panel, cible, camera, 0.8, 0.5, 3);
+    placePanel(panel, cible, camera, OFFSET, ELEVATION, 0.5, 3);
     expect(panel.scale.x).toBeGreaterThan(proche);
   });
 
@@ -46,10 +61,10 @@ describe('le placement du panneau', () => {
     const { panel, cible, camera } = scene();
     cible.position.set(0, 0, 0);
     camera.position.set(0, 0, 0.1);
-    placePanel(panel, cible, camera, 0.8, 0.5, 3);
+    placePanel(panel, cible, camera, OFFSET, ELEVATION, 0.5, 3);
     expect(panel.scale.x).toBeCloseTo(0.5, 5);
     camera.position.set(0, 0, 500);
-    placePanel(panel, cible, camera, 0.8, 0.5, 3);
+    placePanel(panel, cible, camera, OFFSET, ELEVATION, 0.5, 3);
     expect(panel.scale.x).toBeCloseTo(3, 5);
   });
 
@@ -71,9 +86,82 @@ describe('le placement du panneau', () => {
     cible.position.set(2, 0, 0);
     camera.position.set(0, 0, 5);
     const avant = panel.position.clone();
-    placePanel(panel, cible, camera, 0.8, 0.5, 3);
-    placePanel(panel, cible, camera, 0.8, 0.5, 3);
+    placePanel(panel, cible, camera, OFFSET, ELEVATION, 0.5, 3);
+    placePanel(panel, cible, camera, OFFSET, ELEVATION, 0.5, 3);
     expect(panel.position.equals(avant)).toBe(false);
+  });
+});
+
+describe('les trois repères sont des repères MONDE', () => {
+  // Le garde qui manquait. Les cinq tests ci-dessus construisent caméra, cible
+  // et panneau SANS PARENT : local et monde y coïncident par construction,
+  // donc ils restaient verts sur une implémentation qui prenait
+  // `camera.position` — une position LOCALE au rig du joueur — pour une
+  // position monde. Le cœur parente pourtant `world.camera` sous
+  // `world.player` (`world-initializer.js`), et `apps/demo/src/AGENTS.md` le
+  // dit noir sur blanc.
+
+  it('la caméra parentée sous le rig du joueur : la distance vient de sa position MONDE', () => {
+    // La scène de la démo, exactement : joueur à (0, 7, 0)
+    // (`main.iwsdk.scene.json`), caméra à (0, 1,6, 0) DANS le rig
+    // (`iwsdk.config.json`), villageois posé sur le terrain à (3, 7, −8).
+    const { panel, cible } = scene();
+    const rigJoueur = new Object3D();
+    const camera = new Object3D();
+    rigJoueur.add(camera);
+    rigJoueur.position.set(0, 7, 0);
+    camera.position.set(0, 1.6, 0);
+    cible.position.set(3, 7, -8);
+
+    placePanel(panel, cible, camera, OFFSET, ELEVATION, 0.5, 3);
+
+    const camMonde = new Vector3(0, 8.6, 0);
+    const vraieDistance = camMonde.distanceTo(cible.position); // ≈ 8,69 m
+    // Version fautive : elle mesurait 10,1 m, et l'échelle collait à sa borne
+    // haute — 3 — quelle que soit la distance réelle du joueur.
+    expect(panel.scale.x).toBeCloseTo(vraieDistance / 3, 4);
+
+    // Et il regarde le VRAI viseur. Une surface UIKitML est à face unique :
+    // orientée vers un point sept mètres sous le sol, elle ne rend RIEN et ne
+    // signale rien.
+    const versCamera = new Vector3().subVectors(camMonde, panel.position).normalize();
+    const avant = new Vector3(0, 0, 1).applyQuaternion(panel.quaternion);
+    expect(avant.dot(versCamera)).toBeGreaterThan(0.99);
+  });
+
+  it('la cible parentée sous un nœud déplacé : le panneau la suit dans le MONDE', () => {
+    const { panel, camera } = scene();
+    const niveau = new Object3D();
+    const cible = new Object3D();
+    niveau.add(cible);
+    niveau.position.set(10, 0, 0);
+    cible.position.set(0, 0, 0); // monde : (10, 0, 0)
+    camera.position.set(10, 1.6, 6);
+
+    placePanel(panel, cible, camera, OFFSET, ELEVATION, 0.5, 3);
+
+    expect(Math.hypot(panel.position.x - 10, panel.position.z)).toBeCloseTo(OFFSET, 5);
+    expect(panel.position.y).toBeCloseTo(ELEVATION, 5);
+  });
+
+  it('le panneau parenté sous un nœud déplacé : sa position LOCALE porte la bonne position monde', () => {
+    // `world.createTransformEntity(node)` parente le panneau sous le niveau
+    // actif. Écrire une position monde dans `panel.position` sans conversion
+    // le décalerait de la transformation du parent.
+    const { cible, camera } = scene();
+    const parent = new Object3D();
+    const panel = new Object3D();
+    parent.add(panel);
+    parent.position.set(0, 5, 0);
+    cible.position.set(0, 0, -4);
+    camera.position.set(0, 1.6, 0);
+
+    placePanel(panel, cible, camera, OFFSET, ELEVATION, 0.5, 3);
+
+    const monde = new Vector3();
+    panel.getWorldPosition(monde);
+    expect(monde.y).toBeCloseTo(cible.position.y + ELEVATION, 5);
+    expect(Math.hypot(monde.x - cible.position.x, monde.z - cible.position.z)).toBeCloseTo(OFFSET, 5);
   });
 });
 

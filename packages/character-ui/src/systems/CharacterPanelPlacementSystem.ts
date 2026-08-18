@@ -3,6 +3,12 @@ import { CharacterSelection } from '@iwsdk/cardinal-character-three';
 
 // Vecteurs de travail au niveau du module : la fonction tourne à 90 Hz, et un
 // littéral par appel serait onze allocations par seconde et par personnage.
+// `getWorldPosition` et `worldToLocal` écrivent DANS une cible fournie et
+// n'allouent rien de leur côté (Three garde leurs matrices intermédiaires en
+// propriétés de module, comme ici).
+const _camMonde = new Vector3();
+const _cibleMonde = new Vector3();
+const _position = new Vector3();
 const _versCamera = new Vector3();
 const _cote = new Vector3();
 const _haut = new Vector3(0, 1, 0);
@@ -14,6 +20,19 @@ const _haut = new Vector3(0, 1, 0);
  * cible de position (le villageois) et la cible d'orientation (la caméra)
  * diffèrent, d'où cette fonction plutôt que le composant.
  *
+ * **Tout se calcule en coordonnées MONDE.** `world.camera` est un ENFANT de
+ * `world.player` — le cœur le parente lui-même (`world-initializer.js`,
+ * `attachCameraToPlayer(xrOrigin, world.camera)`) — et `apps/demo/src/AGENTS.md`
+ * l'énonce : « `world.camera.position` is local to `world.player`; use
+ * `getWorldPosition()` when logic needs the true viewer position ». Prendre
+ * `camera.position` pour une position monde soustrait un point d'un repère à
+ * un point d'un autre : la distance est fausse (donc l'échelle colle à sa
+ * borne), le côté est arbitraire, et `lookAt` vise un point qui n'est pas le
+ * viseur — or les surfaces UIKitML sont à FACE UNIQUE
+ * (`apps/demo/public/ui/AGENTS.md`), donc le panneau disparaît sans un mot.
+ * `panel.position`, symétriquement, est LOCALE à son parent : la position
+ * monde calculée ici y est reconvertie.
+ *
  * L'échelle est proportionnelle à la distance caméra, bornée : le panneau
  * occupe la même part du champ de vision de près comme de loin. Hors
  * immersion, la caméra bureau peut être à vingt mètres du villageois ; une
@@ -24,26 +43,40 @@ export function placePanel(
   cible: Object3D,
   camera: Object3D,
   offset: number,
+  elevation: number,
   scaleMin: number,
   scaleMax: number,
 ): void {
-  _versCamera.subVectors(camera.position, cible.position);
+  camera.getWorldPosition(_camMonde);
+  cible.getWorldPosition(_cibleMonde);
+
+  _versCamera.subVectors(_camMonde, _cibleMonde);
   const distance = _versCamera.length();
   if (distance < 1e-4) return;
   _versCamera.divideScalar(distance);
 
   // Le côté : perpendiculaire à l'axe caméra-cible, dans le plan horizontal.
-  // Pas de rehaussement vertical séparé ici : `_cote` est déjà purement
-  // horizontal (composante Y nulle par construction du produit vectoriel
-  // avec `_haut`), donc `distanceTo(cible)` vaut exactement `offset` — c'est
-  // ce que vérifie « se pose à côté de la cible, pas dessus ». Une version
-  // antérieure ajoutait `+ 1.2` en Y pour lever le panneau à hauteur de
-  // regard ; retirée ici parce qu'elle portait la distance à
-  // sqrt(offset² + 1.2²) et faisait échouer ce test-là.
+  // `_cote` est purement horizontal (composante Y nulle par construction du
+  // produit vectoriel avec `_haut`), donc l'écart HORIZONTAL à la cible vaut
+  // exactement `offset` et l'élévation s'ajoute sans le perturber. C'est
+  // pourquoi le test mesure les deux séparément : une version antérieure avait
+  // SUPPRIMÉ l'élévation pour satisfaire un test qui mesurait la distance
+  // TOTALE. Or la position d'un villageois est au SOL (`rootMotion: 'flatten'`,
+  // `CardinalSimulationSystem` écrit la position monde du corps) : sans
+  // élévation, le panneau se centre sur ses pieds, moitié sous le terrain,
+  // contre le « à hauteur de regard » de la spec §6.
   _cote.crossVectors(_haut, _versCamera).normalize();
-  panel.position.copy(cible.position).addScaledVector(_cote, offset);
+  _position.copy(_cibleMonde).addScaledVector(_cote, offset);
+  _position.y += elevation;
 
-  panel.lookAt(camera.position);
+  // `_position` est une position MONDE ; `panel.position` est locale à son
+  // parent. Sans parent (les tests unitaires, et le nœud pas encore monté) les
+  // deux coïncident.
+  if (panel.parent !== null) panel.parent.worldToLocal(_position);
+  panel.position.copy(_position);
+
+  // `lookAt` prend un point MONDE et se charge lui-même du repère parent.
+  panel.lookAt(_camMonde);
 
   // 3 mètres de référence : à cette distance l'échelle vaut 1.
   const echelle = Math.min(scaleMax, Math.max(scaleMin, distance / 3));
@@ -55,6 +88,8 @@ export class CharacterPanelPlacementSystem extends createSystem(
   { selections: { required: [CharacterSelection] } },
   {
     offsetMeters: { type: Types.Float32, default: 0.8 },
+    /** « À hauteur de regard », spec §6 — la position du villageois est au SOL. */
+    elevationMeters: { type: Types.Float32, default: 1.2 },
     scaleMin: { type: Types.Float32, default: 0.5 },
     scaleMax: { type: Types.Float32, default: 3 },
   },
@@ -102,6 +137,7 @@ export class CharacterPanelPlacementSystem extends createSystem(
       node,
       this.world.camera,
       this.config.offsetMeters.peek(),
+      this.config.elevationMeters.peek(),
       this.config.scaleMin.peek(),
       this.config.scaleMax.peek(),
     );
