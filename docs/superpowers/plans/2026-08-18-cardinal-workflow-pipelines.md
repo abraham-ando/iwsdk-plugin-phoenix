@@ -4,7 +4,7 @@
 
 **Goal:** Author the three orchestrated Workflow scripts (`docs/superpowers/specs/2026-08-18-cardinal-studio-agent-team-design.md` §5) that `studio-director` runs for pre-merge review, feature delivery, and asset production.
 
-**Architecture:** Each script is a `.claude/workflows/<name>.mjs` file matching the Workflow tool's contract: a literal `export const meta = {...}` header, then plain JS using `agent()`/`parallel()`/`pipeline()`/`phase()`/`log()`. Every `agent()` call uses `opts.agentType` set to one of the 18 roster role names (Plan 2) — these are real custom subagent types once that plan is executed, resolved from the same registry the `Agent` tool uses. Workflow scripts have no filesystem or Bash access themselves; anything that needs to read the repo (e.g. `git diff`) is delegated to an `agent()` call.
+**Architecture:** Each script is a `.claude/workflows/<name>.mjs` file matching the Workflow tool's contract: a literal `export const meta = {...}` header, then plain JS using `agent()`/`parallel()`/`pipeline()`/`phase()`/`log()`. Every `agent()` call uses `opts.agentType` set to one of the 19 roster role names (Plan 2) — these are real custom subagent types once that plan is executed, resolved from the same registry the `Agent` tool uses. Workflow scripts have no filesystem or Bash access themselves; anything that needs to read the repo (e.g. `git diff`) is delegated to an `agent()` call.
 
 **Tech Stack:** Plain JavaScript (not TypeScript — the Workflow runtime does not parse type annotations), the Workflow tool's `agent()`/`parallel()`/`pipeline()` API.
 
@@ -12,7 +12,7 @@
 
 ## Prerequisite
 
-All 18 tasks in `docs/superpowers/plans/2026-08-18-cardinal-agent-roster.md` are complete (including the pre-existing `iwsdk-project-code-reviewer`) — every `agentType` value below must resolve to a real registered subagent.
+All 18 tasks in `docs/superpowers/plans/2026-08-18-cardinal-agent-roster.md` are complete — with the pre-existing `iwsdk-project-code-reviewer`, all 19 roster roles then resolve — every `agentType` value below must resolve to a real registered subagent.
 
 ## Global Constraints
 
@@ -75,6 +75,10 @@ const ROUTES = [
   { prefix: 'apps/demo_server/', role: 'bff-backend-engineer' },
   { prefix: 'apps/demo/src/hud.ts', role: 'vr-comfort-ux-reviewer' },
   { prefix: 'apps/demo/src/ai-hud.ts', role: 'vr-comfort-ux-reviewer' },
+  // Process docs (specs/plans) belong to the superpowers workflow, not the
+  // docs site — order matters: this row must precede the docs/ row.
+  { prefix: 'docs/superpowers/', role: 'iwsdk-project-code-reviewer' },
+  { prefix: 'docs/', role: 'docs-writer' },
 ]
 
 function routeFile(file) {
@@ -132,7 +136,7 @@ phase('Review')
 const reviews = await parallel(
   Array.from(roleToFiles.entries()).map(([role, roleFiles]) => () =>
     agent(
-      `Review these changed files against your domain checklist: ${roleFiles.join(', ')}. Return your findings.`,
+      `Review these changed files against your domain checklist: ${roleFiles.join(', ')}. Return your findings. Additionally: if any fact stated in your domain skill (a constant, export, or invariant) no longer matches the code you just read, report that drift as a 'warning' finding naming the skill file — the skill update belongs in the same change.`,
       { agentType: role, schema: FINDINGS_SCHEMA, phase: 'Review', label: role },
     ).then((result) => result ?? { role, findings: [], unavailable: true }),
   ),

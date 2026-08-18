@@ -254,6 +254,12 @@ features/
   (simulated controller/ray input, ECS assertions — see `iwsdk-debug`
   and `iwsdk-ray`), never `page.click()` on the canvas: the canvas is a
   single opaque element to Playwright.
+- Multiplayer scenarios use multiple Playwright browser contexts in one
+  test — two players are two `browser.newContext()` pages against the
+  same server, the automated equivalent of the demo README's "open the
+  page in two tabs". Ownership races, reconciliation, and spawn/despawn
+  scenarios need at least two; never write them assuming a single
+  client.
 - Run everything: `pnpm test:bdd`. Run one file:
   `pnpm exec playwright test features/<area>/<story-slug>.feature`.
 - New scenarios drive Playwright against `apps/demo`'s plain-Vite dev

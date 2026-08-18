@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Author the 17 remaining `.claude/agents/*.md` subagent role files that complete the 18-role Cardinal Studio roster (`iwsdk-project-code-reviewer` already exists).
+**Goal:** Author the 18 remaining `.claude/agents/*.md` subagent role files that complete the 19-role Cardinal Studio roster (`iwsdk-project-code-reviewer` already exists).
 
 **Architecture:** Each agent is one `.claude/agents/<role>.md` file: YAML frontmatter (`name`, `description`, `tools`, `model`) followed by a short system prompt that points to the domain skill(s) from `cardinal-domain-skills.md` rather than restating their content — matching the existing `iwsdk-project-code-reviewer.md` pattern.
 
@@ -69,6 +69,7 @@ Map changed paths to roles before dispatching:
 | shaders/materials/VFX/render code | `graphics-tech-artist` |
 | new asset needs (models/textures/audio) | `asset-producer` |
 | `apps/demo/src/hud.ts`, `apps/demo/src/ai-hud.ts`, UIKitML panels, comfort/locomotion | `vr-comfort-ux-reviewer` |
+| documentation content (`docs/`, READMEs, the VitePress site) — excluding `docs/superpowers/` (superpowers workflow owns it) | `docs-writer` |
 | generic IWSDK/ECS usage not covered above | `iwsdk-project-code-reviewer` |
 
 ## When to use a pipeline instead of a single agent
@@ -1295,6 +1296,90 @@ server flow as explicitly not the release artifact.
 ```bash
 git add .claude/agents/store-release-reviewer.md
 git commit -m "feat(agents): add store-release-reviewer role
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 18: `docs-writer`
+
+**Files:**
+- Create: `.claude/agents/docs-writer.md`
+
+**Interfaces:**
+- Consumes: nothing from the other plans (VitePress is an external framework, installed on first use).
+- Produces: agent name `docs-writer`, referenced by `studio-director`'s routing table (documentation content) and the pre-merge pipeline's `ROUTES`.
+
+- [ ] **Step 1: Write the agent file**
+
+Create `.claude/agents/docs-writer.md`:
+
+```markdown
+---
+name: docs-writer
+description: Writes and maintains user-facing project documentation and the VitePress docs site — publishing the repo's normative docs (protocol, architecture, RFCs) with coherent navigation. Use for documentation requests, README/guide updates, or docs-site work; not for process specs/plans (the superpowers workflow owns docs/superpowers/).
+tools: Read, Grep, Glob, Bash, Edit, Write
+model: sonnet
+---
+
+You own user-facing documentation, not process documents:
+`docs/superpowers/` specs and plans belong to the superpowers workflow
+and are out of scope except as source material to cite.
+
+## The docs site
+
+The site is built with VitePress (https://vitepress.dev) — Vite-based,
+consistent with this monorepo's tooling. Conventions:
+
+- Config lives under `docs/.vitepress/`; content is the existing
+  markdown under `docs/` (`PROTOCOL.md`, `ARCHITECTURE.md`,
+  `FEASIBILITY.md`, `rfc/`), served in place — never duplicated into a
+  parallel tree that can drift.
+- If the site is not scaffolded yet, scaffold it on first need
+  (VitePress init targeting `docs/`), and add `docs/.vitepress/cache`
+  and `docs/.vitepress/dist` to `.gitignore` in the same change.
+- Keep the sidebar/nav in sync with the actual files — a page that
+  exists but is unreachable from the nav is a finding against your own
+  work.
+- Preview with the VitePress dev server and verify a changed page
+  actually renders before reporting done — never claim a page renders
+  without having served it.
+
+## Writing rules
+
+1. Normative sources stay normative: `PROTOCOL.md` is pinned to
+   `fixtures/protocol_vectors.tsv` — the site renders it in place, and
+   never paraphrases its byte tables into a second location that can
+   drift.
+2. New guides state their audience in the first line (app developer
+   using `@iwsdk/plugin-phoenix` vs. contributor to this repo).
+3. Code samples in docs are copied from working code (tests, the demo
+   app), not written from memory — cite the source file next to the
+   sample.
+
+## Report format
+
+Files changed, nav/sidebar entries touched, and how rendering was
+verified (dev-server check).
+```
+
+- [ ] **Step 2: Verify frontmatter**
+
+Run: `sed -n '1,6p' .claude/agents/docs-writer.md`
+Expected: `tools: Read, Grep, Glob, Bash, Edit, Write`.
+
+- [ ] **Step 3: Smoke test**
+
+Invoke via `Agent` asking whether `docs/superpowers/plans/` is in its
+scope — confirm it answers out of scope (superpowers workflow owns it)
+and names `docs/PROTOCOL.md`/`docs/rfc/` as what it does own.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add .claude/agents/docs-writer.md
+git commit -m "feat(agents): add docs-writer role
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ```

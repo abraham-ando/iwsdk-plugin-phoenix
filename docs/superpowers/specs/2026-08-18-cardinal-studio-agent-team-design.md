@@ -50,12 +50,12 @@ drifts from code) and one role-switching mega-agent (loses per-role tool
 restriction and can't fan out in parallel).
 
 **Operating model: hybrid.** Every role is independently invocable via
-`Agent` at any time. Three of the eighteen roles additionally participate
+`Agent` at any time. Three of the nineteen roles additionally participate
 in `Workflow` pipelines for sequences that are repetitive and high-value
 enough to script deterministically (§5). Nothing else is orchestrated
 automatically — the default is ad hoc invocation.
 
-## §1 — Roster (18 agents)
+## §1 — Roster (19 agents)
 
 Tool-grant convention: reviewer/analyst roles get `Read, Grep, Glob, Bash`
 (read-only usage — running tests/lint, never committing), matching the
@@ -70,6 +70,7 @@ role cannot implement without them. `studio-director` additionally gets
 |---|---|---|---|---|
 | `studio-director` | Direction | Routes tasks, runs the 3 pipelines | Read, Grep, Glob, Bash, Agent, Workflow | `iwsdk-planner` |
 | `product-owner-bdd` | Production | User/technical stories + `.feature` Gherkin | Read, Grep, Glob, Write | *new* |
+| `docs-writer` | Production | User-facing project documentation and the VitePress docs site (nav/sidebar, publishing `docs/`'s normative content in place) | Read, Grep, Glob, Bash, Edit, Write | — (framework: VitePress, https://vitepress.dev) |
 | `simulation-designer` | Design | Village economy/trades, civilization kernel, level/encounter design (no separate level role — this repo has no arena/level directories; world content is simulation-driven) | Read, Grep, Glob, Write | `cardinal-simulation-domain` *(new)*, secondary: `threejs-gameplay-systems` (`game-feel.md`, `game-design-level-design.md` only) |
 | `iwsdk-project-code-reviewer` *(existing)* | Engineering | Generic ECS/IWSDK usage | Read, Grep, Glob, Bash | `iwsdk-planner` |
 | `cardinal-genome-reviewer` | Engineering | Genome/heredity/compiled morphology | Read, Grep, Glob, Bash | `cardinal-character-domain` *(new)* |
@@ -87,9 +88,15 @@ role cannot implement without them. `studio-director` additionally gets
 | `perf-profiler` | QA | Frame budget (11.1 ms), profiling | Read, Grep, Glob, Bash | `iwsdk-debug`; secondary: `threejs-debug-profiler` |
 | `store-release-reviewer` | QA | Meta Horizon Store compliance (pre-ship, occasional use) | Read, Grep, Glob | `hz-store-submit` |
 
-`docs-rfc-writer` was considered and dropped: spec/RFC writing is already
-owned by `superpowers:brainstorming`/`writing-plans`, and a dedicated role
-would duplicate it without adding capability.
+`docs-rfc-writer` as originally conceived (process specs and plans) stays
+dropped — that writing is owned by
+`superpowers:brainstorming`/`writing-plans`. What the roster does include
+(added by explicit user decision, revising the first draft of this spec)
+is `docs-writer`: user-facing project documentation and its VitePress
+docs site (https://vitepress.dev — Vite-based, consistent with this
+monorepo's tooling), publishing the normative docs that already exist
+(`PROTOCOL.md`, `ARCHITECTURE.md`, `docs/rfc/`) with coherent navigation
+rather than authoring process documents.
 
 ## §2 — New domain skills
 
@@ -121,6 +128,11 @@ granularity (root vs. per-package) decided during implementation.
 `product-owner-bdd` writes the `.feature` files; `xr-visual-qa` implements
 the verification steps and runs them — both share this one Playwright
 stack, which `xr-visual-qa` needs regardless for browser/canvas checks.
+Multiplayer scenarios (ownership races, reconciliation, spawn/despawn —
+the differentiating behavior of this stack) use multiple Playwright
+browser contexts in one test: two players are two contexts, exactly the
+"open the page in two tabs" flow the demo README describes. Step authors
+must never assume a single client.
 
 ## §4 — The nine `threejs-game-skills`, verified against this roster
 
@@ -146,7 +158,13 @@ diff touching `packages/ai/rag` → `npc-behavior-engineer` +
 `ai-security-engineer`), fans them out with `parallel()`, then synthesizes
 a single deduplicated report. Mirrors the pattern already seen in
 `claude-security`. A reviewer that errors is reported as "reviewer X
-unavailable" in the synthesis, never silently dropped.
+unavailable" in the synthesis, never silently dropped. Reviewers also
+check their domain skill against the code they just reviewed: any drift
+(a constant, export, or invariant the skill states that the code no
+longer matches) is itself a finding, and the skill update belongs in the
+same change — the discipline that ties `docs/PROTOCOL.md` to its
+fixtures, applied to the skills. No role owns skill maintenance; this
+rule is what keeps the four domain skills honest.
 
 **B. Feature delivery (PO → Engineer → QA)**
 `pipeline()`, sequential: `product-owner-bdd` writes the story and
@@ -178,7 +196,7 @@ the final render visually.
 ## §6 — File layout
 
 ```
-.claude/agents/           18 role files (.md)
+.claude/agents/           19 role files (.md)
 .claude/skills/           4 new domain skills (mirrored to .agents/skills/)
 .claude/workflows/        3 scripts: pre-merge-review, feature-delivery, asset-production
 features/                 Gherkin: *.feature + steps/*.steps.ts
