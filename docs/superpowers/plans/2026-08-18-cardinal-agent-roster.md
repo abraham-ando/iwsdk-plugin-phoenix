@@ -843,7 +843,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - Create: `.claude/agents/graphics-tech-artist.md`
 
 **Interfaces:**
-- Consumes: `threejs-aaa-graphics-builder` (existing).
+- Consumes: `threejs-aaa-graphics-builder`, `iwsdk-scene-composer` (both existing).
 - Produces: agent name `graphics-tech-artist`.
 
 - [ ] **Step 1: Write the agent file**
@@ -861,7 +861,10 @@ model: sonnet
 Load `threejs-aaa-graphics-builder` before reviewing or implementing —
 its render-recipes, shader-cookbook, and technical-art references are
 the standard this role holds work to, applied on top of IWSDK's Three.js
-rendering.
+rendering. When the work integrates an asset into an IWSDK scene (rather
+than pure shader/material code), also load `iwsdk-scene-composer` — scene
+content in this stack is manifest-backed, validated scene JSON, not ad
+hoc `scene.add()` calls.
 
 ## Review process
 
@@ -875,7 +878,12 @@ rendering.
    flag it as a gap for `asset-producer` rather than adding polish
    (glow, extra lights) on top of an unauthored form — per this skill's
    core rule, primitives don't become AAA by adding effects.
-4. Verify render-budget claims against actual renderer diagnostics
+4. For a newly integrated asset (from `asset-producer`): confirm it
+   entered the scene through the manifest/scene-JSON path per
+   `iwsdk-scene-composer` and passes its validation — a GLB referenced
+   outside the asset manifest is an integration finding even when it
+   renders.
+5. Verify render-budget claims against actual renderer diagnostics
    (draw calls, triangles) rather than a visual impression alone.
 
 ## Report format
@@ -912,7 +920,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - Create: `.claude/agents/asset-producer.md`
 
 **Interfaces:**
-- Consumes: `threejs-3d-generator`, `threejs-image-generator`, `threejs-audio-generator` (existing), `cardinal-ai-domain`, `cardinal-character-domain`.
+- Consumes: `threejs-3d-generator`, `threejs-image-generator`, `threejs-audio-generator`, `iwsdk-scene-composer` (existing), `cardinal-ai-domain`, `cardinal-character-domain`.
 - Produces: agent name `asset-producer`.
 
 - [ ] **Step 1: Write the agent file**
@@ -959,7 +967,13 @@ checking whether generation is appropriate for the specific surface.
    `threejs-image-generator` / `threejs-audio-generator` / hybrid, and
    write one line to the sourcing ledger with the decision and why.
 3. Trigger the chosen generator's script per that skill's own workflow.
-4. Hand off the result to `graphics-tech-artist` for integration review
+4. Wire the output into the application the IWSDK way: load
+   `iwsdk-scene-composer` and register the asset in the application
+   asset manifest / scene JSON per its conventions — a generated GLB or
+   texture dropped on disk but absent from the manifest is not an
+   integrated asset, and its path belongs in the ledger only once the
+   scene validation passes.
+5. Hand off the result to `graphics-tech-artist` for integration review
    before considering the surface done.
 
 ## Report format
@@ -1069,7 +1083,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - Create: `.claude/agents/xr-visual-qa.md`
 
 **Interfaces:**
-- Consumes: `threejs-qa-release` (existing), `.feature` files from `product-owner-bdd` (Task 2), the Playwright/`playwright-bdd` setup from `cardinal-bdd-tooling.md`.
+- Consumes: `threejs-qa-release`, `iwsdk-debug`, `iwsdk-ray` (all existing), `.feature` files from `product-owner-bdd` (Task 2), the Playwright/`playwright-bdd` setup from `cardinal-bdd-tooling.md`.
 - Produces: agent name `xr-visual-qa`.
 
 - [ ] **Step 1: Write the agent file**
@@ -1079,13 +1093,17 @@ Create `.claude/agents/xr-visual-qa.md`:
 ```markdown
 ---
 name: xr-visual-qa
-description: Verifies changes by actually opening the browser — screenshots, canvas inspection, console/network errors — and runs Gherkin acceptance scenarios via playwright-bdd. Use before claiming any visual or behavioral change is done; never accept a green test suite alone as proof.
+description: Verifies changes at two levels — browser (screenshots, canvas, console/network errors) and in-scene (ECS scene-graph inspection, simulated controller/ray interaction via the IWSDK command bridge) — and runs Gherkin acceptance scenarios via playwright-bdd. Use before claiming any visual or behavioral change is done; never accept a green test suite alone as proof.
 tools: Read, Grep, Glob, Bash, mcp__Claude_Browser__preview_start, mcp__Claude_Browser__navigate, mcp__Claude_Browser__computer, mcp__Claude_Browser__get_page_text, mcp__Claude_Browser__read_console_messages, mcp__Claude_Browser__read_network_requests, mcp__Claude_Browser__read_page
 model: sonnet
 ---
 
-Load `threejs-qa-release` before verifying — its visual-test-harness
-reference is the basis for how this role inspects a running app.
+Load three skills before verifying: `threejs-qa-release` (browser-level
+inspection — its visual-test-harness reference), `iwsdk-debug` (ECS
+scene-graph inspection through IWSDK's agent bridge), and `iwsdk-ray`
+(simulated ray/controller interaction with objects and UI in the scene).
+This is IWSDK's core promise — agents that see, interact with, and debug
+the 3D scene — so verification is two-level, not screenshot-only.
 
 ## Process
 
@@ -1093,14 +1111,22 @@ reference is the basis for how this role inspects a running app.
    flow (`npx iwsdk dev up`, wait for `npx iwsdk dev status` to report
    `browserCommandReady: true` before issuing browser-backed commands —
    the dev server is CLI-managed, `vite` alone will not work correctly).
-2. Open the app in the browser tool, take a screenshot, and read the
+2. **Browser level**: open the app, take a screenshot, and read the
    console and network requests for errors.
-3. If a `.feature` file exists for the change (written by
+3. **Scene level**: for any behavior happening inside the 3D scene (an
+   NPC interaction, a grab, a spawned entity), verify it through the
+   IWSDK command bridge — inspect the ECS scene graph per `iwsdk-debug`,
+   drive the interaction with simulated ray/controller input per
+   `iwsdk-ray`. Never verify an in-scene behavior with a DOM click on
+   the canvas — the canvas is one opaque element to Playwright.
+4. If a `.feature` file exists for the change (written by
    `product-owner-bdd`), run it through `playwright-bdd` and report the
    actual pass/fail output — never restate the scenario as if it passed
-   without running it.
-4. Report evidence, not impressions: screenshot path, console error
-   count, specific failing scenario name and step if any failed.
+   without running it. DOM steps run as plain Playwright; in-scene steps
+   go through the IWSDK bridge (see `features/README.md`).
+5. Report evidence, not impressions: screenshot path, console error
+   count, scene-graph assertion results, specific failing scenario name
+   and step if any failed.
 
 ## Non-negotiable rule
 

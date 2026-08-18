@@ -247,6 +247,13 @@ features/
   top, `Étant donné/Quand/Alors` or `Given/When/Then` scenarios below).
 - The engineer implementing the story, or `xr-visual-qa` for
   verification-only steps, writes the matching `.steps.ts`.
+- Steps come in two kinds — do not conflate them. **DOM steps** (page
+  loads, titles, the desktop HUD overlays) are plain Playwright.
+  **In-scene steps** (an NPC interaction, a grab, a trade — anything
+  inside the 3D scene) go through IWSDK's agent command bridge
+  (simulated controller/ray input, ECS assertions — see `iwsdk-debug`
+  and `iwsdk-ray`), never `page.click()` on the canvas: the canvas is a
+  single opaque element to Playwright.
 - Run everything: `pnpm test:bdd`. Run one file:
   `pnpm exec playwright test features/<area>/<story-slug>.feature`.
 - New scenarios drive Playwright against `apps/demo`'s plain-Vite dev

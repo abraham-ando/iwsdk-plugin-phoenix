@@ -80,10 +80,10 @@ role cannot implement without them. `studio-director` additionally gets
 | `phoenix-networking-reviewer` | Engineering | Protocol, room/server authority (`packages/client`+`server`) | Read, Grep, Glob, Bash | `cardinal-network-protocol` *(new)* |
 | `bff-backend-engineer` | Engineering | `apps/bff-server`, `apps/demo_server` | Read, Grep, Glob, Bash, Edit, Write | `cardinal-network-protocol` |
 | `security-reviewer` | Engineering | Auth/secrets/dependencies, cross-cutting (non-AI) | Read, Grep, Glob, Bash | — |
-| `graphics-tech-artist` | Art | Shaders/materials/VFX/render budget | Read, Grep, Glob, Bash, Edit, Write | `threejs-aaa-graphics-builder` |
-| `asset-producer` | Art | Decides + triggers 3D/image/audio generation, keeps the sourcing ledger | Read, Grep, Glob, Bash, Write | `threejs-3d-generator`, `threejs-image-generator`, `threejs-audio-generator` |
+| `graphics-tech-artist` | Art | Shaders/materials/VFX/render budget | Read, Grep, Glob, Bash, Edit, Write | `threejs-aaa-graphics-builder`, `iwsdk-scene-composer` (scene integration/validation) |
+| `asset-producer` | Art | Decides + triggers 3D/image/audio generation, keeps the sourcing ledger | Read, Grep, Glob, Bash, Write | `threejs-3d-generator`, `threejs-image-generator`, `threejs-audio-generator`, `iwsdk-scene-composer` (manifest/scene wiring) |
 | `vr-comfort-ux-reviewer` | UX | Comfort, locomotion, spatial-UI (UIKitML) legibility | Read, Grep, Glob | `hz-immersive-designer`, `iwsdk-ui`; secondary: `threejs-game-ui-designer` (scoped to `hud.ts`/`ai-hud.ts` desktop DOM overlays only, §4) |
-| `xr-visual-qa` | QA | Browser/canvas verification, runs Gherkin scenarios | Read, Grep, Glob, Bash, Browser | `threejs-qa-release` |
+| `xr-visual-qa` | QA | Two-level verification — browser (screenshot/console/canvas) and in-scene (ECS scene-graph inspection, simulated controller/ray interaction via the IWSDK command bridge); runs Gherkin scenarios | Read, Grep, Glob, Bash, Browser | `threejs-qa-release`, `iwsdk-debug`, `iwsdk-ray` |
 | `perf-profiler` | QA | Frame budget (11.1 ms), profiling | Read, Grep, Glob, Bash | `iwsdk-debug`; secondary: `threejs-debug-profiler` |
 | `store-release-reviewer` | QA | Meta Horizon Store compliance (pre-ship, occasional use) | Read, Grep, Glob | `hz-store-submit` |
 
@@ -133,7 +133,7 @@ Re-checked against actual code in this session (not assumption):
 | `threejs-aaa-graphics-builder` | **Primary.** | `cardinal-world-reviewer` and `graphics-tech-artist` — shaders, materials, render budget, LOD/instancing apply directly since IWSDK renders through Three.js. |
 | `threejs-game-ui-designer` | **Secondary, narrowly scoped.** | Verified `apps/demo/src/hud.ts`: a deliberate screen-space DOM overlay ("Plain DOM rather than a spatial UIKit panel on purpose... diagnostics for whoever is testing the demo on a desktop browser"), same for `ai-hud.ts`. This is a real surface HUD/menu patterns apply to — but only these two files. `vr-comfort-ux-reviewer` uses it there; everywhere else in-world UI is UIKitML, owned by `iwsdk-ui`/`hz-immersive-designer`, and this skill's screen-space assumptions do not apply. |
 | `threejs-debug-profiler` | **Secondary.** | `perf-profiler`'s primary source is `iwsdk-debug` (IWSDK-aware); this skill's generic Three.js profiling checklists supplement it, not replace it. |
-| `threejs-qa-release` | **Primary.** | `xr-visual-qa` — its `references/visual-test-harness.md` is the direct source of the Playwright-based verification pattern behind §3. |
+| `threejs-qa-release` | **Primary, browser level.** | `xr-visual-qa` — its `references/visual-test-harness.md` is the direct source of the Playwright-based verification pattern behind §3. It covers the browser level only (screenshots, console, canvas pixels); scene-level verification — ECS scene-graph inspection, simulated controller/ray input — goes through IWSDK's own agent bridge via `iwsdk-debug` and `iwsdk-ray`, which is IWSDK's "AI agents that see, interact with, and debug your 3D scenes" capability and has no equivalent in this package. |
 | `threejs-3d-generator` (Tripo) | **Primary, bounded scope.** | `asset-producer`, for village props/buildings/environment pieces only. Verified `packages/ai/src/avatar/RPMAvatarRig.ts`: NPC avatars are built through a dedicated Ready Player Me rig pipeline, and hero characters compile through `cardinal-character`'s genome system — neither should be replaced by Tripo-generated meshes. |
 | `threejs-image-generator` (Gemini) | **Primary.** | `asset-producer` — textures/skies for `cardinal-world`, icons, concept references. |
 | `threejs-audio-generator` (ElevenLabs) | **Primary.** | `asset-producer` — village ambience and trade SFX (anvil, market), complementing `plugin-cardinal-ai`'s `SpatialVoice`, which spatializes at runtime but doesn't generate source audio. |
@@ -159,6 +159,14 @@ read-only reviewer (character, networking, comfort-ux, ai-security,
 simulation, generic) are implemented by a general-purpose agent, then
 reviewed by that domain's reviewer before QA — a reviewer role is never
 asked to write code it has no tools to write.
+
+Gherkin steps split into two kinds, and step authors must not conflate
+them: **DOM steps** (page loads, title, desktop HUD overlays) run as
+plain Playwright; **in-scene steps** (an NPC interaction, a grab, a
+trade — anything happening inside the 3D scene) run through IWSDK's
+agent command bridge (simulated controller/ray input, ECS scene-graph
+assertions via `iwsdk-debug`/`iwsdk-ray`), never as `page.click()` on the
+canvas. A trade with a villager cannot be implemented as a DOM click.
 
 **C. Asset production**
 `asset-producer` identifies a surface lacking an authored asset, runs the
