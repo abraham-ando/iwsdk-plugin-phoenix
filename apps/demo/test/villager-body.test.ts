@@ -20,7 +20,10 @@ import { createAgentAvatar } from '../src/simulation/AgentAvatarFactory';
 // ici le laisserait diverger en silence. `'rpm'` reproduit le nommage des deux
 // avatars T-pose réellement livrés — le seul qu'un `AnimationMixer` sache
 // viser, voir `BoneNaming`.
-import { humanoidPuppet } from '../../../packages/character-three/test/fixtures/humanoidPuppet';
+//
+// L'alias est déclaré dans `vitest.config.ts` : un `../../../packages/…`
+// traversait une frontière de paquet et cassait au premier déplacement.
+import { humanoidPuppet } from '@character-three/fixtures/humanoidPuppet';
 
 function puppetMap(ids: string[]): Map<string, VillagerBody> {
   return new Map(ids.map((id) => [id, new PuppetBody(new Group(), id)]));
@@ -243,13 +246,31 @@ describe('makeRiggedBody, de bout en bout', () => {
     expect(entity.object3D).toBeUndefined();
   });
 
-  it("une levée ne laisse pas non plus de mixer vivant derrière elle", () => {
+  it("une levée APRÈS l'attachement ne laisse pas de mixer vivant", () => {
+    // La porte importe. Une levée de `sanitizeClip` part de l'INTÉRIEUR
+    // d'`attach`, avant que le rig ne soit enregistré : `mixerCount()` y vaut
+    // zéro quoi que fasse le `catch`, et l'assertion ne prouverait rien.
+    // `assertSameWorldFrame` est la seule porte qui lève APRÈS un attachement
+    // réussi — donc la seule qui puisse laisser un mixer orphelin derrière
+    // elle, et la seule qui rende ce test capable de tomber.
     const { world, entity } = makeCharacter();
     const system = world.getSystem(CharacterAnimationSystem)!;
+
+    // Un parent de marionnette déplacé : les deux repères divergent.
+    const decale = new Group();
+    decale.position.set(1, 0, 0);
+    const puppetNode = new Group();
+    decale.add(puppetNode);
+
     expect(() =>
-      makeRiggedBody(world, entity, { idle: conflictingClip() }, new PuppetBody(new Group(), 'mira')),
-    ).toThrow();
+      makeRiggedBody(world, entity, { idle: walkClip() }, new PuppetBody(puppetNode, 'mira')),
+    ).toThrow(/même repère monde/);
+
+    // Le rig ÉTAIT enregistré au moment de la levée : si le `catch` ne
+    // disposait pas l'entité, son `disqualify` ne tomberait pas et le mixer
+    // tournerait pour toujours.
     expect(system.mixerCount()).toBe(0);
+    expect(entity.object3D).toBeUndefined();
   });
 
   it("le repli reste possible : upgradeVillagers absorbe la levée et garde la marionnette", async () => {

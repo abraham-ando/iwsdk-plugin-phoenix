@@ -19,7 +19,7 @@ spec lissée.
 | :--- | :--- | :--- | :--- |
 | §2.4, §10.2, §12 | l'étape se terminerait sans doute sur une preuve du **repli**, faute de réseau | onze rigs RPM montés, zéro avertissement | la réserve portait sur `models.readyplayer.me` ; les avatars sont finalement venus de `readyplayerme/animation-library`, le même dépôt que les clips. La bonne question n'était pas « le réseau passe-t-il ? » mais « d'où viennent les assets ? » |
 | §8 | onze agents sur **cinq** assets RPM de base | **deux**, choisis par le genre | la démonstration voulue — « ce qui les distingue est la morphologie, pas l'asset » — est plus forte avec deux qu'avec cinq |
-| §6.2 | cinq fichiers, 889 Ko | **sept** fichiers, ~5,2 Mo | les deux avatars T-pose n'étaient pas prévus : la spec supposait des avatars servis par URL |
+| §6.2 | cinq fichiers, 889 Ko | **sept** fichiers, **6 264 996 octets** | les deux avatars T-pose n'étaient pas prévus : la spec supposait des avatars servis par URL |
 | §7.1 | une classe `RiggedBody` | `makeRiggedBody`, qui rend un littéral | un ruling de pré-vol l'avait déjà tranché ; la spec ne l'avait pas enregistré |
 | §7.2 | le repli est « le seul usage réel de `PuppetApplicator` » | faux, et jamais vérifié | deux objets sans rapport confondus par leur nom. Voir §7.2 |
 | §4.3 | « on soustrait la valeur de la clé 0 de chaque clé » | une phrase qui se contredit, et qui ne décrivait pas le code | voir §4.3, réécrit |
@@ -312,8 +312,13 @@ Le script imprime la licence et son URL avant de télécharger.
 | `masculine/glb/Masculine_TPose.glb` | **avatar**, rig masculin | 2,51 Mo |
 | `feminine/glb/Feminine_TPose.glb` | **avatar**, rig féminin | 2,59 Mo |
 
-≈ 5,2 Mo au total, dans un dossier ignoré — dont 98 % pour les deux avatars,
-qui portent leurs textures.
+**6 264 996 octets** au total — 5,97 Mio, soit 6,26 Mo — dans un dossier
+ignoré. Les deux avatars, qui portent leurs textures, en font **85,4 %**.
+
+Ces chiffres sont comptés sur le disque, fichier par fichier. Une première
+rédaction annonçait « ≈ 5,2 Mo » et « 98 % » : les deux venaient d'un arrondi
+recopié sans être recalculé, ce qui est précisément la faute que le §7.2
+sanctionne ailleurs.
 
 **`F_Walk_001.glb` n'existe pas.** Les marches féminines de la bibliothèque
 commencent à `F_Walk_002`. Le fait a été vérifié sur l'arborescence complète des
@@ -539,9 +544,14 @@ Les tests 10 à 12 ont été ajoutés par la revue finale : les cinq tests du
 système d'animation passaient tous avec un mixer branché sur un `Group` vide,
 parce que leurs clips visaient des nœuds (`root`, `head`) qui n'existaient dans
 aucune fixture. Mesuré à cette occasion, et vrai bien au-delà de ce test :
-`PropertyBinding` lit `:` comme un séparateur de répertoire, donc **aucune
-piste ne peut viser un os nommé `mixamorig:Hips`** tant que les nœuds n'ont pas
-été assainis eux aussi. Les deux avatars livrés nomment leurs os `Hips`,
+`PropertyBinding` lit `:` comme un séparateur de répertoire, donc une piste
+nommée `mixamorig:Hips.position` — la **seule forme que produisent les GLB** —
+est analysée en `{ nodeName: 'Hips' }` et ne trouve rien sur un rig nommé à la
+Mixamo. L'énoncé absolu « aucune piste ne peut viser `mixamorig:Hips` » serait
+faux : la forme complète `Body.bones[mixamorig:Hips].position` se lie bien,
+car le groupe `objectName`/`objectIndex` est comparé verbatim au nom de l'os.
+Aucun exportateur glTF ne l'émet, mais la nuance compte pour qui écrirait une
+piste à la main. Les deux avatars livrés nomment leurs os `Hips`,
 `Head`… — la convention RPM, la seule qu'un mixer sache viser.
 
 **Mesuré sur trois clips, présumé sur deux — puis mesuré sur les cinq.**
