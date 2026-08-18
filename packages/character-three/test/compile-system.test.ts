@@ -2,9 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { World } from '@iwsdk/core';
 import { HUMANOID, defaultGenome, genomeKey } from '@iwsdk/cardinal-character';
 import { CharacterCompileSystem, genomeFromComponents, needsRecompile } from '../src/systems/CharacterCompileSystem';
+import { CharacterExpressionSystem } from '../src/systems/CharacterExpressionSystem';
 import { createCharacter, installCharacterThree } from '../src/create';
-import { CharacterStructure } from '../src/components/index';
-import { humanoidPuppet } from './fixtures/humanoidPuppet';
+import { CharacterFace, CharacterStructure } from '../src/components/index';
+import { humanoidPuppet, humanoidSkinned } from './fixtures/humanoidPuppet';
 
 describe('genomeFromComponents', () => {
   const base = { family: 'humanoid', genes: { ...defaultGenome(HUMANOID).genes, skinTone: 0.8 } };
@@ -88,5 +89,57 @@ describe('createCharacter — le génome de structure atteint le compilateur', (
     // hauteur. C'est l'assertion qui compte — la première pourrait passer sur
     // un composant amorcé mais ignoré par le compilateur.
     expect(petit.knee).not.toBeCloseTo(grand.knee, 4);
+  });
+});
+
+/**
+ * Test jumeau du précédent, côté VISAGE — trouvaille de revue : amorcer
+ * `CharacterStructure` sans amorcer `CharacterFace` laissait le test ci-dessus
+ * vert alors que `CharacterExpressionSystem` (qui lit `entity.getValue(
+ * CharacterFace, …)` directement, jamais le génome — voir son `update()`)
+ * aurait appliqué le même morph 0.5 par défaut à deux personnages aux gènes de
+ * visage opposés. Aucun test existant ne le couvrait : ceux qui touchent
+ * `CharacterExpressionSystem` (`create.test.ts`) passent tous par
+ * `entity.setValue(CharacterFace, …)` ou `defaultGenome`, ce qui contourne
+ * entièrement le chemin `genesFor` pour ce composant.
+ *
+ * `humanoidSkinned()` (déjà réutilisée par `create.test.ts` pour ce même
+ * système) est la seule fixture du paquet à porter un `morphTargetDictionary`
+ * — `humanoidPuppet()` n'a qu'un `Mesh` simple, muet sur les morphs.
+ */
+describe('createCharacter — le génome de visage atteint CharacterExpressionSystem', () => {
+  it('deux génomes de visage opposés donnent deux morphs RÉELLEMENT APPLIQUÉS DIFFÉRENTS', () => {
+    const world = new World();
+    installCharacterThree(world);
+    const expression = world.getSystem(CharacterExpressionSystem)!;
+
+    const measure = (value: number): { jawWidth: number; morph: number } => {
+      const genes: Record<string, number> = {};
+      for (const key of Object.keys(HUMANOID.genes)) genes[key] = value;
+      const { root, mesh } = humanoidSkinned();
+      const entity = createCharacter(world, {
+        familyId: HUMANOID.id,
+        genome: { family: HUMANOID.id, genes },
+        age: 30,
+        rigRoot: root,
+      }).entity;
+      expression.update();
+      const jawIndex = mesh.morphTargetDictionary!['jawWidth']!;
+      return {
+        jawWidth: entity.getValue(CharacterFace, 'jawWidth') ?? Number.NaN,
+        morph: mesh.morphTargetInfluences![jawIndex] ?? Number.NaN,
+      };
+    };
+
+    const petit = measure(0.05);
+    const grand = measure(0.95);
+
+    // Le composant porte le gène reçu, pas le défaut du schéma.
+    expect(petit.jawWidth).toBeCloseTo(0.05, 5);
+    expect(grand.jawWidth).toBeCloseTo(0.95, 5);
+    // Et le morph écrit sur le maillage par CharacterExpressionSystem s'en
+    // ressent. C'est l'assertion qui compte — la première pourrait passer sur
+    // un composant amorcé mais jamais lu par le système d'expression.
+    expect(petit.morph).not.toBeCloseTo(grand.morph, 4);
   });
 });
