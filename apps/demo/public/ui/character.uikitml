@@ -1,0 +1,182 @@
+<!--
+  Panneau de personnage : deux onglets et un pied de page.
+
+  Les identifiants sont le CONTRAT avec `@iwsdk/cardinal-character-ui` :
+  `apps/demo/test/uikitml-ids.test.ts` confronte ce fichier aux identifiants que
+  les contrôleurs demandent, et tombe si l'un manque. Un document factice ne
+  voit jamais cette panne — c'est la plus probable de l'étape.
+
+  Les tailles sont en CENTIMÈTRES, sans suffixe. `width: 60` fait 60 cm. Les
+  deux autres panneaux du dépôt écrivent `px` et compensent par un
+  `scale.setScalar(0.5)` ; celui-ci déclare sa taille réelle.
+
+  Les accents dépendent d'un correctif @pmndrs/uikit déclaré dans
+  `patchedDependencies`, gardé par `scripts/__tests__/uikit-charset.test.mjs`.
+-->
+<style>
+  .root { flex-direction: column; width: 60; height: 78; background-color: #14161c;
+          border-radius: 1.2; padding: 1.6; gap: 1.0; }
+  .tab { flex-direction: column; gap: 0.5; flex-grow: 1; }
+  .row { flex-direction: row; align-items: center; gap: 0.6; height: 3.2; }
+  .name { width: 16; font-size: 1.3; color: #d8dde8; }
+  .track { flex-grow: 1; height: 0.9; background-color: #2a2f3a; border-radius: 0.45; }
+  .bar { height: 0.9; background-color: #6ea8fe; border-radius: 0.45; }
+  .val { width: 5; font-size: 1.2; color: #9aa4b8; }
+  .step { width: 3.4; height: 2.6; background-color: #2a2f3a; border-radius: 0.5;
+          align-items: center; justify-content: center; }
+  .step:hover { background-color: #3a4150; }
+  .note { font-size: 1.0; color: #8a93a6; }
+  .foot { flex-direction: row; align-items: center; gap: 0.8; height: 4; }
+  .tabbtn { width: 14; height: 3; background-color: #2a2f3a; border-radius: 0.5;
+            align-items: center; justify-content: center; }
+  .h { font-size: 1.6; color: #ffffff; }
+</style>
+
+<div class="root" id="panel-root">
+  <p class="h" id="target-name">Aucune cible</p>
+
+  <div class="tab" id="tab-settings">
+    <div class="row" id="gene-row-stature">
+      <p class="name" id="gene-label-stature">Stature</p>
+      <button class="step" id="gene-minus-stature"><p>−</p></button>
+      <div class="track"><div class="bar" id="gene-bar-stature"></div></div>
+      <p class="val" id="gene-val-stature">0.50</p>
+      <button class="step" id="gene-plus-stature"><p>+</p></button>
+      <p class="note" id="gene-note-stature">inerte sur ce rig</p>
+    </div>
+    <div class="row" id="gene-row-armLength">
+      <p class="name" id="gene-label-armLength">Longueur de bras</p>
+      <button class="step" id="gene-minus-armLength"><p>−</p></button>
+      <div class="track"><div class="bar" id="gene-bar-armLength"></div></div>
+      <p class="val" id="gene-val-armLength">0.50</p>
+      <button class="step" id="gene-plus-armLength"><p>+</p></button>
+      <p class="note" id="gene-note-armLength">inerte sur ce rig</p>
+    </div>
+    <div class="row" id="gene-row-legLength">
+      <p class="name" id="gene-label-legLength">Longueur de jambe</p>
+      <button class="step" id="gene-minus-legLength"><p>−</p></button>
+      <div class="track"><div class="bar" id="gene-bar-legLength"></div></div>
+      <p class="val" id="gene-val-legLength">0.50</p>
+      <button class="step" id="gene-plus-legLength"><p>+</p></button>
+      <p class="note" id="gene-note-legLength">inerte sur ce rig</p>
+    </div>
+    <div class="row" id="gene-row-torsoLength">
+      <p class="name" id="gene-label-torsoLength">Longueur de tronc</p>
+      <button class="step" id="gene-minus-torsoLength"><p>−</p></button>
+      <div class="track"><div class="bar" id="gene-bar-torsoLength"></div></div>
+      <p class="val" id="gene-val-torsoLength">0.50</p>
+      <button class="step" id="gene-plus-torsoLength"><p>+</p></button>
+      <p class="note" id="gene-note-torsoLength">inerte sur ce rig</p>
+    </div>
+    <div class="row" id="gene-row-shoulderWidth">
+      <p class="name" id="gene-label-shoulderWidth">Largeur d'épaules</p>
+      <button class="step" id="gene-minus-shoulderWidth"><p>−</p></button>
+      <div class="track"><div class="bar" id="gene-bar-shoulderWidth"></div></div>
+      <p class="val" id="gene-val-shoulderWidth">0.50</p>
+      <button class="step" id="gene-plus-shoulderWidth"><p>+</p></button>
+      <p class="note" id="gene-note-shoulderWidth">inerte sur ce rig</p>
+    </div>
+    <div class="row" id="gene-row-jawWidth">
+      <p class="name" id="gene-label-jawWidth">Mâchoire</p>
+      <button class="step" id="gene-minus-jawWidth"><p>−</p></button>
+      <div class="track"><div class="bar" id="gene-bar-jawWidth"></div></div>
+      <p class="val" id="gene-val-jawWidth">0.50</p>
+      <button class="step" id="gene-plus-jawWidth"><p>+</p></button>
+      <p class="note" id="gene-note-jawWidth">inerte sur ce rig</p>
+    </div>
+    <div class="row" id="gene-row-noseSize">
+      <p class="name" id="gene-label-noseSize">Nez</p>
+      <button class="step" id="gene-minus-noseSize"><p>−</p></button>
+      <div class="track"><div class="bar" id="gene-bar-noseSize"></div></div>
+      <p class="val" id="gene-val-noseSize">0.50</p>
+      <button class="step" id="gene-plus-noseSize"><p>+</p></button>
+      <p class="note" id="gene-note-noseSize">inerte sur ce rig</p>
+    </div>
+    <div class="row" id="gene-row-eyeScale">
+      <p class="name" id="gene-label-eyeScale">Yeux</p>
+      <button class="step" id="gene-minus-eyeScale"><p>−</p></button>
+      <div class="track"><div class="bar" id="gene-bar-eyeScale"></div></div>
+      <p class="val" id="gene-val-eyeScale">0.50</p>
+      <button class="step" id="gene-plus-eyeScale"><p>+</p></button>
+      <p class="note" id="gene-note-eyeScale">inerte sur ce rig</p>
+    </div>
+    <div class="row" id="gene-row-cheekbone">
+      <p class="name" id="gene-label-cheekbone">Pommettes</p>
+      <button class="step" id="gene-minus-cheekbone"><p>−</p></button>
+      <div class="track"><div class="bar" id="gene-bar-cheekbone"></div></div>
+      <p class="val" id="gene-val-cheekbone">0.50</p>
+      <button class="step" id="gene-plus-cheekbone"><p>+</p></button>
+      <p class="note" id="gene-note-cheekbone">inerte sur ce rig</p>
+    </div>
+    <div class="row" id="gene-row-bodyMass">
+      <p class="name" id="gene-label-bodyMass">Corpulence</p>
+      <button class="step" id="gene-minus-bodyMass"><p>−</p></button>
+      <div class="track"><div class="bar" id="gene-bar-bodyMass"></div></div>
+      <p class="val" id="gene-val-bodyMass">0.50</p>
+      <button class="step" id="gene-plus-bodyMass"><p>+</p></button>
+      <p class="note" id="gene-note-bodyMass">inerte sur ce rig</p>
+    </div>
+    <div class="row" id="gene-row-skinTone">
+      <p class="name" id="gene-label-skinTone">Teint</p>
+      <button class="step" id="gene-minus-skinTone"><p>−</p></button>
+      <div class="track"><div class="bar" id="gene-bar-skinTone"></div></div>
+      <p class="val" id="gene-val-skinTone">0.50</p>
+      <button class="step" id="gene-plus-skinTone"><p>+</p></button>
+      <p class="note" id="gene-note-skinTone">inerte sur ce rig</p>
+    </div>
+    <div class="row" id="gene-row-hairTone">
+      <p class="name" id="gene-label-hairTone">Cheveux</p>
+      <button class="step" id="gene-minus-hairTone"><p>−</p></button>
+      <div class="track"><div class="bar" id="gene-bar-hairTone"></div></div>
+      <p class="val" id="gene-val-hairTone">0.50</p>
+      <button class="step" id="gene-plus-hairTone"><p>+</p></button>
+      <p class="note" id="gene-note-hairTone">inerte sur ce rig</p>
+    </div>
+    <div class="row" id="gene-row-hairStyle">
+      <p class="name" id="gene-label-hairStyle">Coiffure</p>
+      <button class="step" id="gene-minus-hairStyle"><p>−</p></button>
+      <div class="track"><div class="bar" id="gene-bar-hairStyle"></div></div>
+      <p class="val" id="gene-val-hairStyle">0.50</p>
+      <button class="step" id="gene-plus-hairStyle"><p>+</p></button>
+      <p class="note" id="gene-note-hairStyle">inerte sur ce rig</p>
+    </div>
+  </div>
+
+  <div class="tab" id="tab-persona">
+    <p class="name" id="persona-role">—</p>
+    <p class="note" id="persona-text">—</p>
+    <div class="row">
+      <p class="name" id="need-label-hunger">Faim</p>
+      <div class="track"><div class="bar" id="need-bar-hunger"></div></div>
+      <p class="val" id="need-val-hunger">—</p>
+    </div>
+    <div class="row">
+      <p class="name" id="need-label-warmth">Chaleur</p>
+      <div class="track"><div class="bar" id="need-bar-warmth"></div></div>
+      <p class="val" id="need-val-warmth">—</p>
+    </div>
+    <div class="row">
+      <p class="name" id="need-label-energy">Énergie</p>
+      <div class="track"><div class="bar" id="need-bar-energy"></div></div>
+      <p class="val" id="need-val-energy">—</p>
+    </div>
+    <div class="row">
+      <p class="name" id="need-label-affection">Affection</p>
+      <div class="track"><div class="bar" id="need-bar-affection"></div></div>
+      <p class="val" id="need-val-affection">—</p>
+    </div>
+    <div class="row">
+      <p class="name" id="need-label-stress">Stress</p>
+      <div class="track"><div class="bar" id="need-bar-stress"></div></div>
+      <p class="val" id="need-val-stress">—</p>
+    </div>
+    <p class="note" id="persona-action">—</p>
+    <p class="note" id="persona-plan">—</p>
+    <p class="note" id="persona-absent">aucune source de persona</p>
+  </div>
+
+  <div class="foot">
+    <button class="tabbtn" id="btn-tab-settings"><p>Réglages</p></button>
+    <button class="tabbtn" id="btn-tab-persona"><p>Persona</p></button>
+  </div>
+</div>

@@ -6,6 +6,26 @@
  */
 
 import { defineComponents } from '@iwsdk/core';
+import {
+  CharacterIdentity, CharacterStructure, CharacterFace,
+  CharacterSurface, CharacterSelection,
+} from '@iwsdk/cardinal-character-three/components';
 import { Robot } from './robot-component.js';
 
-export default defineComponents([Robot]);
+// Les cinq composants de personnage figurent ici pour que l'inspecteur de
+// l'éditeur managé rende leurs curseurs : il lit CE manifeste, et les
+// métadonnées `label`, `min`, `max`, `step` que `gene()` porte déjà suffisent
+// à produire une ligne bornée et étiquetée. Sans cette déclaration, aucune des
+// treize valeurs n'est éditable hors du panneau spatial. On importe depuis le
+// sous-chemin `/components`, pas la racine du paquet : ce fichier est évalué
+// deux fois, dans deux réalités JS (application et éditeur), et la racine
+// entraînerait les systèmes ainsi que `registerFamily(HUMANOID)` — un effet
+// de bord au chargement du module dans `@iwsdk/cardinal-character`.
+export default defineComponents([
+  Robot,
+  CharacterIdentity,
+  CharacterStructure,
+  CharacterFace,
+  CharacterSurface,
+  CharacterSelection,
+]);

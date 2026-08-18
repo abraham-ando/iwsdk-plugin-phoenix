@@ -18,6 +18,7 @@
   "dependencies": {
     "@iwsdk/cardinal-character": "workspace:*",
     "@iwsdk/cardinal-character-three": "workspace:*",
+    "@iwsdk/cardinal-character-ui": "workspace:*",
     "@iwsdk/cardinal-simulation": "workspace:*",
     "@iwsdk/cardinal-world": "workspace:*",
     "@iwsdk/core": "0.5.3",

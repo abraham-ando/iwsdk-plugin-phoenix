@@ -122,5 +122,11 @@ export default defineAssets({
     type: AssetType.UIKitML,
     name: 'Local AI Panel',
   },
+  'character-panel': {
+    url: publicAssetUrl('ui/character.uikitml'),
+    type: AssetType.UIKitML,
+    name: 'Panneau de personnage',
+    priority: 'lazy',
+  },
 });
 
