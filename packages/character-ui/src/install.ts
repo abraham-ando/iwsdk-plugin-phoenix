@@ -1,7 +1,7 @@
 import { RayInteractable, UIKitMLAsset, type Entity, type Object3D, type World } from '@iwsdk/core';
 import { CharacterSelection, CharacterStructure, CharacterFace } from '@iwsdk/cardinal-character-three';
 import { CharacterUIRoute } from './components';
-import { TabRouter, PANEL_IDS } from './router';
+import { TabRouter, PANEL_IDS, type TabId } from './router';
 import { SettingsTab } from './tabs/settings';
 import { PersonaTab, type PersonaView } from './tabs/persona';
 import { CharacterPickSystem } from './systems/CharacterPickSystem';
@@ -66,7 +66,17 @@ export async function installCharacterUI(
   // atteint le panneau quand même.
   panneau.addComponent(RayInteractable, {});
 
-  const router = new TabRouter(doc);
+  // Spec §4.3 : `CharacterUIRoute` est l'UNIQUE source de vérité de la route.
+  // Le routeur ne garde donc aucune copie privée — il lit et écrit ici. Sans
+  // cela le composant était enregistré, posé sur l'entité, et mort : basculer
+  // sur Persona depuis le panneau laissait `tab` à `'settings'` pour toujours,
+  // et l'écrire depuis l'inspecteur ne changeait rien à l'écran.
+  const router = new TabRouter(doc, {
+    get: () => (selection.getValue(CharacterUIRoute, 'tab') as TabId | null) ?? 'settings',
+    set: (tab) => {
+      selection.setValue(CharacterUIRoute, 'tab', tab);
+    },
+  });
   const persona = new PersonaTab(doc);
 
   const cible = (): Entity | null =>
@@ -100,6 +110,11 @@ export async function installCharacterUI(
   let dernier = 0;
   const tick = (now: number): void => {
     const e = cible();
+    // Une écriture de `CharacterUIRoute.tab` venue d'ailleurs — l'inspecteur
+    // de l'éditeur managé, un état restauré — atteint l'écran ici. Une
+    // comparaison de chaînes par tick ; le document n'est réécrit que si la
+    // route a réellement bougé.
+    router.sync();
     setText(doc.getElementById(PANEL_IDS.targetName), e === null ? 'Aucune cible' : 'Villageois');
     // Un onglet en `display: none` n'a rien à montrer. Sans cette garde,
     // `refresh()` réécrivait treize lignes dix fois par seconde même caché —

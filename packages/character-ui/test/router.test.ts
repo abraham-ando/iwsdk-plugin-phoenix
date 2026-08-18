@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { TabRouter, TAB_IDS, TAB_BUTTON_IDS } from '../src/router';
+import { TabRouter, TAB_IDS, TAB_BUTTON_IDS, type RouteStore, type TabId } from '../src/router';
 import { makeFakeDocument } from './fixtures/fakeDocument';
 
 function build() {
@@ -59,5 +59,72 @@ describe('le routeur d onglets', () => {
     const { doc } = makeFakeDocument([]);
     const router = new TabRouter(doc);
     expect(() => router.show('persona')).not.toThrow();
+  });
+});
+
+describe('la route vit dans le dépôt qu on lui donne, pas dans le routeur', () => {
+  // Spec §4.3 : une seule source de vérité. Le routeur tenait son onglet dans
+  // un champ privé pendant que `CharacterUIRoute` — enregistré, posé sur
+  // l entité de sélection — n était ni lu ni écrit : faux dans les deux sens.
+
+  function storeEspion(): { store: RouteStore; lu: () => number; valeur: () => TabId } {
+    let tab: TabId = 'settings';
+    let lectures = 0;
+    return {
+      store: {
+        get: () => {
+          lectures++;
+          return tab;
+        },
+        set: (suivant) => {
+          tab = suivant;
+        },
+      },
+      lu: () => lectures,
+      valeur: () => tab,
+    };
+  }
+
+  it('`show` ÉCRIT dans le dépôt', () => {
+    const { doc } = makeFakeDocument([...Object.values(TAB_IDS), ...Object.values(TAB_BUTTON_IDS)]);
+    const espion = storeEspion();
+    const router = new TabRouter(doc, espion.store);
+    router.show('persona');
+    expect(espion.valeur()).toBe('persona');
+  });
+
+  it('`current` LIT le dépôt, sans copie privée', () => {
+    const { doc } = makeFakeDocument([...Object.values(TAB_IDS), ...Object.values(TAB_BUTTON_IDS)]);
+    const espion = storeEspion();
+    const router = new TabRouter(doc, espion.store);
+    const avant = espion.lu();
+    expect(router.current).toBe('settings');
+    expect(espion.lu()).toBeGreaterThan(avant);
+  });
+
+  it('`sync` applique une écriture venue d AILLEURS — l inspecteur, un état restauré', () => {
+    const { doc, props } = makeFakeDocument([
+      ...Object.values(TAB_IDS), ...Object.values(TAB_BUTTON_IDS),
+    ]);
+    const espion = storeEspion();
+    const router = new TabRouter(doc, espion.store);
+    expect(props.get(TAB_IDS.persona)?.display).toBe('none');
+
+    espion.store.set('persona'); // personne n a appelé `show`
+    router.sync();
+
+    expect(props.get(TAB_IDS.persona)?.display).toBe('flex');
+    expect(props.get(TAB_IDS.settings)?.display).toBe('none');
+  });
+
+  it('`sync` ne réécrit RIEN quand la route n a pas bougé', () => {
+    const { doc, journal } = makeFakeDocument([
+      ...Object.values(TAB_IDS), ...Object.values(TAB_BUTTON_IDS),
+    ]);
+    const router = new TabRouter(doc, storeEspion().store);
+    journal.length = 0;
+    router.sync();
+    router.sync();
+    expect(journal).toEqual([]);
   });
 });

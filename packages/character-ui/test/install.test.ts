@@ -5,6 +5,7 @@ import {
   installCharacterThree,
 } from '@iwsdk/cardinal-character-three';
 import { installCharacterUI } from '../src/install';
+import { CharacterUIRoute } from '../src/components';
 import { CharacterPickSystem } from '../src/systems/CharacterPickSystem';
 import { CharacterPanelPlacementSystem } from '../src/systems/CharacterPanelPlacementSystem';
 import { PANEL_IDS, TAB_IDS, TAB_BUTTON_IDS } from '../src/router';
@@ -326,5 +327,49 @@ describe('installCharacterUI — dispose', () => {
     vi.advanceTimersByTime(1000);
     // Le minuteur est coupé : plus aucune écriture, quoi que fasse le monde.
     expect(texts.get(PANEL_IDS.targetName)).toBe(avant);
+  });
+});
+
+
+describe("installCharacterUI — CharacterUIRoute EST la route", () => {
+  // Spec §4.3, README et le commentaire du composant l affirmaient tous les
+  // trois : `CharacterUIRoute { tab }` est l unique source de vérité. Le
+  // routeur tenait pourtant son état dans un champ privé et ne touchait jamais
+  // le composant — enregistré, posé sur l entité de sélection, et mort. Aucun
+  // test ne pouvait tomber là-dessus : `install.test.ts` vérifiait seulement
+  // que les systèmes étaient enregistrés.
+
+  /** L entité de sélection : le seul `world.createEntity()` que fait l install. */
+  function entiteDeSelection(world: World, spy: ReturnType<typeof vi.spyOn>) {
+    void world;
+    return spy.mock.results[0]!.value as ReturnType<World['createEntity']>;
+  }
+
+  it('un clic sur l onglet Persona ÉCRIT le composant', async () => {
+    const { world, clicks } = build();
+    const spy = vi.spyOn(world, 'createEntity');
+    await installCharacterUI(world);
+    const selection = entiteDeSelection(world, spy);
+
+    expect(selection.getValue(CharacterUIRoute, 'tab')).toBe('settings');
+    clicks.get(TAB_BUTTON_IDS.persona)?.();
+    expect(selection.getValue(CharacterUIRoute, 'tab')).toBe('persona');
+    clicks.get(TAB_BUTTON_IDS.settings)?.();
+    expect(selection.getValue(CharacterUIRoute, 'tab')).toBe('settings');
+  });
+
+  it('écrire le composant depuis l extérieur CHANGE l écran au tick suivant', async () => {
+    // L autre sens : l inspecteur de l éditeur managé, un état restauré. Sans
+    // lui, écrire `tab = 'persona'` ne changeait rien du tout.
+    const { world, props } = build();
+    const spy = vi.spyOn(world, 'createEntity');
+    await installCharacterUI(world);
+    const selection = entiteDeSelection(world, spy);
+
+    expect(props.get(TAB_IDS.persona)?.display).toBe('none');
+    selection.setValue(CharacterUIRoute, 'tab', 'persona');
+    vi.advanceTimersByTime(100);
+    expect(props.get(TAB_IDS.persona)?.display).toBe('flex');
+    expect(props.get(TAB_IDS.settings)?.display).toBe('none');
   });
 });

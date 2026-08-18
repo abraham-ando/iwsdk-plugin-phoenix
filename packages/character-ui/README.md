@@ -18,6 +18,13 @@ le routeur qui applique cette route au document : un onglet en
 `display: flex`, les autres en `display: none`, et le bouton du pied de page
 correspondant marqué actif.
 
+Le routeur ne garde **aucune copie privée** de l'onglet : il lit et écrit un
+`RouteStore` (`{ get, set }`) qu'on lui passe, et `installCharacterUI` lui en
+donne un branché sur `CharacterUIRoute`. C'est ce qui rend le composant vrai
+dans les deux sens — l'inspecteur voit l'onglet réel, et y écrire change
+l'écran au tick suivant (`router.sync()`). Sans dépôt fourni, le routeur en
+fabrique un en mémoire : une seule source de vérité dans les deux cas.
+
 ## IWSDK ne fournit aucune navigation entre panneaux
 
 C'est pourquoi ce paquet existe : le routeur est notre propre code, pas une
@@ -66,12 +73,18 @@ Elle :
   `world.createTransformEntity` ;
 - crée l'entité de sélection (singleton `CharacterSelection` +
   `CharacterUIRoute`) que `CharacterPickSystem` alimente quand un rayon (ou
-  clic souris, même chemin) presse un personnage ;
+  clic souris, même chemin) presse un personnage, et branche le routeur sur
+  `CharacterUIRoute.tab` ;
+- donne `RayInteractable` au nœud du panneau : en immersion, `InputSystem`
+  restreint `scene.rayDescendants` aux entités qui le portent, et sans lui
+  les boutons du panneau sont inertes dans le casque (hors immersion le cœur
+  retombe sur la scène entière, ce qui masque le défaut) ;
 - fait tourner une boucle de rafraîchissement toutes les 100 ms : le nom de
-  la cible au pied de page, l'onglet Réglages (toujours), l'onglet Persona
-  seulement s'il est actif et au plus 4 fois par seconde (`PERSONA_PERIOD_MS`
-  = 250 ms — Persona porte des données par frame côté simulation, les relire
-  à 90 Hz allouerait pour un texte que l'œil ne suit pas) ;
+  la cible au pied de page, l'onglet Réglages **seulement s'il est visible**
+  et seulement pour les lignes qui ont changé, l'onglet Persona seulement
+  s'il est actif et au plus 4 fois par seconde (`PERSONA_PERIOD_MS` = 250 ms
+  — Persona porte des données par frame côté simulation, les relire à 90 Hz
+  allouerait pour un texte que l'œil ne suit pas) ;
 - route l'écriture d'un gène vers le bon composant : `CharacterStructure` si
   la clé appartient à son schéma, `CharacterFace` sinon (les gènes de
   surface ne sont jamais transmis jusqu'ici — voir `NON_EDITABLE_GENES`).
