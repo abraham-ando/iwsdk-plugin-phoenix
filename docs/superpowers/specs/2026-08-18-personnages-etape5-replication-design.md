@@ -70,7 +70,15 @@ N'importe quel composant déclaré dans `cardinal/components.mjs` en bénéficie
 automatiquement. Rien à écrire côté serveur au-delà du schéma — confirmé
 contre le code, pas seulement affirmé par la spec mère.
 
-### 2.4 La publication et la réception sont automatiques
+### 2.4 La publication est automatique — mais seulement pour un pair possédant l'entité
+
+> **Correction post-implémentation (2026-08-19).** La version d'origine de
+> cette section affirmait que poser `CharacterGenome` sur une entité
+> `Networked` suffisait, sans condition. C'était faux pour toute entité dont
+> `isLocalOwner` ne passe jamais à `true` — exactement la situation des onze
+> villageois tels que câblés à cette étape. Le texte ci-dessous est la version
+> corrigée, trouvée en revue finale de branche ; voir l'addendum du plan
+> d'implémentation pour l'historique complet de cette correction.
 
 `packages/client/src/cardinal/publish.ts`, `CardinalPublisher.collect()` :
 
@@ -78,18 +86,51 @@ contre le code, pas seulement affirmé par la spec mère.
 > comparison against the last thing published… a component that changes and
 > changes back within one tick correctly produces no traffic. »*
 
-Elle parcourt `CARDINAL_REGISTRY` et publie tout composant Cardinal qu'une
-entité **porte**, uniquement si ses octets diffèrent des derniers publiés.
+Cette citation reste exacte pour ce que `collect()` fait, mais elle ne dit
+rien de qui l'appelle. `collect()` lui-même **ignore l'ownership** : il
+parcourt `CARDINAL_REGISTRY` et publie tout composant Cardinal qu'une entité
+**porte** (`entity.hasComponent(...)`), uniquement si ses octets diffèrent
+des derniers publiés — un simple filtre par contenu, pas par droit de
+publication.
+
+Le verrou d'ownership vit entièrement dans son appelant,
+`PhoenixNetworkSystem.publishComponents()`
+(`packages/client/src/systems/PhoenixNetworkSystem.ts:322`) :
+
+```ts
+for (const entity of this.queries.replicated.entities) {
+  if (!entity.getValue(Networked, 'isLocalOwner')) continue;
+  // ... c'est seulement ici, après ce filtre, que collect() est appelé.
+}
+```
+
+**Pour les onze villageois tels que câblés à cette étape, `isLocalOwner` vaut
+`false` sur chaque pair, en permanence.** Rien dans ce dépôt ne le fait jamais
+passer à `true` pour eux : le seul chemin existant vers `isLocalOwner: true`
+est une revendication d'ownership déclenchée par une saisie (`claim()` dans
+`apps/demo/src/multiplayer.ts`, le patron de `adoptSharedPlant()`), et les
+villageois sont `RayInteractable`, jamais `Grabbable` — ce chemin ne
+s'applique donc pas à eux.
+
+**Constat, sans détour : tel que livré, aucun pair ne publie `CharacterGenome`
+pour aucun villageois.** Le schéma, le câblage et le chemin de réception sont
+réels et testés — mais le côté publication n'a aucun déclencheur pour ces
+onze entités. Un vrai correctif demanderait de désigner, pour cette plage
+d'identifiants fixes, un pair publicateur (le premier arrivé ? l'id de pair le
+plus bas ? une autre règle ?), et de traiter la déconnexion de ce pair — une
+décision d'architecture réelle, délibérément différée, hors périmètre de
+cette étape.
+
 Réception, `PhoenixNetworkSystem.ts:541` :
 
 ```ts
 CARDINAL_REGISTRY.get(record.componentId)?.write(entity, record.data);
 ```
 
-**Aucun code applicatif n'est nécessaire ni pour publier ni pour recevoir.**
-Poser `CharacterGenome` sur une entité `Networked` suffit ; le système s'en
-charge, et se tait dès que la valeur cesse de changer — exactement le
-comportement voulu pour un génome immuable.
+Le chemin de réception, lui, ne dépend d'aucun ownership : n'importe quel
+pair qui reçoit un `COMPONENT_UPDATE` pour un `networkId` qu'il connaît
+l'applique. C'est le côté publication, et lui seul, qui manque de
+déclencheur.
 
 **Une contrainte qui en découle :** `write()` fait `entity.setValue(...)`
 directement (`components.generated.ts:59-61` pour `Health`), ce qui suppose le
@@ -271,14 +312,32 @@ exemple un test qui construit `genomeA` et `genomeB` avec des graines
 distinctes pour le même `agent.id` — encode `genomeA` en `CharacterGenome`,
 le fait transiter par l'encodeur/décodeur généré (`codecs.generated.ts`), et
 vérifie que le pair B, après réception, porte `genomeA` et non `genomeB`.
-C'est la preuve que le mécanisme fonctionne, indépendamment de son invisibilité
-pratique aujourd'hui.
+C'est la preuve que l'encodage, le décodage et l'écriture fonctionnent de
+bout en bout, indépendamment de son invisibilité pratique aujourd'hui.
 
-**Le vrai bénéfice attend l'étape 6.** Un enfant engendré en cours de partie
-n'a, par construction, aucune fonction déterministe locale à rejouer sur un
-pair qui n'était pas présent au tick de sa naissance. C'est le seul cas où
-cette étape change quelque chose que l'œil peut voir — et il est
-explicitement hors périmètre ici.
+> **Précision post-implémentation.** Ce test (implémenté dans
+> `apps/demo/test/character-genome-replication.test.ts`) simule la réception
+> directement — il encode côté A et applique côté B sans passer par
+> `PhoenixNetworkSystem.publishComponents()`. Il prouve donc que le
+> mécanisme de transport et d'écriture est correct, pas qu'un pair réel
+> déclenche cette publication pour un villageois aujourd'hui. Ce deuxième
+> fait — qu'aucun déclencheur de publication n'existe pour les villageois —
+> est établi et corrigé au §2.4, et pinné par un test dédié dans
+> `packages/client/test/replication.test.ts`
+> (`describe('CharacterGenome publish gate — pinning the current (incomplete)
+> behavior', ...)`).
+
+**Le vrai bénéfice attend l'étape 6 — et suppose le côté publication réglé
+d'ici là.** Un enfant engendré en cours de partie n'a, par construction,
+aucune fonction déterministe locale à rejouer sur un pair qui n'était pas
+présent au tick de sa naissance : il *doit* recevoir son génome. Mais
+« recevoir » suppose qu'un pair l'ait publié, et le §2.4 (corrigé) établit
+qu'aucun mécanisme de ce projet ne désigne aujourd'hui un tel pair. Le
+bénéfice visible de l'étape 6 est donc conditionné à une décision
+d'architecture qui reste à prendre — pas seulement à écrire le composant de
+naissance. C'est le seul cas où cette étape change quelque chose que l'œil
+peut voir — et il est explicitement hors périmètre ici, gap de publication
+compris.
 
 ---
 
@@ -288,10 +347,13 @@ explicitement hors périmètre ici.
   rouverte.
 - **L'ordre des treize gènes est l'ordre alphabétique** de `HUMANOID.genes`,
   celui que `createGenome()` applique déjà. Ne pas en inventer un autre.
-- **Le génome se transmet une fois, à l'apparition.** Aucune écriture
-  ultérieure ; `CardinalPublisher` s'en assure par comparaison d'octets, mais
-  le code applicatif ne doit jamais appeler `setValue` sur ce composant après
-  la création.
+- **Le génome se transmet une fois, à l'apparition — quand il se transmet.**
+  Si un pair publie (§2.4), aucune écriture ultérieure n'a lieu :
+  `CardinalPublisher` s'en assure par comparaison d'octets. Mais §2.4
+  (corrigé) établit qu'aujourd'hui, pour les villageois, aucun pair ne publie
+  jamais — cette garantie de non-répétition est donc vraie sans être
+  actuellement exercée. Le code applicatif ne doit, dans tous les cas, jamais
+  appeler `setValue` sur ce composant après la création.
 - **Cette réplication ne fonctionne qu'en mode `host_relayed`.** Documenté,
   pas contourné — un client en `server_authoritative` verrait sa publication
   refusée.
@@ -337,7 +399,8 @@ plus qu'elle ne montre.
 | :--- | :--- | :--- | :--- |
 | Le premier usage réel d'un champ `array` révèle un chemin de code jamais exercé | moyenne | génération incorrecte, silencieuse jusqu'aux vecteurs dorés | §10.1 tests 1–4 ; ne pas supposer que « le code existe » veut dire « le code marche » |
 | `pnpm test` racine reste cassé (`check-cardinal-drift` → `ERR_UNKNOWN_FILE_EXTENSION` sous Node 22.12, préexistant, noté à la fin de l'étape 4) | **certaine, déjà vérifiée** | la commande canonique ne valide pas la parité générée | à réparer en tâche 1, avant de déclarer le composant — sinon aucun garde ne protège cette étape |
-| Le mode `server_authoritative` est un jour activé pour la démo | faible aujourd'hui | la réplication du génome cesse silencieusement de fonctionner | documenté §2.2 et §9 ; pas résolu ici |
+| **Aucun pair ne publie jamais `CharacterGenome` pour un villageois — `isLocalOwner` reste `false` partout (§2.4, corrigé en revue finale).** | **certaine, déjà vérifiée** | le composant, le schéma et la réception sont réels, mais rien ne les déclenche côté publication ; ce n'était pas identifié comme un risque à l'écriture initiale de cette spec, seulement découvert en revue finale de branche | documenté §2.4 ; pinné par un test de régression dédié (`packages/client/test/replication.test.ts`) pour qu'un futur changement d'ownership pour ces entités soit visible et délibéré ; désigner un pair publicateur pour cette plage d'ids fixes reste une décision d'architecture à prendre séparément, hors périmètre de cette étape |
+| Le mode `server_authoritative` est un jour activé pour la démo, *après* qu'un mécanisme de publication ait été ajouté pour les villageois | faible aujourd'hui, et sans objet tant que le risque ci-dessus n'est pas résolu | la réplication du génome cesserait silencieusement de fonctionner | documenté §2.2 et §9 ; pas résolu ici |
 | Deux villageois futurs partagent par erreur un `networkId` | faible | un `COMPONENT_UPDATE` écrase le mauvais personnage | test 6 du §10.1 |
 
 ---

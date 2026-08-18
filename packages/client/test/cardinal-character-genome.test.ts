@@ -21,18 +21,17 @@ describe('le composant CharacterGenome généré', () => {
     expect(decoded.genes).toEqual(genes);
   });
 
-  it('l ordre des octets est l ordre alphabétique de HUMANOID.genes', () => {
-    // Le contrat est documenté, pas seulement supposé : ce test l'encode en
-    // dur pour qu'un futur ajout de gène qui casse l'ordre soit vu ici.
+  it('documente la liste de référence utilisée par le test de conversion', () => {
+    // Ce test ne prouve aucune garantie d'ordre par lui-même — il ne fait que
+    // fixer la liste de référence. La preuve que CET ordre est bien celui du
+    // composant vient du test de conversion (Task 3), qui encode un Genome
+    // nommé et vérifie l'octet à l'index attendu ; voir aussi wire.test.ts.
     const ordreAttendu = [
       'armLength', 'bodyMass', 'cheekbone', 'eyeScale', 'hairStyle',
       'hairTone', 'jawWidth', 'legLength', 'noseSize', 'shoulderWidth',
       'skinTone', 'stature', 'torsoLength',
     ];
     expect(ordreAttendu.length).toBe(13);
-    // La preuve que CET ordre est bien celui du composant vient du test de
-    // conversion (Task 3), qui encode un Genome nommé et vérifie l'octet à
-    // l'index attendu — ce test-ci fixe la liste de référence.
   });
 
   it('un tableau plus court complète à zéro, jamais undefined', () => {

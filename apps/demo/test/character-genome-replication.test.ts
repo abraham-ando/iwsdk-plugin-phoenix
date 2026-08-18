@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { World } from '@iwsdk/core';
-import { CARDINAL_CODECS, Networked, CharacterGenome } from '@iwsdk/plugin-phoenix';
+import { CARDINAL_CODECS, CharacterGenome } from '@iwsdk/plugin-phoenix';
 import { HUMANOID, createGenome, type RngLike } from '@iwsdk/cardinal-character';
 import { genomeToBytes } from '@iwsdk/cardinal-character-three';
 

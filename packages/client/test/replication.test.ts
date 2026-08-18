@@ -21,6 +21,9 @@ import { ClientPredictionSystem } from '../src/systems/ClientPredictionSystem.js
 import { PhoenixNetworkSystem } from '../src/systems/PhoenixNetworkSystem.js';
 import type { INetworkAdapter } from '../src/interfaces/INetworkAdapter.js';
 import { BinaryProtocol } from '../src/protocol/BinaryProtocol.js';
+import type { ComponentRecord } from '../src/protocol/BinaryProtocol.js';
+import { CardinalPublisher } from '../src/cardinal/publish.js';
+import { CharacterGenome } from '../src/cardinal/components.generated.js';
 
 /** Simulated clock driving both `performance.now()` and the loopback bus. */
 let clock = 0;
@@ -458,6 +461,83 @@ describe('rate limiting and change detection', () => {
     // At 10 Hz across ~100 ms, far fewer than 9 frames go out.
     expect(sent).toBeLessThanOrEqual(2);
     expect(sent).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * Pin down a gap, not a bug.
+ *
+ * `CardinalPublisher.collect()` (`../src/cardinal/publish.ts`) is itself
+ * ownership-agnostic — it publishes any Cardinal component an entity
+ * `hasComponent()`, full stop. The actual gate lives one layer up, in
+ * `PhoenixNetworkSystem.publishComponents()`: `collect()` is only ever
+ * called for entities whose `Networked.isLocalOwner` is `true`
+ * (`../src/systems/PhoenixNetworkSystem.ts`, the `continue` at the top of
+ * `publishComponents()`).
+ *
+ * As wired in étape 5, the eleven villagers get `isLocalOwner: false` on
+ * every peer, forever — nothing in this codebase ever flips it, because the
+ * only existing path to `isLocalOwner: true` is a grab-triggered ownership
+ * claim, and villagers are not `Grabbable`. So today, no peer ever publishes
+ * `CharacterGenome` for a villager. That is a real, deliberately-deferred
+ * gap (see `docs/superpowers/specs/2026-08-18-personnages-etape5-replication-design.md`
+ * §2.4) — not something this test suite should fix by inventing an ownership
+ * rule. This test exists so that if a future change ever flips
+ * `isLocalOwner`/ownership assignment for these entities, it shows up here
+ * as an intentional, visible test change, not a silent, unnoticed regression
+ * (or a silent, unnoticed fix).
+ */
+describe('CharacterGenome publish gate — pinning the current (incomplete) behavior', () => {
+  function entityWithGenome(world: World, isLocalOwner: boolean): Entity {
+    const entity = makeEntity(world, { networkId: 1, isLocalOwner });
+    entity.addComponent(CharacterGenome, {
+      genes: Array.from({ length: 13 }, (_, i) => i * 10),
+    });
+    return entity;
+  }
+
+  it('ne publie jamais CharacterGenome pour un villageois — isLocalOwner reste false', () => {
+    const bus = new LoopbackNetwork(0);
+    const alice = bus.createPeer('alice');
+    const { world } = makeWorld(alice);
+    void alice.connect('memory://');
+
+    entityWithGenome(world, false);
+
+    const collectSpy = vi.spyOn(CardinalPublisher.prototype, 'collect');
+
+    world.update(1 / 90, 0);
+
+    // Le verrou d'ownership empêche même l'appel à collect() : aucun octet
+    // de CharacterGenome n'atteint jamais le fil pour cette entité.
+    expect(collectSpy).not.toHaveBeenCalled();
+  });
+
+  it('sanity check : publie bien CharacterGenome dès que isLocalOwner passe à true', () => {
+    // Preuve que le test précédent est réellement sensible au verrou
+    // d'ownership, et non trivialement vert — le même montage, avec
+    // isLocalOwner: true, doit produire un enregistrement CharacterGenome
+    // (component id 4).
+    const bus = new LoopbackNetwork(0);
+    const alice = bus.createPeer('alice');
+    const { world } = makeWorld(alice);
+    void alice.connect('memory://');
+
+    entityWithGenome(world, true);
+
+    const collectSpy = vi.spyOn(CardinalPublisher.prototype, 'collect');
+
+    world.update(1 / 90, 0);
+
+    expect(collectSpy).toHaveBeenCalled();
+    const records = collectSpy.mock.results.flatMap(
+      (result) => result.value as ComponentRecord[],
+    );
+    const genomeRecord = records.find((record) => record.componentId === 4);
+    expect(genomeRecord).toBeDefined();
+    expect(genomeRecord?.data).toEqual({
+      genes: Array.from({ length: 13 }, (_, i) => i * 10),
+    });
   });
 });
 

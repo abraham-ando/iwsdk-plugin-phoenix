@@ -131,14 +131,30 @@ World.create(container, projectOptions)
                   // reçoit ENTIÈREMENT SEUL une fois posé — CardinalPublisher
                   // et PhoenixNetworkSystem font le reste, aucun appel
                   // explicite de publication.
-                  entity.addComponent(Networked, {
-                    networkId: VILLAGER_NETWORK_IDS[agent.id] ?? 0,
-                    isLocalOwner: false,
-                    ownerId: 0,
-                  });
-                  entity.addComponent(CharacterGenome, {
-                    genes: genomeToBytes(genomes[agent.id]!),
-                  });
+                  // `villager-network-ids.test.ts` prouve que
+                  // VILLAGER_NETWORK_IDS couvre exactement les onze agents
+                  // de DEFAULT_VILLAGE, dont VILLAGE_LAYOUT.agents est un
+                  // alias direct (layout.ts) — cette branche ne devrait donc
+                  // jamais s'exercer en pratique. On préfère quand même ne
+                  // jamais écrire un networkId 0 (sentinelle invalide côté
+                  // protocole) : un agent sans identifiant connu reste un
+                  // personnage purement local, ni Networked ni répliqué,
+                  // plutôt que de mentir sur son identité réseau.
+                  const networkId = VILLAGER_NETWORK_IDS[agent.id];
+                  if (networkId === undefined) {
+                    console.warn(
+                      `[villagers] identifiant réseau manquant pour l'agent "${agent.id}" — Networked/CharacterGenome non posés.`,
+                    );
+                  } else {
+                    entity.addComponent(Networked, {
+                      networkId,
+                      isLocalOwner: false,
+                      ownerId: 0,
+                    });
+                    entity.addComponent(CharacterGenome, {
+                      genes: genomeToBytes(genomes[agent.id]!),
+                    });
+                  }
                   rapportsParEntite.set(
                     entity,
                     new Set([...report.missingMorphs, ...report.missingSurfaces]),

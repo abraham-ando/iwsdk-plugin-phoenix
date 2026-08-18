@@ -47,10 +47,14 @@
     "phoenix": "^1.7.0"
   },
   "peerDependencies": {
-    "@iwsdk/core": ">=0.5.0"
+    "@iwsdk/core": ">=0.5.0",
+    "elics": "^3.4.1"
   },
   "peerDependenciesMeta": {
     "@iwsdk/core": {
+      "optional": false
+    },
+    "elics": {
       "optional": false
     }
   },

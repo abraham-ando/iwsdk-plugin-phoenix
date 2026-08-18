@@ -743,3 +743,64 @@ Ceci n'a jamais été fait dans ce projet — aucun patron établi à suivre. Es
 **Cohérence des types.** `genomeToBytes(genome: Genome): number[]` et `bytesToGenome(family: FamilyDescriptor, bytes: readonly number[]): Genome` — signatures identiques dans leur définition (Task 3) et tous leurs appels (Task 4, Task 5). `VILLAGER_NETWORK_IDS: Readonly<Record<string, number>>` — même type en Task 3 et Task 4.
 
 **Un risque d'exécution à signaler à l'implémenteur de la Task 4.** Le double d'assets utilisé dans le test d'intégration proposé au Step 4 est esquissé, pas éprouvé — contrairement au reste de ce plan, dont chaque fragment de code a été vérifié contre le dépôt réel. Si le double ne fonctionne pas tel quel, la substance à préserver (une entité de personnage réel porte `Networked` et `CharacterGenome` avec les bonnes valeurs) prime sur la forme exacte du test — suivre le motif de `packages/character-three/test/from-asset.test.ts`, déjà éprouvé à l'étape 3.
+
+---
+
+## Addendum post-implémentation — 2026-08-19
+
+Cette section amende le plan après coup, à la manière déjà établie dans ce
+projet pour corriger un plan sans réécrire silencieusement son historique
+(voir par exemple « docs: correct the packed-genome size in the character
+plan », `2026-08-17-personnages-etape1-noyau.md`). Rien au-dessus de cette
+ligne n'a été modifié rétroactivement.
+
+**Ce qu'une revue de branche complète, après implémentation intégrale des
+Tasks 1 à 6, a confirmé vrai.** Le schéma `CharacterGenome` (Task 2), le
+câblage des onze villageois avec des identifiants réseau fixes (Task 3, 4),
+et le chemin de réception (`PhoenixNetworkSystem.ts:541`,
+`CARDINAL_REGISTRY.get(record.componentId)?.write(...)`) sont tous réels et
+couverts par des tests qui échouent réellement quand on casse le code qu'ils
+prétendent garantir — vérifié tâche par tâche pendant l'implémentation, puis
+revérifié en revue finale.
+
+**Ce que la revue finale a trouvé faux.** Le §2.4 de la spec de conception
+(`2026-08-18-personnages-etape5-replication-design.md`) affirmait que poser
+`CharacterGenome` sur une entité `Networked` suffisait — publication et
+réception « entièrement automatiques ». C'est faux pour toute entité dont
+`Networked.isLocalOwner` ne passe jamais à `true`, ce qui est exactement le
+cas des onze villageois tels que câblés à cette étape :
+`PhoenixNetworkSystem.publishComponents()`
+(`packages/client/src/systems/PhoenixNetworkSystem.ts:322`) n'appelle
+`CardinalPublisher.collect()` que pour une entité que le pair courant
+possède localement, et rien dans ce dépôt ne fait jamais passer
+`isLocalOwner` à `true` pour un villageois — le seul chemin existant vers
+`isLocalOwner: true` est une revendication d'ownership déclenchée par une
+saisie (`apps/demo/src/multiplayer.ts`, patron `adoptSharedPlant()`), et les
+villageois sont `RayInteractable`, jamais `Grabbable`. **Concrètement :
+aucun pair ne publie aujourd'hui `CharacterGenome` pour aucun villageois.**
+Le §2.4 a été réécrit pour dire précisément cela (voir aussi §8 et §11 de la
+même spec, corrigés en cohérence).
+
+**Le test de régression ajouté en réponse.** Une nouvelle suite dans
+`packages/client/test/replication.test.ts`
+(`describe('CharacterGenome publish gate — pinning the current (incomplete)
+behavior', ...)`) pince ce fait : elle prouve que `CardinalPublisher.collect()`
+n'est jamais appelé pour une entité `isLocalOwner: false` portant
+`CharacterGenome`, et — sanity-check à l'appui — qu'il l'est bien dès que
+`isLocalOwner` passe à `true` sur le même montage. Elle existe précisément
+pour qu'un futur changement à `isLocalOwner` ou à toute logique d'attribution
+d'ownership pour ces entités se manifeste ici comme une modification de test
+intentionnelle et visible — jamais comme une régression silencieuse que
+personne ne remarque, ni comme une correction silencieuse qui n'aurait pas
+été délibérément voulue.
+
+**Portée pour la suite.** Ce constat change la portée de tout travail futur
+sur la « démographie »/étape 6, qui avait été discuté par le passé comme si
+la réplication du génome fonctionnait déjà de bout en bout — **ce n'est pas
+le cas.** Un mécanisme côté publication (désigner quel pair publie, pour
+quelle plage d'identifiants, et que faire à sa déconnexion) doit être conçu
+avant qu'un enfant né en cours de partie puisse réellement recevoir son
+génome sur les pairs qui n'étaient pas présents à sa naissance. Cette
+décision d'architecture est délibérément hors périmètre de cette étape et de
+cette vague de correctifs — elle doit passer par le processus normal de
+discussion de ce projet avec son opérateur humain avant d'être implémentée.
