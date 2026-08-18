@@ -451,6 +451,15 @@ defmodule IwsdkPhoenix.Room.State do
   This is what lets the server itself act as an object's owner. `Room.Server`
   uses it for a sector's weather; any other server-authored component — an
   NPC's genome, say — rides the same path.
+
+  The dedup only reliably no-ops in `:host_relayed` rooms. In
+  `:server_authoritative` rooms `Cache` stores the *decoded* struct rather
+  than the raw payload (see `Cache.value_for/2`), so comparing it against a
+  binary `payload` here never matches — every call re-broadcasts, even an
+  unchanged one. That is pre-existing behaviour, not something this function
+  introduced (`publish_weather/1` had the identical comparison before this
+  was extracted), but it is worth knowing before leaning on this as a
+  high-frequency path in a server-authoritative room.
   """
   @spec author_component(t(), pos_integer(), pos_integer(), binary()) :: {t(), binary() | nil}
   def author_component(%__MODULE__{} = state, network_id, component_id, payload) do
