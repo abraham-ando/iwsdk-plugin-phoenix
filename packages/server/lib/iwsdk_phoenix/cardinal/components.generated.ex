@@ -120,6 +120,48 @@ defmodule IwsdkPhoenix.Cardinal.Weather do
   def decode(_other), do: :error
 end
 
+defmodule IwsdkPhoenix.Cardinal.CharacterGenome do
+  @moduledoc "Cardinal component 4. 13 bytes on the wire."
+
+  defstruct genes: List.duplicate(0, 13)
+
+  @type t :: %__MODULE__{
+          genes: [non_neg_integer()],
+        }
+
+  @doc "Wire size in bytes. Constant."
+  @spec byte_size() :: pos_integer()
+  def byte_size, do: 13
+
+  @doc "Field names in declaration order — struct key order is sorted, not declared."
+  @spec field_order() :: [atom()]
+  def field_order, do: [:genes]
+
+  @spec encode(t()) :: binary()
+  def encode(%__MODULE__{} = struct) do
+    IO.iodata_to_binary([
+      (for value <- pad(struct.genes, 13), into: <<>>, do: <<value::unsigned-integer-size(8)>>)
+    ])
+  end
+
+  @spec decode(binary()) :: {:ok, t()} | :error
+  def decode(<<genes_bin::binary-size(13)>>) do
+    {:ok,
+     %__MODULE__{
+       genes: for(<<value::unsigned-integer-size(8) <- genes_bin>>, do: value),
+     }}
+  end
+
+  def decode(_other), do: :error
+
+  # A short list is padded rather than rejected: the wire size is fixed,
+  # and a caller that supplied fewer entries meant the rest to be empty.
+  defp pad(list, length) do
+    taken = Enum.take(list, length)
+    taken ++ List.duplicate(0, length - length(taken))
+  end
+end
+
 defmodule IwsdkPhoenix.Cardinal.Registry do
   @moduledoc """
   Lookup from wire id to generated component module.
@@ -129,23 +171,25 @@ defmodule IwsdkPhoenix.Cardinal.Registry do
   not take the room down with it.
   """
 
-  @schema_hash "47215e8a"
+  @schema_hash "b0c0459c"
 
   @spec schema_hash() :: String.t()
   def schema_hash, do: @schema_hash
 
   @spec ids() :: [pos_integer()]
-  def ids, do: [1, 2, 3]
+  def ids, do: [1, 2, 3, 4]
 
   @spec module_for(integer()) :: module() | nil
   def module_for(1), do: IwsdkPhoenix.Cardinal.Health
   def module_for(2), do: IwsdkPhoenix.Cardinal.Grabbable
   def module_for(3), do: IwsdkPhoenix.Cardinal.Weather
+  def module_for(4), do: IwsdkPhoenix.Cardinal.CharacterGenome
   def module_for(_other), do: nil
 
   @spec byte_size_for(integer()) :: pos_integer() | nil
   def byte_size_for(1), do: 8
   def byte_size_for(2), do: 16
   def byte_size_for(3), do: 17
+  def byte_size_for(4), do: 13
   def byte_size_for(_other), do: nil
 end

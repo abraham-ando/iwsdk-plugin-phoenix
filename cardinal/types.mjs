@@ -114,6 +114,20 @@ export const TYPES = Object.freeze({
       [0, 0.7071067811865476, 0, 0.7071067811865476],
     ],
   },
+  // Array types: one entry per {element type, length} pair actually used.
+  // These are synthesized types for multi-slot array fields that don't fit
+  // the predefined Vec2/Vec3/Vec4 slots. Keys follow the pattern
+  // `array${length}${elementType}` for uniqueness.
+  array13u8: {
+    bytes: 13,
+    ts: 'Vec4', // Placeholder; elics uses this to identify multi-slot fields.
+    elixir: '[non_neg_integer()]',
+    slots: 13,
+    read: (v, o) => `for i <- 0..12, do: ${v}.getUint8(${o} + i)`,
+    write: (v, o, x) =>
+      `for {i, val} <- Enum.with_index(${x}), do: ${v}.setUint8(${o} + i, val)`,
+    samples: [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]],
+  },
 });
 
 /** Name of a field's element type, for both scalars and arrays. */

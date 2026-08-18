@@ -20,15 +20,17 @@ describe('generated client components', () => {
   });
 
   it('registers every schema component by id', () => {
-    expect([...CARDINAL_REGISTRY.keys()].sort((a, b) => a - b)).toEqual([1, 2, 3]);
+    expect([...CARDINAL_REGISTRY.keys()].sort((a, b) => a - b)).toEqual([1, 2, 3, 4]);
     expect(CARDINAL_REGISTRY.get(1)!.name).toBe('Health');
     expect(CARDINAL_REGISTRY.get(2)!.name).toBe('Grabbable');
     expect(CARDINAL_REGISTRY.get(3)!.name).toBe('Weather');
+    expect(CARDINAL_REGISTRY.get(4)!.name).toBe('CharacterGenome');
   });
 
   it('reports constant byte sizes', () => {
     expect(CARDINAL_REGISTRY.get(1)!.bytes).toBe(8); // f32 + f32
     expect(CARDINAL_REGISTRY.get(2)!.bytes).toBe(16); // u32 + vec3
+    expect(CARDINAL_REGISTRY.get(4)!.bytes).toBe(13); // 13 x u8
   });
 
   it('exports the elics component objects themselves', () => {

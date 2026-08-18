@@ -1,14 +1,15 @@
 defmodule IwsdkPhoenix.CardinalComponentsTest do
   use ExUnit.Case, async: true
 
-  alias IwsdkPhoenix.Cardinal.{Grabbable, Health, Registry}
+  alias IwsdkPhoenix.Cardinal.{Grabbable, Health, Registry, CharacterGenome}
 
   describe "registry" do
     test "knows every schema component by id" do
-      assert Enum.sort(Registry.ids()) == [1, 2, 3]
+      assert Enum.sort(Registry.ids()) == [1, 2, 3, 4]
       assert Registry.module_for(1) == Health
       assert Registry.module_for(2) == Grabbable
       assert Registry.module_for(3) == IwsdkPhoenix.Cardinal.Weather
+      assert Registry.module_for(4) == CharacterGenome
     end
 
     test "returns nil for an unknown id rather than raising" do
@@ -21,6 +22,7 @@ defmodule IwsdkPhoenix.CardinalComponentsTest do
     test "reports constant byte sizes" do
       assert Registry.byte_size_for(1) == 8
       assert Registry.byte_size_for(2) == 16
+      assert Registry.byte_size_for(4) == 13
     end
 
     test "exposes an eight-hex-character schema hash" do

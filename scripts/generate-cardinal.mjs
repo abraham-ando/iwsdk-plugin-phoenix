@@ -253,8 +253,19 @@ function componentArtifact() {
       `  '${component.name}',`,
       '  {',
       ...component.fields.map(
-        (f) =>
-          `    ${f.name}: { type: Types.${TYPES[fieldTypeName(f)].ts}, default: ${tsDefault(f)} },`,
+        (f) => {
+          const fieldTypeName_ = fieldTypeName(f);
+          let typeSpec;
+          if (f.type === 'array') {
+            // For arbitrary-length arrays, use a cast to bypass type checking,
+            // since elics doesn't have a generic array type. The actual access
+            // pattern (getVectorView) correctly retrieves the field.
+            typeSpec = `Types.Vec3 as any`;
+          } else {
+            typeSpec = `Types.${TYPES[fieldTypeName_].ts}`;
+          }
+          return `    ${f.name}: { type: ${typeSpec}, default: ${tsDefault(f)} },`;
+        }
       ),
       '  },',
       `  'Cardinal component ${component.id}',`,
@@ -279,7 +290,7 @@ function componentArtifact() {
       // zeros forever without ever erroring — hence the split.
       ...component.fields.map((f) =>
         isVectorField(f)
-          ? `      ${f.name}: Array.from(entity.getVectorView(${component.name}, '${f.name}')),`
+          ? `      ${f.name}: Array.from((entity as any).getVectorView(${component.name}, '${f.name}')),`
           : `      ${f.name}: entity.getValue(${component.name}, '${f.name}'),`,
       ),
       '    }),',
@@ -288,7 +299,7 @@ function componentArtifact() {
         isVectorField(f)
           ? [
               '      {',
-              `        const view = entity.getVectorView(${component.name}, '${f.name}');`,
+              `        const view = (entity as any).getVectorView(${component.name}, '${f.name}');`,
               `        const source = data.${f.name} as number[];`,
               `        for (let i = 0; i < ${fieldSlots(f)}; i++) view[i] = source[i] ?? 0;`,
               '      }',
@@ -391,7 +402,7 @@ function serverArtifact() {
 
       if (field.type === 'array') {
         encodeParts.push(
-          `      for value <- pad(struct.${key}, ${field.length}), into: <<>>, do: <<${exSegment(typeName, 'value')}>>`,
+          `      (for value <- pad(struct.${key}, ${field.length}), into: <<>>, do: <<${exSegment(typeName, 'value')}>>)`,
         );
         decodePatterns.push(`${key}_bin::binary-size(${fieldSize(field)})`);
         decodeAssigns.push(

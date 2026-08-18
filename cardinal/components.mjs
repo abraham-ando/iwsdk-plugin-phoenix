@@ -48,4 +48,15 @@ export const components = [
       { name: 'wind', type: 'vec3' },
     ],
   },
+  {
+    id: 4,
+    name: 'CharacterGenome',
+    fields: [
+      // Un octet par gène — 256 pas sur [0,1], très en deçà du seuil de
+      // perception sur une largeur d'épaules (spec §10.2 de la spec mère).
+      // Ordre : l'ordre ALPHABÉTIQUE des clés de HUMANOID.genes, celui que
+      // `createGenome()` applique déjà — ne pas en inventer un autre.
+      { name: 'genes', type: 'array', of: 'u8', length: 13 },
+    ],
+  },
 ];

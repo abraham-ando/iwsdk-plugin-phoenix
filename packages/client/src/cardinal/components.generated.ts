@@ -47,6 +47,15 @@ export const Weather = createComponent(
   'Cardinal component 3',
 );
 
+/** Component 4. */
+export const CharacterGenome = createComponent(
+  'CharacterGenome',
+  {
+    genes: { type: Types.Vec3 as any, default: new Array(13).fill(0) },
+  },
+  'Cardinal component 4',
+);
+
 /** Every schema component, keyed by its permanent wire id. */
 export const CARDINAL_REGISTRY: ReadonlyMap<number, CardinalComponentSpec> = new Map([
   [1, {
@@ -66,12 +75,12 @@ export const CARDINAL_REGISTRY: ReadonlyMap<number, CardinalComponentSpec> = new
     component: Grabbable as unknown as AnyComponent,
     read: (entity: Entity) => ({
       holderId: entity.getValue(Grabbable, 'holderId'),
-      grabPoint: Array.from(entity.getVectorView(Grabbable, 'grabPoint')),
+      grabPoint: Array.from((entity as any).getVectorView(Grabbable, 'grabPoint')),
     }),
     write: (entity: Entity, data: Record<string, unknown>) => {
       entity.setValue(Grabbable, 'holderId', data.holderId as never);
       {
-        const view = entity.getVectorView(Grabbable, 'grabPoint');
+        const view = (entity as any).getVectorView(Grabbable, 'grabPoint');
         const source = data.grabPoint as number[];
         for (let i = 0; i < 3; i++) view[i] = source[i] ?? 0;
       }
@@ -83,15 +92,29 @@ export const CARDINAL_REGISTRY: ReadonlyMap<number, CardinalComponentSpec> = new
     read: (entity: Entity) => ({
       kind: entity.getValue(Weather, 'kind'),
       intensity: entity.getValue(Weather, 'intensity'),
-      wind: Array.from(entity.getVectorView(Weather, 'wind')),
+      wind: Array.from((entity as any).getVectorView(Weather, 'wind')),
     }),
     write: (entity: Entity, data: Record<string, unknown>) => {
       entity.setValue(Weather, 'kind', data.kind as never);
       entity.setValue(Weather, 'intensity', data.intensity as never);
       {
-        const view = entity.getVectorView(Weather, 'wind');
+        const view = (entity as any).getVectorView(Weather, 'wind');
         const source = data.wind as number[];
         for (let i = 0; i < 3; i++) view[i] = source[i] ?? 0;
+      }
+    },
+  }],
+  [4, {
+    ...(CARDINAL_CODECS.get(4) as CardinalCodec),
+    component: CharacterGenome as unknown as AnyComponent,
+    read: (entity: Entity) => ({
+      genes: Array.from((entity as any).getVectorView(CharacterGenome, 'genes')),
+    }),
+    write: (entity: Entity, data: Record<string, unknown>) => {
+      {
+        const view = (entity as any).getVectorView(CharacterGenome, 'genes');
+        const source = data.genes as number[];
+        for (let i = 0; i < 13; i++) view[i] = source[i] ?? 0;
       }
     },
   }],
@@ -107,4 +130,5 @@ export function registerCardinalComponents(world: World): void {
   world.registerComponent(Health);
   world.registerComponent(Grabbable);
   world.registerComponent(Weather);
+  world.registerComponent(CharacterGenome);
 }

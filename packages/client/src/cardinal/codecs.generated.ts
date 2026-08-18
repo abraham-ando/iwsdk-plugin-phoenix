@@ -24,7 +24,7 @@ export interface CardinalCodec {
 }
 
 /** Fingerprint of the schema these codecs came from. */
-export const SCHEMA_HASH = '47215e8a';
+export const SCHEMA_HASH = 'b0c0459c';
 
 /** Component 1, 8 bytes. */
 export interface HealthData {
@@ -83,6 +83,27 @@ function decodeWeather(view: DataView, offset: number): Record<string, unknown> 
   };
 }
 
+/** Component 4, 13 bytes. */
+export interface CharacterGenomeData {
+  genes: number[];
+}
+
+function encodeCharacterGenome(view: DataView, offset: number, data: Record<string, unknown>): void {
+  {
+    const items = data.genes as number[];
+    for (let i = 0; i < 13; i++) {
+      view.setUint8(offset + 0 + i * 1, items[i] ?? 0);
+    }
+  }
+}
+
+function decodeCharacterGenome(view: DataView, offset: number): Record<string, unknown> {
+  return {
+    genes: Array.from({ length: 13 }, (_unused, i) =>
+      view.getUint8(offset + 0 + i * 1)),
+  };
+}
+
 /** Every schema component's codec, keyed by its permanent wire id. */
 export const CARDINAL_CODECS: ReadonlyMap<number, CardinalCodec> = new Map([
   [1, {
@@ -118,5 +139,15 @@ export const CARDINAL_CODECS: ReadonlyMap<number, CardinalCodec> = new Map([
     ],
     encode: encodeWeather,
     decode: decodeWeather,
+  }],
+  [4, {
+    id: 4,
+    name: 'CharacterGenome',
+    bytes: 13,
+    fields: [
+      { name: 'genes', slots: 13 },
+    ],
+    encode: encodeCharacterGenome,
+    decode: decodeCharacterGenome,
   }],
 ]);
