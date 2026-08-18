@@ -3,7 +3,11 @@ import { defineBddConfig } from 'playwright-bdd';
 
 const testDir = defineBddConfig({
   features: 'features/**/*.feature',
-  steps: 'features/**/*.steps.ts',
+  // `support/*.ts` is included alongside `*.steps.ts` so bddgen loads
+  // `features/support/in-scene.ts` and registers its exported `test`
+  // (extended from playwright-bdd's own `test`) as the custom test
+  // instance in-scene steps use — see `features/tooling/in-scene-bridge.steps.ts`.
+  steps: ['features/**/*.steps.ts', 'features/support/*.ts'],
 });
 
 export default defineConfig({

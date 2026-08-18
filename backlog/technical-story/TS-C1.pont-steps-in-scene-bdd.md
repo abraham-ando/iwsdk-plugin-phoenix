@@ -6,7 +6,7 @@ epic: "Épic C — Outillage BDD (voie 3)"
 priority: P2
 voie: 3
 depends_on: "—"
-status: "À faire"
+status: "Fait"
 gherkin: TS-C1.pont-steps-in-scene-bdd.bdd.md
 ---
 
