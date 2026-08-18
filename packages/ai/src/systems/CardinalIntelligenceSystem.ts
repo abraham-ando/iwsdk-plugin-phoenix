@@ -115,8 +115,10 @@ export class CardinalIntelligenceSystem extends createSystem(
       this.personalities.get(personalityId) ??
       'Tu es un personnage interactif dans le monde Cardinal.';
 
-    // Augment with NPCEmotion modifier if component exists
-    if ((NPCEmotion as any).bit && entity.hasComponent(NPCEmotion)) {
+    // Augment with NPCEmotion modifier if component exists. Guard on
+    // `.bitmask` — elics' actual registration marker; `.bit` doesn't
+    // exist and was always falsy, silently disabling the mood modifier.
+    if ((NPCEmotion as any).bitmask && entity.hasComponent(NPCEmotion)) {
       const emotionVal = (entity.getValue(NPCEmotion, 'currentEmotion') ?? 0) as EmotionTypeValue;
       const moodModifier = EmotionPromptModifiers[emotionVal];
       if (moodModifier) {

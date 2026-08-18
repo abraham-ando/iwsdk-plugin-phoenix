@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { World } from '@iwsdk/core';
 import { SpatialVoice } from '../src/components';
+import { NPCEmotion, EmotionType, EmotionAudioProfiles } from '../src/components/NPCEmotion';
 import { CardinalSpatialAudioSystem } from '../src/systems';
 import type { ITTSAdapter, SpeechRequest, SpeechResponse } from '../src/adapters/types';
 
@@ -64,5 +65,23 @@ describe('CardinalSpatialAudioSystem', () => {
 
     system.stopSpeaking(entity);
     expect(entity.getValue(SpatialVoice, 'isPlaying')).toBe(false);
+  });
+
+  it('modulates pitch and speed from the NPC\'s current emotion', async () => {
+    world.registerComponent(NPCEmotion);
+    world.registerSystem(CardinalSpatialAudioSystem, {
+      configData: { adapter: mockTTS },
+    });
+
+    const system = world.getSystem(CardinalSpatialAudioSystem)!;
+    const entity = world.createEntity();
+    entity.addComponent(SpatialVoice, { pitch: 1.0 });
+    entity.addComponent(NPCEmotion, { currentEmotion: EmotionType.HOSTILE });
+
+    await system.speak(entity, 'Rends-toi immédiatement !');
+
+    const profile = EmotionAudioProfiles[EmotionType.HOSTILE];
+    expect(mockTTS.lastRequest?.pitch).toBeCloseTo(1.0 * profile.pitchMultiplier);
+    expect(mockTTS.lastRequest?.speed).toBeCloseTo(1.0 * profile.speedMultiplier);
   });
 });

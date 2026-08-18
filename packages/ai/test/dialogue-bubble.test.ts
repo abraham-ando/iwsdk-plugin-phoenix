@@ -55,4 +55,17 @@ describe('DialogueBubbleSystem', () => {
     bubbleSystem.update(0.016, 61_600);
     expect(entity.getValue(SpatialDialogueUI, 'activeWordIndex')).toBe(5);
   });
+
+  it('shows a "..." thinking bubble while the NPC is reasoning', () => {
+    const entity = world.createEntity();
+    entity.addComponent(SpatialDialogueUI);
+    entity.addComponent(SmartNPC, { isThinking: true });
+
+    bubbleSystem.update(0.016, 1000);
+
+    const state = bubbleSystem.getBubbleState(entity);
+    expect(state?.isThinking).toBe(true);
+    expect(state?.text).toBe('...');
+    expect(state?.visible).toBe(true);
+  });
 });

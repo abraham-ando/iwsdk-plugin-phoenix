@@ -79,8 +79,10 @@ export class DialogueBubbleSystem extends createSystem(
       const id = entity.index ?? (entity as any).id ?? 0;
       let state = this.bubbleStates.get(id);
 
-      // Check SmartNPC isThinking
-      const isThinking = (SmartNPC as any).bit && entity.hasComponent(SmartNPC)
+      // Check SmartNPC isThinking. Guard on `.bitmask` — elics' actual
+      // registration marker; `.bit` doesn't exist and was always falsy,
+      // silently disabling the thinking bubble.
+      const isThinking = (SmartNPC as any).bitmask && entity.hasComponent(SmartNPC)
         ? Boolean(entity.getValue(SmartNPC, 'isThinking'))
         : false;
 

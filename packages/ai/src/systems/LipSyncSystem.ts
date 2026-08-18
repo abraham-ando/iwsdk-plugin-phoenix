@@ -34,7 +34,10 @@ export class LipSyncSystem extends createSystem(
 
     for (const entity of this.queries.syncs.entities) {
       const entityId = entity.index ?? (entity as any).id ?? 0;
-      const isSpeaking = ((SpatialVoice as any).bit && entity.hasComponent(SpatialVoice))
+      // Guard on `.bitmask` — elics' actual registration marker; `.bit`
+      // doesn't exist and was always falsy, so this always fell through
+      // to the amplitude-only fallback below.
+      const isSpeaking = ((SpatialVoice as any).bitmask && entity.hasComponent(SpatialVoice))
         ? Boolean(entity.getValue(SpatialVoice, 'isPlaying'))
         : (this.activeAmplitudes.get(entityId) ?? 0) > 0.05;
 

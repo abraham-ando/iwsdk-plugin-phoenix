@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import type { Entity } from '@iwsdk/core';
+import { World, type Entity } from '@iwsdk/core';
 import { CardinalContextBuilder } from '../src/context/CardinalContextBuilder';
 import { addDialogueTurn, clearDialogueHistory } from '../src/components/NPCMemory';
+import { NPCEmotion, EmotionType, EmotionPromptModifiers } from '../src/components/NPCEmotion';
 
 function fakeEntity(index: number): Entity {
   return { index, hasComponent: () => false } as unknown as Entity;
@@ -43,5 +44,16 @@ describe('CardinalContextBuilder', () => {
 
     expect(contextForBob).toContain('Salut PNJ');
     expect(contextForBob).not.toContain('trésor secret');
+  });
+
+  it("includes the NPC's current mood modifier when it has an NPCEmotion component", () => {
+    const world = new World();
+    world.registerComponent(NPCEmotion);
+    const entity = world.createEntity();
+    entity.addComponent(NPCEmotion, { currentEmotion: EmotionType.HOSTILE });
+
+    const context = CardinalContextBuilder.buildContext(entity, {});
+
+    expect(context).toContain(EmotionPromptModifiers[EmotionType.HOSTILE]);
   });
 });

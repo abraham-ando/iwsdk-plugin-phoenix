@@ -58,8 +58,10 @@ export class CardinalSpatialAudioSystem extends createSystem(
     let basePitch = opts.pitch ?? (entity.getValue(SpatialVoice, 'pitch') ?? 1.0);
     let baseSpeed = opts.speed ?? 1.0;
 
-    // Modulate pitch and speed if NPCEmotion is present
-    if ((NPCEmotion as any).bit && entity.hasComponent(NPCEmotion)) {
+    // Modulate pitch and speed if NPCEmotion is present. Guard on
+    // `.bitmask` — elics' actual registration marker; `.bit` doesn't
+    // exist and was always falsy, silently disabling this modulation.
+    if ((NPCEmotion as any).bitmask && entity.hasComponent(NPCEmotion)) {
       const emotionVal = (entity.getValue(NPCEmotion, 'currentEmotion') ?? 0) as EmotionTypeValue;
       const profile = EmotionAudioProfiles[emotionVal];
       if (profile) {
