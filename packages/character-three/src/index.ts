@@ -11,6 +11,8 @@ export { sanitizeClip } from './clips/sanitize';
 export { applyRootMotionPolicy, type RootMotionPolicy } from './clips/rootMotion';
 export { loadCharacterClips } from './clips/load';
 
+export { genomeToBytes, bytesToGenome } from './wire';
+
 export {
   CharacterIdentity, CharacterStructure, CharacterFace,
   CharacterSurface, CharacterSelection,
