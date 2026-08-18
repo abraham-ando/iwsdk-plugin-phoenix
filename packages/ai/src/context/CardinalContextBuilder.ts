@@ -1,6 +1,6 @@
 import type { Entity } from '@iwsdk/core';
 import { NPCEmotion, EmotionType, EmotionPromptModifiers, EmotionTypeValue } from '../components/NPCEmotion';
-import { getDialogueHistory } from '../components/NPCMemory';
+import type { NPCMemoryStore } from '../components/NPCMemory';
 
 export interface WeatherData {
   kind: number; // 0: clear, 1: rain, 2: storm, 3: fog
@@ -58,10 +58,17 @@ export class CardinalContextBuilder {
 
   /**
    * Construct context description string from world environment and entity states.
+   *
+   * `memoryStore` is the plugin installation's own {@link NPCMemoryStore} —
+   * this method has no instance state of its own to hold one, so the caller
+   * (normally `CardinalIntelligenceSystem`) threads it through explicitly.
+   * Omitted, the conversational memory summary is left out entirely rather
+   * than falling back to any shared/global store.
    */
   public static buildContext(
     entity?: Entity | null,
-    options: CardinalWorldContextOptions = {}
+    options: CardinalWorldContextOptions = {},
+    memoryStore?: NPCMemoryStore
   ): string {
     const lines: string[] = [];
 
@@ -91,9 +98,9 @@ export class CardinalContextBuilder {
     }
 
     // 5. Conversational Memory Summary
-    if (entity) {
+    if (entity && memoryStore) {
       const entityId = (entity as any).index ?? (entity as any).id ?? 0;
-      const history = getDialogueHistory(entityId, options.playerId);
+      const history = memoryStore.getDialogueHistory(entityId, options.playerId);
       if (history.length > 0) {
         lines.push('- Historique récent de conversation :');
         for (const turn of history.slice(-4)) {

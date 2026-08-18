@@ -5,7 +5,7 @@
 import type { World } from '@iwsdk/core';
 import { SmartNPC } from './components/SmartNPC';
 import { SpatialVoice } from './components/SpatialVoice';
-import { NPCMemory } from './components/NPCMemory';
+import { NPCMemory, NPCMemoryStore } from './components/NPCMemory';
 import { NPCEmotion } from './components/NPCEmotion';
 import { FacialLipSync } from './components/FacialLipSync';
 import { VoiceReceiver } from './components/VoiceReceiver';
@@ -104,6 +104,13 @@ export function installCardinalAI(
 
   const ttsAdapter: ITTSAdapter = new PiperTTSAdapter(tts, onProgress);
 
+  // Owns this installation's episodic NPC memory. One instance per
+  // `installCardinalAI()` call — never shared across `World`s — so two
+  // installations never leak dialogue turns into each other. Handed to
+  // `CardinalIntelligenceSystem`, whose `destroy()` releases it; that system
+  // is unregistered by `dispose()` below, so disposing the plugin purges it.
+  const npcMemory = new NPCMemoryStore();
+
   // 2. Register ECS Components
   world
     .registerComponent(SmartNPC)
@@ -144,6 +151,7 @@ export function installCardinalAI(
     priority: AISystemPriority.INTELLIGENCE,
     configData: {
       adapter: inferenceAdapter,
+      memoryStore: npcMemory,
     },
   });
 
