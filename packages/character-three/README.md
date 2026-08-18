@@ -234,9 +234,18 @@ serait plus difficile à diagnostiquer qu'un échec net.
 - `'keep'` — la piste de translation de la racine passe telle quelle.
 - `'strip'` — elle disparaît : le personnage ne bouge jamais dans le monde,
   quel que soit le clip.
-- `'flatten'` — chaque clé est rebasée sur l'HORIZONTALE de départ (X et Z) ;
-  l'axe vertical reste intact, pour garder le balancement de la marche et
-  l'accroupissement de l'inactivité. Le voyage disparaît, la pose reste.
+- `'flatten'` — le **déplacement net** est retiré de X et Z, et rien d'autre :
+  chaque clé au temps `t_i` perd la fraction `(t_i − t_0) / (t_n − t_0)` de
+  l'écart entre la dernière clé et la première. La clé 0 est donc préservée
+  (la pose de départ reste), le voyage disparaît, et l'**oscillation** autour
+  de cette droite survit. L'axe vertical n'est pas touché.
+
+  > La première version épinglait chaque clé sur l'horizontale de la clé 0.
+  > C'était trop : mesuré, le balancement LATÉRAL des hanches vaut 5,46 cm
+  > (`walk-masculine`) et 8,26 cm (`walk-feminine`) — plus que le balancement
+  > vertical (5,22 / 4,55 cm) que cette même politique se donne explicitement
+  > du mal à conserver. L'épinglage jetait le plus grand des deux avec le
+  > voyage.
 
 **Le défaut est `'keep'` — pas parce que c'est le bon choix pour un
 villageois, mais pour ne rien changer aux appelants existants.**
