@@ -39,9 +39,18 @@ et `mountLocalAiPanel` compense par
 donc **quatre mètres**, ramenés à deux par l'échelle. Ça fonctionne, mais par
 compensation, pas par intention.
 
-**Cette règle est déduite, pas observée.** Elle vient de déclarations de type et
-d'un bundle minifié. La tâche 1 la mesure dans le navigateur avant toute autre
-ligne (§12.2). Si elle est fausse, tous les chiffres du document le sont.
+**Cette règle a été observée, pas seulement déduite.** La tâche 1 a monté un
+document jetable déclarant `width: 400` (sans suffixe), l'a instancié dans le
+navigateur du serveur de dev IWSDK, et a mesuré sa boîte englobante Three.js
+après une frame de mise en page. Le log de sonde :
+
+```
+[SONDE] width déclarée 400 → 4.0000 m × 2.0000 m
+```
+
+`400` sans unité vaut donc 4 m dans le monde : l'unité UIKit est bien le
+**centimètre** (facteur ×0.01 vers le mètre). La règle du §2.1 est confirmée
+telle quelle ; aucune correction de facteur n'est nécessaire avant la tâche 3.
 
 ### 2.2 Huit gènes sur treize sont inertes sur les rigs livrés
 
