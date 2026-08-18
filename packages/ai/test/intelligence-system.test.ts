@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { World } from '@iwsdk/core';
 import { SmartNPC, NPCMemory } from '../src/components';
+import { NPCEmotion, EmotionType, EmotionPromptModifiers } from '../src/components/NPCEmotion';
 import { CardinalIntelligenceSystem } from '../src/systems';
 import type { IInferenceAdapter, InferenceRequest, InferenceResponse } from '../src/adapters/types';
 
@@ -81,6 +82,21 @@ describe('CardinalIntelligenceSystem', () => {
 
     await system.queryNPC(entity, 'Quelle potion as-tu ?');
     expect(mockAdapter.lastRequest?.systemPrompt).toContain('Tu es un alchimiste fou.');
+  });
+
+  it('appends the NPC\'s current mood modifier to the system prompt', async () => {
+    world.registerComponent(NPCEmotion);
+    world.registerSystem(CardinalIntelligenceSystem, {
+      configData: { adapter: mockAdapter },
+    });
+
+    const system = world.getSystem(CardinalIntelligenceSystem)!;
+    const entity = world.createEntity();
+    entity.addComponent(SmartNPC, { personalityId: 1 });
+    entity.addComponent(NPCEmotion, { currentEmotion: EmotionType.HOSTILE });
+
+    await system.queryNPC(entity, 'Que veux-tu ?');
+    expect(mockAdapter.lastRequest?.systemPrompt).toContain(EmotionPromptModifiers[EmotionType.HOSTILE]);
   });
 
   it('carries a player\'s own prior turns into their next world context (same NPC, same session)', async () => {

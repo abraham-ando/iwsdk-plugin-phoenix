@@ -81,8 +81,10 @@ export class CardinalContextBuilder {
       lines.push(`- Climat : ${weatherName} (intensité : ${intensityPct}%)`);
     }
 
-    // 4. Entity Emotion
-    if (entity && (NPCEmotion as any).bit && entity.hasComponent(NPCEmotion)) {
+    // 4. Entity Emotion. Guard on `.bitmask` — elics' actual registration
+    // marker; `.bit` doesn't exist and was always falsy, silently
+    // disabling the mood modifier line.
+    if (entity && (NPCEmotion as any).bitmask && entity.hasComponent(NPCEmotion)) {
       const emotionVal = (entity.getValue(NPCEmotion, 'currentEmotion') ?? 0) as EmotionTypeValue;
       const modifier = EmotionPromptModifiers[emotionVal] ?? '';
       lines.push(`- Ton état d'esprit actuel : ${modifier}`);

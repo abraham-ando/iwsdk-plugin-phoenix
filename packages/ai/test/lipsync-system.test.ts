@@ -27,4 +27,17 @@ describe('LipSyncSystem', () => {
     const jaw = entity.getValue(FacialLipSync, 'jawOpen') ?? 0;
     expect(jaw).toBeGreaterThan(0.0);
   });
+
+  it('drives lip sync from SpatialVoice.isPlaying alone, with no amplitude fed in', () => {
+    const entity = world.createEntity();
+    entity.addComponent(FacialLipSync, { smoothing: 0.5 });
+    entity.addComponent(SpatialVoice, { isPlaying: true });
+
+    // No setAudioAmplitude call: isSpeaking must come from the SpatialVoice
+    // component's isPlaying flag, not the (empty) amplitude fallback.
+    lipSyncSystem.update(0.016, 100);
+
+    const jaw = entity.getValue(FacialLipSync, 'jawOpen') ?? 0;
+    expect(jaw).toBeGreaterThan(0.0);
+  });
 });
