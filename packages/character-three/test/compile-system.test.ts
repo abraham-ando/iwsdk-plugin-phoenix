@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
+import { World } from '@iwsdk/core';
 import { HUMANOID, defaultGenome, genomeKey } from '@iwsdk/cardinal-character';
-import { genomeFromComponents, needsRecompile } from '../src/systems/CharacterCompileSystem';
+import { CharacterCompileSystem, genomeFromComponents, needsRecompile } from '../src/systems/CharacterCompileSystem';
+import { createCharacter, installCharacterThree } from '../src/create';
+import { CharacterStructure } from '../src/components/index';
+import { humanoidPuppet } from './fixtures/humanoidPuppet';
 
 describe('genomeFromComponents', () => {
   const base = { family: 'humanoid', genes: { ...defaultGenome(HUMANOID).genes, skinTone: 0.8 } };
@@ -45,5 +49,44 @@ describe('needsRecompile', () => {
   it('est vrai pour un changement de gène', () => {
     const autre = { ...g, genes: { ...g.genes, stature: 0.9 } };
     expect(needsRecompile(genomeKey(HUMANOID, g, 20), genomeKey(HUMANOID, autre, 20))).toBe(true);
+  });
+});
+
+describe('createCharacter — le génome de structure atteint le compilateur', () => {
+  it('deux génomes opposés donnent deux squelettes DIFFÉRENTS', () => {
+    // Le test qui manquait : sans lui, `createCharacter` pouvait jeter le
+    // génome de structure sans qu'aucune suite ne s'en aperçoive — et onze
+    // villageois se retrouvaient avec le même corps à l'écran.
+    const world = new World();
+    installCharacterThree(world);
+    const system = world.getSystem(CharacterCompileSystem)!;
+
+    const measure = (value: number): { stature: number; knee: number } => {
+      const genes: Record<string, number> = {};
+      for (const key of Object.keys(HUMANOID.genes)) genes[key] = value;
+      const { root, bones } = humanoidPuppet();
+      const entity = createCharacter(world, {
+        familyId: HUMANOID.id,
+        genome: { family: HUMANOID.id, genes },
+        age: 30,
+        rigRoot: root,
+      }).entity;
+      system.update();
+      return {
+        stature: entity.getValue(CharacterStructure, 'stature') ?? Number.NaN,
+        knee: bones['legL']?.position.y ?? Number.NaN,
+      };
+    };
+
+    const petit = measure(0.05);
+    const grand = measure(0.95);
+
+    // Le composant porte le gène reçu, pas le défaut du schéma.
+    expect(petit.stature).toBeCloseTo(0.05, 5);
+    expect(grand.stature).toBeCloseTo(0.95, 5);
+    // Et le squelette compilé s'en ressent : le genou n'est pas à la même
+    // hauteur. C'est l'assertion qui compte — la première pourrait passer sur
+    // un composant amorcé mais ignoré par le compilateur.
+    expect(petit.knee).not.toBeCloseTo(grand.knee, 4);
   });
 });

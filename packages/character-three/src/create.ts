@@ -86,6 +86,31 @@ export function assertBonesAreDescendants(
 }
 
 /**
+ * Les valeurs initiales d'un composant de gènes, prises dans le génome.
+ *
+ * Sans cet amorçage, `addComponent(CharacterStructure, {})` laisse les cinq
+ * champs au défaut `0.5` du schéma — et `refreshGenes` LIT LE COMPOSANT en
+ * priorité pour les gènes de structure, ce qui jetait silencieusement le génome
+ * reçu. Onze villageois tirés de onze génomes distincts se retrouvaient avec le
+ * même corps.
+ *
+ * La priorité au composant est voulue : c'est elle qui permettra à un panneau de
+ * réglages d'éditer un personnage vivant. Ce qui manquait, c'était le point de
+ * départ.
+ */
+function genesFor(
+  schema: Readonly<Record<string, unknown>>,
+  genome: Genome,
+): Record<string, number> {
+  const values: Record<string, number> = {};
+  for (const key of Object.keys(schema)) {
+    const value = genome.genes[key];
+    if (value !== undefined) values[key] = value;
+  }
+  return values;
+}
+
+/**
  * Le seul chemin d'entrée. Mesure la boîte englobante de l'asset ENTIER dans sa
  * pose de repos, avant toute morphologie — c'est la hauteur de référence que le
  * génome module ensuite.
@@ -179,8 +204,12 @@ export function createCharacter(
       : new PuppetApplicator({ rigRoot: anchor, nodes: bones, surfaceTargets, ramps });
 
   entity.addComponent(CharacterIdentity, { family: family.id, age: options.age });
-  entity.addComponent(CharacterStructure, {});
-  entity.addComponent(CharacterFace, {});
+  entity.addComponent(CharacterStructure, genesFor(CharacterStructure.schema, options.genome));
+  entity.addComponent(CharacterFace, genesFor(CharacterFace.schema, options.genome));
+  // CharacterSurface reste amorcé à vide : ses deux champs sont des
+  // Types.Color (des VECTEURS), écrits par getVectorView à la compilation —
+  // voir CharacterCompileSystem. Les initialiser ici par addComponent
+  // n'apporterait rien et brouillerait la source de vérité.
   entity.addComponent(CharacterSurface, {});
 
   const compiler = world.getSystem(CharacterCompileSystem) as CharacterCompileSystem;
