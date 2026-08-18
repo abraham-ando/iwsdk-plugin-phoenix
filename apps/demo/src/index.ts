@@ -6,7 +6,7 @@
  */
 
 import { World, type Entity } from '@iwsdk/core';
-import { installPhoenixNetworking } from '@iwsdk/plugin-phoenix';
+import { CharacterGenome, installPhoenixNetworking, Networked } from '@iwsdk/plugin-phoenix';
 import projectOptions from 'virtual:iwsdk-project';
 import { DemoHud } from './hud.js';
 import { MultiplayerSystem } from './multiplayer.js';
@@ -26,12 +26,14 @@ import { TrajectoryUploader } from './simulation/TrajectoryUploader.js';
 import { PhysicsSimulationSystem } from './simulation/PhysicsSimulationSystem.js';
 import {
   createCharacterFromAsset,
+  genomeToBytes,
   installCharacterThree,
   loadCharacterClips,
 } from '@iwsdk/cardinal-character-three';
 import { installCharacterUI } from '@iwsdk/cardinal-character-ui';
 import { buildVillagerGenomes } from './simulation/villagerGenomes.js';
 import { makeRiggedBody, upgradeVillagers } from './simulation/VillagerBody.js';
+import { VILLAGER_NETWORK_IDS } from './simulation/villagerNetworkIds.js';
 
 const container = document.getElementById('scene-container') as HTMLDivElement;
 const network = readNetworkConfig(import.meta.env);
@@ -122,6 +124,21 @@ World.create(container, projectOptions)
                     age: 30,
                   });
                   agentIdParEntite.set(entity, agent.id);
+                  // Identité réseau fixe (patron adoptSharedPlant) : chaque
+                  // pair crée ce personnage localement et de façon
+                  // identique, il ne lui manque qu'un networkId connu
+                  // d'avance. Le composant CharacterGenome se publie et se
+                  // reçoit ENTIÈREMENT SEUL une fois posé — CardinalPublisher
+                  // et PhoenixNetworkSystem font le reste, aucun appel
+                  // explicite de publication.
+                  entity.addComponent(Networked, {
+                    networkId: VILLAGER_NETWORK_IDS[agent.id] ?? 0,
+                    isLocalOwner: false,
+                    ownerId: 0,
+                  });
+                  entity.addComponent(CharacterGenome, {
+                    genes: genomeToBytes(genomes[agent.id]!),
+                  });
                   rapportsParEntite.set(
                     entity,
                     new Set([...report.missingMorphs, ...report.missingSurfaces]),

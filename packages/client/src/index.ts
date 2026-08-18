@@ -110,6 +110,10 @@ export {
 // Cardinal — generated component runtime
 export {
   CARDINAL_REGISTRY,
+  // Seul composant généré qu'une application appelle par son nom jusqu'ici
+  // (la démo lui pose `genes` à la création d'un villageois) — les autres
+  // (Health, Grabbable, Weather) ne sont consommés que via CARDINAL_REGISTRY.
+  CharacterGenome,
   registerCardinalComponents,
 } from './cardinal/components.generated.js';
 export type { CardinalComponentSpec } from './cardinal/components.generated.js';
