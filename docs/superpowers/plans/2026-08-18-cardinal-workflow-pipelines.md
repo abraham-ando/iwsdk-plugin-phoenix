@@ -75,8 +75,10 @@ const ROUTES = [
   { prefix: 'apps/demo_server/', role: 'bff-backend-engineer' },
   { prefix: 'apps/demo/src/hud.ts', role: 'vr-comfort-ux-reviewer' },
   { prefix: 'apps/demo/src/ai-hud.ts', role: 'vr-comfort-ux-reviewer' },
-  // Process docs (specs/plans) belong to the superpowers workflow, not the
-  // docs site — order matters: this row must precede the docs/ row.
+  // Order matters in the three docs rows: PROTOCOL.md is protocol work
+  // first, rendering second (smoke-test ruling, roster ledger); process
+  // docs belong to the superpowers workflow, not the docs site.
+  { prefix: 'docs/PROTOCOL.md', role: 'phoenix-networking-reviewer' },
   { prefix: 'docs/superpowers/', role: 'iwsdk-project-code-reviewer' },
   { prefix: 'docs/', role: 'docs-writer' },
 ]
