@@ -10,7 +10,11 @@ export type ActionIntentType =
   | 'EMOTE'
   | 'SET_QUEST_STAGE'
   | 'CHANGE_EMOTION'
-  | 'CUSTOM';
+  | 'CUSTOM'
+  // The parser emits whatever uppercase action name the model produced, and
+  // IntentGuard role policies name game-specific actions (SELL_ITEM, OPEN_GATE…):
+  // keep literal autocompletion but accept any action string.
+  | (string & {});
 
 export interface ActionIntent {
   type: ActionIntentType;
