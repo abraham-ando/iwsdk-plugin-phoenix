@@ -29,7 +29,11 @@ const artifacts = [
 const scratch = mkdtempSync(join(tmpdir(), 'cardinal-drift-'));
 
 try {
-  execFileSync('node', ['scripts/generate-cardinal.mjs'], {
+  // Le générateur importe dynamiquement son propre .ts généré pour encoder
+  // les vecteurs dorés avec le codec qui expédie réellement. Node 22.12 ne
+  // charge pas un .ts sans ce flag ; le hook de résolution des imports `.js`
+  // internes s'enregistre déjà tout seul (voir generate-cardinal.mjs).
+  execFileSync('node', ['--experimental-strip-types', 'scripts/generate-cardinal.mjs'], {
     cwd: root,
     stdio: 'pipe',
     env: { ...process.env, CARDINAL_OUT_DIR: scratch },
