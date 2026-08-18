@@ -4,6 +4,7 @@ import { CelestialTime, SkyModel, StarField } from './atmosphere/components';
 import { CelestialTimeSystem } from './atmosphere/CelestialTimeSystem';
 import { SkyRenderSystem } from './atmosphere/SkyRenderSystem';
 import { StarFieldSystem } from './atmosphere/StarFieldSystem';
+import { NightSkySystem } from './atmosphere/NightSkySystem';
 import { MaterialLibrary } from './materials/MaterialLibrary';
 import { ProceduralMaterial } from './materials/components';
 import { MaterialSystem } from './materials/MaterialSystem';
@@ -87,6 +88,10 @@ export function installCardinalWorld(
   world.registerSystem(CelestialTimeSystem, { priority: 10 });
   world.registerSystem(SkyRenderSystem, { priority: 12, configData: { quality } });
   world.registerSystem(StarFieldSystem, { priority: 14 });
+  // Après StarFieldSystem, qui calcule l'opacité que celui-ci consomme :
+  // les étoiles et la lune étaient décrites depuis l'origine, et dessinées
+  // par personne.
+  world.registerSystem(NightSkySystem, { priority: 15 });
   world.registerSystem(ExposureSystem, { priority: 16 });
   world.registerSystem(MaterialSystem, { priority: 20, configData: { library: materials } });
 

@@ -15,6 +15,15 @@ export { CelestialTime, SkyModel, StarField, WEATHER_KINDS } from './atmosphere/
 export { CelestialTimeSystem } from './atmosphere/CelestialTimeSystem';
 export { SkyRenderSystem, IBL_REFRESH_ELEVATION_DEG } from './atmosphere/SkyRenderSystem';
 export { StarFieldSystem } from './atmosphere/StarFieldSystem';
+export { NightSkySystem } from './atmosphere/NightSkySystem';
+export {
+  moonPhaseForDay,
+  moonIllumination,
+  moonPosition,
+  moonlightIntensity,
+  SYNODIC_MONTH_DAYS,
+} from './atmosphere/lunar';
+export { starPositions, starBrightness, skyDirection } from './atmosphere/nightSkyGeometry';
 export {
   installCardinalWorld,
   withLevelRoot,
