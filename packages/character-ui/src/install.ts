@@ -1,4 +1,4 @@
-import { UIKitMLAsset, type Entity, type Object3D, type World } from '@iwsdk/core';
+import { RayInteractable, UIKitMLAsset, type Entity, type Object3D, type World } from '@iwsdk/core';
 import { CharacterSelection, CharacterStructure, CharacterFace } from '@iwsdk/cardinal-character-three';
 import { CharacterUIRoute } from './components';
 import { TabRouter, PANEL_IDS } from './router';
@@ -54,7 +54,17 @@ export async function installCharacterUI(
   // Le panneau, lui, EST un objet 3D : il entre dans le graphe de scène pour
   // que `CharacterPanelPlacementSystem` puisse le déplacer et le mettre à
   // l'échelle face à la caméra.
-  world.createTransformEntity(node);
+  const panneau = world.createTransformEntity(node);
+  // « Give the panel node `RayInteractable` so clicks land »
+  // (`apps/demo/public/ui/AGENTS.md`). Ce n'est pas décoratif : en immersion,
+  // `InputSystem.updateDescendantArrays()` ne remplit `scene.rayDescendants`
+  // qu'avec les `object3D` des entités qui portent ce composant, et le
+  // pointeur RAYON n'intersecte que cette liste. Sans lui, `[+]`, `[−]` et les
+  // deux onglets sont inertes DANS LE CASQUE. Hors immersion le défaut est
+  // invisible : le cœur remet `rayDescendants` à `undefined` et
+  // `CanvasPointerSystem` retombe sur la scène entière, donc le clic souris
+  // atteint le panneau quand même.
+  panneau.addComponent(RayInteractable, {});
 
   const router = new TabRouter(doc);
   const persona = new PersonaTab(doc);

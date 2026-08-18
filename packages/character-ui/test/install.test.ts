@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { Group, Object3D, Pressed, World } from '@iwsdk/core';
+import { Group, Object3D, Pressed, RayInteractable, World } from '@iwsdk/core';
 import {
   CharacterIdentity, CharacterFace, CharacterStructure,
   installCharacterThree,
@@ -138,6 +138,26 @@ describe('installCharacterUI — enregistrement', () => {
     const spy = vi.spyOn(world, 'createTransformEntity');
     await installCharacterUI(world);
     expect(spy).toHaveBeenCalledWith(panel);
+  });
+
+  it("donne RayInteractable au nœud du panneau, sans quoi aucun clic ne l atteint en immersion", async () => {
+    // Le symétrique de `apps/demo/test/villager-body.test.ts` (« le rig est
+    // visable au rayon »), pour l'autre bout de la chaîne. En immersion,
+    // `InputSystem` restreint `scene.rayDescendants` aux entités qui portent
+    // ce composant, et le pointeur rayon n'intersecte que cette liste : sans
+    // lui, `[+]`, `[−]` et les onglets sont inertes DANS LE CASQUE. Hors
+    // immersion le cœur retombe sur la scène entière — ce qui a masqué le
+    // défaut pendant toute l'étape, et pourquoi aucun autre test ne pouvait
+    // l'attraper : tous appellent le gestionnaire en direct.
+    const { world } = build();
+    // Enregistré d'avance pour que l'assertion tombe sur un `false` net : un
+    // composant jamais enregistré n'a pas de masque de bits, et
+    // `hasComponent` lève au lieu de répondre.
+    world.registerComponent(RayInteractable);
+    const spy = vi.spyOn(world, 'createTransformEntity');
+    await installCharacterUI(world);
+    const panneau = spy.mock.results[0]!.value as ReturnType<World['createTransformEntity']>;
+    expect(panneau.hasComponent(RayInteractable)).toBe(true);
   });
 
   it("instancie 'character-panel' par défaut, ou l assetId fourni", async () => {
