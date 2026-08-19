@@ -6,7 +6,7 @@ epic: "Épic D — PNJ vivants (voie 4)"
 priority: P3
 voie: 4
 depends_on: "—"
-status: "À faire"
+status: "Fait"
 gherkin: TS-D1.regard-pnj-vise-joueur.bdd.md
 ---
 
