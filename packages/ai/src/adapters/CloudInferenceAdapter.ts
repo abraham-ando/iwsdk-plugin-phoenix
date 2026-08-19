@@ -45,6 +45,20 @@ export class CloudInferenceAdapter implements IInferenceAdapter {
       throw new Error('[CloudInferenceAdapter] Authentication required (apiKey, sessionToken, tokenProvider, or proxyUrl)');
     }
     this._isReady = true;
+
+    // Warm the BFF session token at startup rather than waiting for the
+    // first `generate()` call — this is what makes "the village starts up"
+    // observably emit the auth request, instead of leaving it to whenever
+    // an NPC happens to speak first. A cold/unreachable BFF must not fail
+    // init(): the adapter stays ready and `generate()` will surface (and
+    // callers will handle) the auth failure per-request.
+    if (this.config.tokenProvider) {
+      try {
+        await this.tokenManager.getValidToken();
+      } catch (err) {
+        console.warn('[CloudInferenceAdapter] Could not warm session token at init (BFF unreachable?):', err);
+      }
+    }
   }
 
   public async generate(request: InferenceRequest): Promise<InferenceResponse> {

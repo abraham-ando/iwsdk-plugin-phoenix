@@ -6,7 +6,7 @@ epic: "Épic A — Sécurité et authentification (voie 1)"
 priority: P1
 voie: 1
 depends_on: "—"
-status: "À faire"
+status: "Fait"
 gherkin: TS-A2.authentification-bff-demo.bdd.md
 ---
 
