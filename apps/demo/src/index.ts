@@ -13,6 +13,7 @@ import { MultiplayerSystem } from './multiplayer.js';
 import { describeConfig, readNetworkConfig } from './networking.js';
 import { PanelSystem } from './panel.js';
 import { RobotSystem } from './robot.js';
+import { installTestBridge } from './test-bridge.js';
 import { setupCardinalVillage } from './ai-village.js';
 import { installCardinalWorld } from '@iwsdk/cardinal-world';
 import { CardinalSimulationSystem } from './simulation/CardinalSimulationSystem.js';
@@ -45,6 +46,11 @@ const hud = new DemoHud(document.body, { target: describeConfig(network) });
 
 World.create(container, projectOptions)
   .then((world) => {
+    // First, unconditionally ahead of everything below: this bridge must
+    // exist even if a later sub-step throws (Cardinal village, networking,
+    // …). Dev-only — see test-bridge.ts's module docs.
+    if (import.meta.env.DEV) installTestBridge(world);
+
     // Priorités explicites, bande 50-58, en amont des personnages (60).
     world.registerSystem(RobotSystem, { priority: 50 });
     world.registerSystem(PanelSystem, { priority: 52 });
