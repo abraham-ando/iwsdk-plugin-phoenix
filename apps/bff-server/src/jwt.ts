@@ -7,11 +7,43 @@ export interface SessionPayload {
   iat: number;
 }
 
+const DEFAULT_DEV_SECRET = 'cardinal_super_secret_session_key_2026';
+
+/** The default secret is only acceptable when we're not running in
+ * production, or when an operator has explicitly opted in via
+ * ALLOW_DEFAULT_JWT_SECRET (e.g. `--dev` at the index.ts entrypoint). */
+function defaultSecretAllowed(): boolean {
+  const override = process.env.ALLOW_DEFAULT_JWT_SECRET;
+  if (override === 'true' || override === '1') return true;
+  return process.env.NODE_ENV !== 'production';
+}
+
 export class JWTService {
   private secret: string;
 
   constructor(secret?: string) {
-    this.secret = secret || process.env.CARDINAL_JWT_SECRET || 'cardinal_super_secret_session_key_2026';
+    if (secret) {
+      this.secret = secret;
+      return;
+    }
+    const envSecret = process.env.CARDINAL_JWT_SECRET;
+    if (envSecret) {
+      this.secret = envSecret;
+      return;
+    }
+    if (!defaultSecretAllowed()) {
+      throw new Error(
+        'CARDINAL_JWT_SECRET is not set. Refusing to start with the hardcoded default JWT ' +
+          'secret outside development, because JWT verification is the only gate in front of ' +
+          '/api/v1/cardinal/chat and the real provider key behind it. Set CARDINAL_JWT_SECRET, ' +
+          'or set ALLOW_DEFAULT_JWT_SECRET=true to override explicitly (not recommended).'
+      );
+    }
+    console.warn(
+      '[Cardinal BFF] CARDINAL_JWT_SECRET is not set — falling back to the default development ' +
+        'secret. This is INSECURE and must never be used in production.'
+    );
+    this.secret = DEFAULT_DEV_SECRET;
   }
 
   private base64UrlEncode(str: string): string {
